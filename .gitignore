@@ -1,0 +1,17 @@
+# Binary output
+balceinv-api
+*.exe
+
+# Database file (keep out of git)
+*.db
+
+# Environment variables
+.env
+
+# Go build cache
+/vendor
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
