@@ -5,6 +5,8 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/config"
 	"github.com/chrisostomemataba/balceinv-api/database"
+	"github.com/chrisostomemataba/balceinv-api/license"
+	"github.com/chrisostomemataba/balceinv-api/middleware"
 	"github.com/chrisostomemataba/balceinv-api/models"
 	"github.com/chrisostomemataba/balceinv-api/routes"
 	"github.com/gofiber/fiber/v2"
@@ -45,6 +47,8 @@ func main() {
 		ExposeHeaders:    "Set-Cookie",
 	}))
 
+	app.Use(middleware.LicenseCheck())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "ok",
@@ -53,6 +57,9 @@ func main() {
 	})
 
 	routes.Setup(app, db, cfg)
+
+	license.StartTimestampWriter()
+	go license.SyncWithDjango()
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	if err := app.Listen(":" + cfg.Port); err != nil {

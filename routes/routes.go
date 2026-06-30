@@ -186,4 +186,9 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	// --- Catalog ---
 	catalogHandler := handlers.NewCatalogHandler(database)
 	application.Get("/api/catalog", protected, catalogHandler.GetAll)
+
+	// License — public routes, work even when license is expired
+	application.Get("/api/license/status", handlers.GetLicenseStatus)
+	application.Get("/api/license/packages", handlers.GetLicensePackages)
+	application.Post("/api/license/pay", handlers.InitiateLicensePayment)
 }

@@ -14,6 +14,7 @@ type Config struct {
 	DBPath              string
 	AccessTokenSecret   string
 	RefreshTokenSecret  string
+	LicenseSecret       string
 	Env                 string
 }
 
@@ -33,6 +34,7 @@ func Load() *Config {
 		DBPath:             getEnv("DB_PATH", "./balce.db"),
 		AccessTokenSecret:  getEnv("ACCESS_TOKEN_SECRET", ""),
 		RefreshTokenSecret: getEnv("REFRESH_TOKEN_SECRET", ""),
+		LicenseSecret:      getEnv("BALCE_LICENSE_SECRET", ""),
 		Env:                getEnv("ENV", "development"),
 	}
 

@@ -15,3 +15,8 @@ balceinv-api
 *.db
 *.db-shm
 *.db-wal
+
+# Md files
+CLAUDE.md
+GOAL.md
+STEPS.md
