@@ -43,7 +43,11 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		MaxAge:   604800, // 7 days
 	})
 
-	return utils.Success(c, "Logged in successfully", fiber.Map{"user": result.User})
+	return utils.Success(c, "Logged in successfully", fiber.Map{
+		"user":          result.User,
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+	})
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
@@ -70,7 +74,10 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	c.Cookie(&fiber.Cookie{Name: "access_token", Value: newAccess, HTTPOnly: true, SameSite: "Lax", MaxAge: 14400})
 	c.Cookie(&fiber.Cookie{Name: "refresh_token", Value: newRefresh, HTTPOnly: true, SameSite: "Lax", MaxAge: 604800})
 
-	return utils.Success(c, "Session refreshed", nil)
+	return utils.Success(c, "Session refreshed", fiber.Map{
+		"access_token":  newAccess,
+		"refresh_token": newRefresh,
+	})
 }
 
 func (h *AuthHandler) Me(c *fiber.Ctx) error {
