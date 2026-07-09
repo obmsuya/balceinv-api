@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/license"
+	"github.com/chrisostomemataba/balceinv-api/utils"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,10 +18,6 @@ const djangoProxyTimeoutSeconds = 20
 const contentTypeHeader = "Content-Type"
 const applicationJsonContentType = "application/json"
 
-// GetHardwareId returns this device's computed hardware ID so it can be
-// looked up (or manually registered) on the licensing server. Deliberately
-// has no dependency on a local license already existing — this is exactly
-// the value needed to create the first one.
 func GetHardwareId(fiberContext *fiber.Ctx) error {
 	hardwareIdString, hardwareIdComputeError := license.ComputeHardwareId()
 	if hardwareIdComputeError != nil {
@@ -36,26 +33,23 @@ func GetHardwareId(fiberContext *fiber.Ctx) error {
 }
 
 // GetLicenseStatus returns the current license state to the frontend including
-// expiry date, days remaining, and whether the app is in the grace period.
 func GetLicenseStatus(fiberContext *fiber.Ctx) error {
 	licenseStateObject, licenseLoadError := license.LoadLicenseState()
-	licenseFileExists := licenseLoadError == nil
+	licenseIsCurrentlyValid := licenseLoadError == nil && license.Check() == nil
 
-	if !licenseFileExists {
-		// No local license.json yet — this is the normal state before a
-		// customer has paid, but it's also the state right after paying,
-		// since nothing else ever writes the file for the first time.
-		// The frontend polls this exact endpoint after initiating payment
-		// (useLicense.ts pollUntilLicensed), so checking Django here closes
-		// that loop with no frontend changes needed.
+	if !licenseIsCurrentlyValid {
 		if activateError := license.ActivateFromDjango(); activateError == nil {
 			licenseStateObject, licenseLoadError = license.LoadLicenseState()
-			licenseFileExists = licenseLoadError == nil
 		}
 	}
 
+	licenseFileExists := licenseLoadError == nil
 	if !licenseFileExists {
-		return fiberContext.JSON(fiber.Map{"success": true, "licensed": false, "message": licenseLoadError.Error()})
+		return utils.Success(fiberContext, "License status", fiber.Map{
+			"licensed":        false,
+			"is_grace_period": false,
+			"is_trial":        false,
+		})
 	}
 
 	daysRemainingInt := license.GetDaysRemaining()
@@ -63,12 +57,12 @@ func GetLicenseStatus(fiberContext *fiber.Ctx) error {
 	licenseCheckError := license.Check()
 	licenseIsValidBool := licenseCheckError == nil
 
-	return fiberContext.JSON(fiber.Map{
-		"success":         true,
+	return utils.Success(fiberContext, "License status", fiber.Map{
 		"licensed":        licenseIsValidBool,
 		"expires_at":      licenseStateObject.ExpiresAt,
 		"days_remaining":  daysRemainingInt,
 		"is_grace_period": isInGracePeriodBool,
+		"is_trial":        licenseStateObject.IsTrial,
 		"plan":            licenseStateObject.DaysGranted,
 		"max_devices":     licenseStateObject.MaxDevices,
 	})

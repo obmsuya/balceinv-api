@@ -9,12 +9,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// CompiledAccessTokenSecret and CompiledRefreshTokenSecret are injected at
-// compile time via -ldflags for release builds, the same way
-// license.LicenseSecret is. They exist because the packaged desktop app
-// ships with no .env file and no environment variables set for the sidecar
-// process — without a compiled-in fallback, every shipped install would
-// sign JWTs with an empty secret.
 var CompiledAccessTokenSecret = ""
 var CompiledRefreshTokenSecret = ""
 
@@ -68,14 +62,6 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// defaultDBPath resolves the database into the same OS app-data directory
-// license.json already lives in, instead of a path relative to the sidecar
-// binary's own location. The installed app's directory (Contents/MacOS on
-// macOS, the Program Files install dir on Windows) is not writable, so a
-// relative path like "./balce.db" fails to open there — database.Connect()
-// errors, main.go calls log.Fatalf, and the sidecar process exits within
-// milliseconds of starting, before it ever binds its port. Falls back to
-// the old relative path only if the OS directory can't be resolved.
 func defaultDBPath() string {
 	appDataDir, err := license.GetAppDataDirectory()
 	if err != nil {

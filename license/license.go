@@ -33,7 +33,6 @@ const hardwareIdFileName = "hardware.id"
 
 var licenseStateMutex sync.Mutex
 
-// LicenseState represents the license data stored locally on the machine.
 type LicenseState struct {
 	LicenseKey    string `json:"license_key"`
 	HardwareId    string `json:"hardware_id"`
@@ -42,6 +41,35 @@ type LicenseState struct {
 	DaysGranted   int    `json:"days_granted"`
 	Signature     string `json:"signature"`
 	LastKnownTime string `json:"last_known_time"`
+	IsTrial       bool   `json:"is_trial"`
+}
+
+const TrialDurationDays = 14
+
+func IssueTrialLicense() error {
+	_, existingLicenseError := LoadLicenseState()
+	if existingLicenseError == nil {
+		return nil
+	}
+
+	hardwareIdString, hardwareIdComputeError := ComputeHardwareId()
+	if hardwareIdComputeError != nil {
+		return hardwareIdComputeError
+	}
+
+	trialExpiryTime := time.Now().Add(TrialDurationDays * 24 * time.Hour)
+
+	trialLicenseState := &LicenseState{
+		LicenseKey:    "trial",
+		HardwareId:    hardwareIdString,
+		ExpiresAt:     trialExpiryTime.UTC().Format(time.RFC3339),
+		MaxDevices:    1,
+		DaysGranted:   TrialDurationDays,
+		LastKnownTime: time.Now().UTC().Format(time.RFC3339),
+		IsTrial:       true,
+	}
+
+	return SaveLicenseState(trialLicenseState)
 }
 
 // GetAppDataDirectory returns the OS-appropriate directory for storing the
@@ -363,17 +391,6 @@ func SyncWithDjango() {
 	log.Printf("license sync successful: expires %s", djangoSyncResponseObject.LicenseData.ExpiresAt)
 }
 
-// ActivateFromDjango checks Django for an existing license tied to this
-// device's hardware ID and writes the local license.json for the first time
-// if one is found. This is the missing bootstrap step: SyncWithDjango can
-// only refresh a license that's already on disk, so a fresh install has no
-// way to ever get its first license.json without this. Requires a new
-// Django endpoint — GET /balce/license/by-hardware/<hardware_id>/ — that
-// looks up a license by hardware_id the same way BalceCallbackView already
-// does internally, and returns the same {license_key, license_data,
-// signature} shape BalceLicenseVerifyView does. Returns an error (not saved)
-// if no license exists yet for this device — that's the normal, expected
-// state before the customer has paid.
 func ActivateFromDjango() error {
 	hardwareIdString, hardwareIdComputeError := ComputeHardwareId()
 	if hardwareIdComputeError != nil {
