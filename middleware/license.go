@@ -17,6 +17,7 @@ var licenseCheckSkippedPaths = []string{
 	"/api/license/status",
 	"/api/license/packages",
 	"/api/license/pay",
+	"/api/license/hardware-id",
 }
 
 // LicenseCheck returns a Fiber middleware handler that enforces license validity

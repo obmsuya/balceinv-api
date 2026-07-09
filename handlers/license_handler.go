@@ -17,6 +17,24 @@ const djangoProxyTimeoutSeconds = 20
 const contentTypeHeader = "Content-Type"
 const applicationJsonContentType = "application/json"
 
+// GetHardwareId returns this device's computed hardware ID so it can be
+// looked up (or manually registered) on the licensing server. Deliberately
+// has no dependency on a local license already existing — this is exactly
+// the value needed to create the first one.
+func GetHardwareId(fiberContext *fiber.Ctx) error {
+	hardwareIdString, hardwareIdComputeError := license.ComputeHardwareId()
+	if hardwareIdComputeError != nil {
+		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"error":   hardwareIdComputeError.Error(),
+		})
+	}
+	return fiberContext.JSON(fiber.Map{
+		"success":     true,
+		"hardware_id": hardwareIdString,
+	})
+}
+
 // GetLicenseStatus returns the current license state to the frontend including
 // expiry date, days remaining, and whether the app is in the grace period.
 func GetLicenseStatus(fiberContext *fiber.Ctx) error {
