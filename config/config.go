@@ -7,6 +7,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// CompiledAccessTokenSecret and CompiledRefreshTokenSecret are injected at
+// compile time via -ldflags for release builds, the same way
+// license.LicenseSecret is. They exist because the packaged desktop app
+// ships with no .env file and no environment variables set for the sidecar
+// process — without a compiled-in fallback, every shipped install would
+// sign JWTs with an empty secret.
+var CompiledAccessTokenSecret = ""
+var CompiledRefreshTokenSecret = ""
+
 // Config holds every value the application needs from the environment.
 // All other packages receive this struct — they never call os.Getenv themselves.
 type Config struct {
@@ -32,8 +41,8 @@ func Load() *Config {
 	cfg := &Config{
 		Port:               getEnv("PORT", "8080"),
 		DBPath:             getEnv("DB_PATH", "./balce.db"),
-		AccessTokenSecret:  getEnv("ACCESS_TOKEN_SECRET", ""),
-		RefreshTokenSecret: getEnv("REFRESH_TOKEN_SECRET", ""),
+		AccessTokenSecret:  getEnv("ACCESS_TOKEN_SECRET", CompiledAccessTokenSecret),
+		RefreshTokenSecret: getEnv("REFRESH_TOKEN_SECRET", CompiledRefreshTokenSecret),
 		LicenseSecret:      getEnv("BALCE_LICENSE_SECRET", ""),
 		Env:                getEnv("ENV", "development"),
 	}
