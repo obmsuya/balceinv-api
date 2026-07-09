@@ -191,4 +191,5 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	application.Get("/api/license/status", handlers.GetLicenseStatus)
 	application.Get("/api/license/packages", handlers.GetLicensePackages)
 	application.Post("/api/license/pay", handlers.InitiateLicensePayment)
+	application.Get("/api/license/hardware-id", handlers.GetHardwareId)
 }
