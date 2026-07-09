@@ -51,7 +51,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	refreshToken := c.Cookies("refresh_token")
+	refreshToken := utils.ExtractToken(c, "refresh_token")
 	h.service.Logout(refreshToken)
 
 	c.Cookie(&fiber.Cookie{Name: "access_token", Value: "", Expires: time.Now().Add(-1 * time.Hour)})
@@ -61,7 +61,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
-	refreshToken := c.Cookies("refresh_token")
+	refreshToken := utils.ExtractToken(c, "refresh_token")
 	if refreshToken == "" {
 		return utils.Error(c, fiber.StatusUnauthorized, "No refresh token")
 	}
