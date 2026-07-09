@@ -363,6 +363,75 @@ func SyncWithDjango() {
 	log.Printf("license sync successful: expires %s", djangoSyncResponseObject.LicenseData.ExpiresAt)
 }
 
+// ActivateFromDjango checks Django for an existing license tied to this
+// device's hardware ID and writes the local license.json for the first time
+// if one is found. This is the missing bootstrap step: SyncWithDjango can
+// only refresh a license that's already on disk, so a fresh install has no
+// way to ever get its first license.json without this. Requires a new
+// Django endpoint — GET /balce/license/by-hardware/<hardware_id>/ — that
+// looks up a license by hardware_id the same way BalceCallbackView already
+// does internally, and returns the same {license_key, license_data,
+// signature} shape BalceLicenseVerifyView does. Returns an error (not saved)
+// if no license exists yet for this device — that's the normal, expected
+// state before the customer has paid.
+func ActivateFromDjango() error {
+	hardwareIdString, hardwareIdComputeError := ComputeHardwareId()
+	if hardwareIdComputeError != nil {
+		return hardwareIdComputeError
+	}
+
+	activateURL := djangoBaseURL + "/balce/license/by-hardware/" + hardwareIdString + "/"
+	httpClientObject := &http.Client{Timeout: 10 * time.Second}
+
+	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Get(activateURL)
+	if djangoHttpNetworkError != nil {
+		return fmt.Errorf("licensing server unreachable: %w", djangoHttpNetworkError)
+	}
+	defer djangoHttpResponse.Body.Close()
+
+	if djangoHttpResponse.StatusCode != http.StatusOK {
+		return errors.New("no license found for this device yet")
+	}
+
+	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(djangoHttpResponse.Body)
+	if djangoResponseBodyReadError != nil {
+		return djangoResponseBodyReadError
+	}
+
+	var djangoActivateResponseObject struct {
+		Success     bool   `json:"success"`
+		LicenseKey  string `json:"license_key"`
+		LicenseData struct {
+			ExpiresAt   string `json:"expires_at"`
+			MaxDevices  int    `json:"max_devices"`
+			DaysGranted int    `json:"days_granted"`
+		} `json:"license_data"`
+		Signature string `json:"signature"`
+	}
+	if err := json.Unmarshal(djangoResponseBodyBytes, &djangoActivateResponseObject); err != nil {
+		return err
+	}
+	if !djangoActivateResponseObject.Success {
+		return errors.New("django reported failure")
+	}
+
+	expectedSignatureHex := ComputeSignature(djangoActivateResponseObject.LicenseKey, djangoActivateResponseObject.LicenseData.ExpiresAt, djangoActivateResponseObject.LicenseData.MaxDevices, djangoActivateResponseObject.LicenseData.DaysGranted)
+	if !hmac.Equal([]byte(expectedSignatureHex), []byte(djangoActivateResponseObject.Signature)) {
+		return errors.New("django returned invalid signature")
+	}
+
+	newLicenseStateObject := &LicenseState{
+		LicenseKey:    djangoActivateResponseObject.LicenseKey,
+		HardwareId:    hardwareIdString,
+		ExpiresAt:     djangoActivateResponseObject.LicenseData.ExpiresAt,
+		MaxDevices:    djangoActivateResponseObject.LicenseData.MaxDevices,
+		DaysGranted:   djangoActivateResponseObject.LicenseData.DaysGranted,
+		LastKnownTime: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	return SaveLicenseState(newLicenseStateObject)
+}
+
 // IsInGracePeriod returns true if the license is expired but still within the
 // 5-day grace period. Returns false if the license is valid or hard-expired.
 func IsInGracePeriod() bool {

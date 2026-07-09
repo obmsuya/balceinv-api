@@ -24,6 +24,19 @@ func GetLicenseStatus(fiberContext *fiber.Ctx) error {
 	licenseFileExists := licenseLoadError == nil
 
 	if !licenseFileExists {
+		// No local license.json yet — this is the normal state before a
+		// customer has paid, but it's also the state right after paying,
+		// since nothing else ever writes the file for the first time.
+		// The frontend polls this exact endpoint after initiating payment
+		// (useLicense.ts pollUntilLicensed), so checking Django here closes
+		// that loop with no frontend changes needed.
+		if activateError := license.ActivateFromDjango(); activateError == nil {
+			licenseStateObject, licenseLoadError = license.LoadLicenseState()
+			licenseFileExists = licenseLoadError == nil
+		}
+	}
+
+	if !licenseFileExists {
 		return fiberContext.JSON(fiber.Map{"success": true, "licensed": false, "message": licenseLoadError.Error()})
 	}
 
