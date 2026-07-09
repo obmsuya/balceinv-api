@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"log"
+
+	"github.com/chrisostomemataba/balceinv-api/license"
 	"github.com/chrisostomemataba/balceinv-api/services"
 	"github.com/chrisostomemataba/balceinv-api/utils"
 	"github.com/gofiber/fiber/v2"
@@ -33,6 +36,10 @@ func (h *SetupHandler) Run(c *fiber.Ctx) error {
 
 	if err := h.service.Run(input); err != nil {
 		return utils.Error(c, fiber.StatusBadRequest, err.Error())
+	}
+
+	if trialIssueError := license.IssueTrialLicense(); trialIssueError != nil {
+		log.Printf("trial license issuance failed: %v", trialIssueError)
 	}
 
 	return utils.Success(c, "Setup complete. You can now log in.", nil)
