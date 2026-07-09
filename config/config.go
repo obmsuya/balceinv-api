@@ -3,7 +3,9 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/chrisostomemataba/balceinv-api/license"
 	"github.com/joho/godotenv"
 )
 
@@ -19,12 +21,12 @@ var CompiledRefreshTokenSecret = ""
 // Config holds every value the application needs from the environment.
 // All other packages receive this struct — they never call os.Getenv themselves.
 type Config struct {
-	Port                string
-	DBPath              string
-	AccessTokenSecret   string
-	RefreshTokenSecret  string
-	LicenseSecret       string
-	Env                 string
+	Port               string
+	DBPath             string
+	AccessTokenSecret  string
+	RefreshTokenSecret string
+	LicenseSecret      string
+	Env                string
 }
 
 // Load reads the .env file and returns a populated Config struct.
@@ -40,7 +42,7 @@ func Load() *Config {
 
 	cfg := &Config{
 		Port:               getEnv("PORT", "8080"),
-		DBPath:             getEnv("DB_PATH", "./balce.db"),
+		DBPath:             getEnv("DB_PATH", defaultDBPath()),
 		AccessTokenSecret:  getEnv("ACCESS_TOKEN_SECRET", CompiledAccessTokenSecret),
 		RefreshTokenSecret: getEnv("REFRESH_TOKEN_SECRET", CompiledRefreshTokenSecret),
 		LicenseSecret:      getEnv("BALCE_LICENSE_SECRET", ""),
@@ -64,4 +66,20 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// defaultDBPath resolves the database into the same OS app-data directory
+// license.json already lives in, instead of a path relative to the sidecar
+// binary's own location. The installed app's directory (Contents/MacOS on
+// macOS, the Program Files install dir on Windows) is not writable, so a
+// relative path like "./balce.db" fails to open there — database.Connect()
+// errors, main.go calls log.Fatalf, and the sidecar process exits within
+// milliseconds of starting, before it ever binds its port. Falls back to
+// the old relative path only if the OS directory can't be resolved.
+func defaultDBPath() string {
+	appDataDir, err := license.GetAppDataDirectory()
+	if err != nil {
+		return "./balce.db"
+	}
+	return filepath.Join(appDataDir, "balce.db")
 }
