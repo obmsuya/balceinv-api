@@ -149,7 +149,7 @@ func (s *SaleService) CreateSale(input CreateSaleInput) (*SaleResult, error) {
 	}
 
 	sale := s.buildSaleRecord(input, receiptNumber, total, taxAmount)
-	saleItems, movements, stockUpdates := s.buildTransactionData(resolved, receiptNumber)
+	saleItems, movements, stockUpdates := s.buildTransactionData(resolved, receiptNumber, input.UserID)
 
 	if err := s.repo.CreateWithItems(sale, saleItems, movements, stockUpdates); err != nil {
 		return nil, err
@@ -208,10 +208,12 @@ func (s *SaleService) buildSaleRecord(input CreateSaleInput, receiptNumber strin
 func (s *SaleService) buildTransactionData(
 	resolved []resolvedItem,
 	receiptNumber string,
+	cashierID uint,
 ) ([]models.SaleItem, []models.StockMovement, map[uint]int) {
 	saleItems := make([]models.SaleItem, 0, len(resolved))
 	movements := make([]models.StockMovement, 0, len(resolved))
 	stockUpdates := map[uint]int{}
+	userID := cashierID
 
 	for _, r := range resolved {
 		effectivePrice := resolveEffectivePrice(r)
@@ -235,7 +237,7 @@ func (s *SaleService) buildTransactionData(
 			NewQuantity: newQuantity,
 			Reason:      "sale",
 			Reference:   &ref,
-			UserID:      &r.input.ProductID,
+			UserID:      &userID,
 		})
 	}
 
