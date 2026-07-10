@@ -40,7 +40,7 @@ func main() {
 	app.Use(logger.New())
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000,tauri://localhost,https://tauri.localhost",
+		AllowOrigins:     "http://localhost:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
 		AllowCredentials: true,

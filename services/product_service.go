@@ -43,6 +43,7 @@ type UpdateProductInput struct {
 	VariantLabel   string         `json:"variant_label"`
 	Price          float64        `json:"price"`
 	CostPrice      float64        `json:"cost_price"`
+	Quantity       int            `json:"quantity"`
 	MinStock       int            `json:"min_stock"`
 	WholesalePrice *float64       `json:"wholesale_price"`
 	WholesaleMin   int            `json:"wholesale_min"`
@@ -178,10 +179,13 @@ func (service *ProductService) Update(id uint, input UpdateProductInput, userID 
 		})
 	}
 
+	quantityChange := input.Quantity - product.Quantity
+
 	product.Name = input.Name
 	product.VariantLabel = input.VariantLabel
 	product.Price = input.Price
 	product.CostPrice = input.CostPrice
+	product.Quantity = input.Quantity
 	product.MinStock = input.MinStock
 	product.WholesalePrice = input.WholesalePrice
 	product.WholesaleMin = input.WholesaleMin
@@ -196,6 +200,18 @@ func (service *ProductService) Update(id uint, input UpdateProductInput, userID 
 
 	if err := service.productRepository.Update(product); err != nil {
 		return nil, err
+	}
+
+	if quantityChange != 0 {
+		reference := "Manual edit"
+		service.productRepository.CreateStockMovement(&models.StockMovement{
+			ProductID:   product.ID,
+			Change:      quantityChange,
+			NewQuantity: product.Quantity,
+			Reason:      "adjust",
+			Reference:   &reference,
+			UserID:      userID,
+		})
 	}
 
 	return product, nil
