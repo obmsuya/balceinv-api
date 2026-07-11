@@ -20,6 +20,11 @@ import (
 func main() {
 	cfg := config.Load()
 
+	licenseSecretNotCompiledIn := license.LicenseSecret == ""
+	if licenseSecretNotCompiledIn {
+		license.LicenseSecret = cfg.LicenseSecret
+	}
+
 	db, err := database.Connect(cfg.DBPath)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)

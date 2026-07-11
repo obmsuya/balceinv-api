@@ -12,11 +12,17 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const djangoPackagesURL = "https://backend.wapangaji.com/api/v1/payments/balce/packages/"
-const djangoPayURL = "https://backend.wapangaji.com/api/v1/payments/balce/pay/"
 const djangoProxyTimeoutSeconds = 20
 const contentTypeHeader = "Content-Type"
 const applicationJsonContentType = "application/json"
+
+func djangoPackagesURL() string {
+	return license.DjangoBaseURL + "/balce/packages/"
+}
+
+func djangoPayURL() string {
+	return license.DjangoBaseURL + "/balce/pay/"
+}
 
 func GetHardwareId(fiberContext *fiber.Ctx) error {
 	hardwareIdString, hardwareIdComputeError := license.ComputeHardwareId()
@@ -73,7 +79,7 @@ func GetLicenseStatus(fiberContext *fiber.Ctx) error {
 func GetLicensePackages(fiberContext *fiber.Ctx) error {
 	httpClientObject := &http.Client{Timeout: time.Duration(djangoProxyTimeoutSeconds) * time.Second}
 
-	djangoGetRequest, djangoGetRequestBuildError := http.NewRequest(http.MethodGet, djangoPackagesURL, nil)
+	djangoGetRequest, djangoGetRequestBuildError := http.NewRequest(http.MethodGet, djangoPackagesURL(), nil)
 	if djangoGetRequestBuildError != nil {
 		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to build request to licensing server"})
 	}
@@ -118,7 +124,7 @@ func InitiateLicensePayment(fiberContext *fiber.Ctx) error {
 		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to build payment request"})
 	}
 
-	djangoPostRequest, djangoPostRequestBuildError := http.NewRequest(http.MethodPost, djangoPayURL, bytes.NewReader(updatedPayloadBytes))
+	djangoPostRequest, djangoPostRequestBuildError := http.NewRequest(http.MethodPost, djangoPayURL(), bytes.NewReader(updatedPayloadBytes))
 	if djangoPostRequestBuildError != nil {
 		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to build request to licensing server"})
 	}
