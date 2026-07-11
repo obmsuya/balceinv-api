@@ -26,10 +26,20 @@ var LicenseSecret = ""
 
 const gracePeriodDays = 5
 const timestampWriteIntervalMinutes = 30
-const djangoBaseURL = "https://backend.wapangaji.com/api/v1/payments"
+const productionDjangoBaseURL = "https://backend.wapangaji.com/api/v1/payments"
 const appDataDirectoryName = "com.balceinv.app"
 const licenseStateFileName = "license.json"
 const hardwareIdFileName = "hardware.id"
+
+var DjangoBaseURL = resolveDjangoBaseURL()
+
+func resolveDjangoBaseURL() string {
+	overrideURL := os.Getenv("BALCE_DJANGO_BASE_URL")
+	if overrideURL != "" {
+		return overrideURL
+	}
+	return productionDjangoBaseURL
+}
 
 var licenseStateMutex sync.Mutex
 
@@ -316,7 +326,7 @@ func SyncWithDjango() {
 		return
 	}
 
-	djangoVerifyURL := djangoBaseURL + "/balce/license/verify/"
+	djangoVerifyURL := DjangoBaseURL + "/balce/license/verify/"
 	djangoHttpRequest, djangoHttpRequestBuildError := http.NewRequest(http.MethodPost, djangoVerifyURL, bytes.NewReader(syncRequestPayloadBytes))
 	if djangoHttpRequestBuildError != nil {
 		log.Printf("license sync failed: cannot build request: %v", djangoHttpRequestBuildError)
@@ -397,7 +407,7 @@ func ActivateFromDjango() error {
 		return hardwareIdComputeError
 	}
 
-	activateURL := djangoBaseURL + "/balce/license/by-hardware/" + hardwareIdString + "/"
+	activateURL := DjangoBaseURL + "/balce/license/by-hardware/" + hardwareIdString + "/"
 	httpClientObject := &http.Client{Timeout: 10 * time.Second}
 
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Get(activateURL)
