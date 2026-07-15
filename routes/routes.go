@@ -161,6 +161,8 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	printRoutes := application.Group("/api/print", protected)
 	printRoutes.Post("/receipt", printHandler.PrintReceipt)
 	printRoutes.Get("/status", printHandler.PrinterStatus)
+	printRoutes.Get("/devices", printHandler.ListDevices)
+	printRoutes.Post("/test", printHandler.TestPrint)
 
 	// --- Reports ---
 	reportService := services.NewReportService(reportRepository)

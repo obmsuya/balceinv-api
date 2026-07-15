@@ -11,10 +11,12 @@ import (
 	_ "image/png"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/kenshaw/escpos"
+	"go.bug.st/serial/enumerator"
 
 	"github.com/chrisostomemataba/balceinv-api/models"
 	"github.com/chrisostomemataba/balceinv-api/repository"
@@ -45,6 +47,109 @@ func columnCount(paperWidthMM int) int {
 		return 32
 	}
 	return 48
+}
+
+// DetectedPrinter describes one candidate port found during enumeration —
+// good enough for the settings UI to offer a pick list instead of asking
+// the user to type a raw OS device path themselves.
+type DetectedPrinter struct {
+	Port         string `json:"port"`
+	IsUSB        bool   `json:"is_usb"`
+	VendorID     string `json:"vendor_id"`
+	ProductID    string `json:"product_id"`
+	Manufacturer string `json:"manufacturer"`
+	Product      string `json:"product"`
+}
+
+// ListDevices enumerates USB/serial ports that could be a connected thermal
+// printer. Most budget ESC/POS printers use a USB-to-serial chip (CH340,
+// PL2303, CP210x) and show up as a COM port / /dev/ttyUSB* / /dev/cu.* —
+// covered by go.bug.st/serial's cross-platform enumerator. Linux can also
+// expose a printer through the kernel's usblp driver as a raw
+// /dev/usb/lpN character device, which is not a serial port and so never
+// appears in that enumerator — listed separately below.
+func (service *PrintService) ListDevices() ([]DetectedPrinter, error) {
+	serialPorts, serialEnumerationError := enumerator.GetDetailedPortsList()
+	if serialEnumerationError != nil {
+		return nil, fmt.Errorf("could not enumerate serial ports: %w", serialEnumerationError)
+	}
+
+	devices := make([]DetectedPrinter, 0, len(serialPorts))
+	for _, port := range serialPorts {
+		devices = append(devices, DetectedPrinter{
+			Port:         port.Name,
+			IsUSB:        port.IsUSB,
+			VendorID:     port.VID,
+			ProductID:    port.PID,
+			Manufacturer: port.Manufacturer,
+			Product:      port.Product,
+		})
+	}
+
+	return append(devices, listLinuxRawUSBPrinters()...), nil
+}
+
+// listLinuxRawUSBPrinters finds Linux's raw USB printer-class devices.
+// No-op on Windows/macOS, where /dev/usb doesn't exist — os.ReadDir just
+// returns an error that's treated as "nothing found" rather than a failure.
+func listLinuxRawUSBPrinters() []DetectedPrinter {
+	entries, readDirError := os.ReadDir("/dev/usb")
+	if readDirError != nil {
+		return nil
+	}
+
+	devices := make([]DetectedPrinter, 0, len(entries))
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "lp") {
+			devices = append(devices, DetectedPrinter{
+				Port:    filepath.Join("/dev/usb", entry.Name()),
+				IsUSB:   true,
+				Product: "USB printer (raw device)",
+			})
+		}
+	}
+	return devices
+}
+
+// TestPrint writes a short confirmation slip to a printer port so a
+// connection can be verified without completing a real sale. portOverride
+// lets the settings UI test a port before it's been saved; an empty value
+// falls back to the currently saved settings port.
+func (service *PrintService) TestPrint(portOverride string) error {
+	settings, err := service.settingsRepository.GetSettings()
+	if err != nil {
+		return fmt.Errorf("could not load settings: %w", err)
+	}
+
+	portPath := portOverride
+	if portPath == "" {
+		portPath = settings.PrinterPort
+	}
+	if portPath == "" {
+		return fmt.Errorf("no printer port specified or configured")
+	}
+
+	return service.writeToPort(portPath, service.buildTestReceipt(settings.PrinterPaperWidth))
+}
+
+// buildTestReceipt writes a minimal ESC/POS slip — no sale data involved.
+func (service *PrintService) buildTestReceipt(paperWidthMM int) []byte {
+	columns := columnCount(paperWidthMM)
+	buffer := &bytes.Buffer{}
+	printer := escpos.New(buffer)
+
+	printer.Init()
+	printer.SetAlign("center")
+	printer.SetEmphasize(1)
+	printer.Write("Balce Inventory\n")
+	printer.SetEmphasize(0)
+	printer.Write(centerText("Test Print OK", columns) + "\n")
+	printer.Write(centerText(time.Now().Format("02/01/2006 15:04:05"), columns) + "\n")
+	printer.Formfeed()
+	printer.Cut()
+	printer.End()
+
+	return buffer.Bytes()
 }
 
 // PrintReceipt is the single public entry point called after a completed sale.
@@ -97,6 +202,7 @@ func (service *PrintService) buildReceipt(
 	service.printMeta(printer, sale, columns)
 	service.printItems(printer, sale, settings.Currency, columns)
 	service.printTotals(printer, sale, settings, columns)
+	service.printPayment(printer, sale, settings.Currency, columns)
 	service.printFooter(printer, settings.Company, columns)
 
 	if openDrawer && settings.OpenCashDrawer {
@@ -233,6 +339,26 @@ func (service *PrintService) printTotals(
 	printer.SetEmphasize(1)
 	printer.Write(leftRightText("TOTAL", formatReceiptAmount(sale.TotalAmount, settings.Currency), columns) + "\n")
 	printer.SetEmphasize(0)
+}
+
+// printPayment writes the amount tendered and, when there is any, the
+// change owed. Card/mobile payments are normally tendered for the exact
+// total, so the Change line only appears when change > 0 — matching the
+// on-screen POS success view, which does the same.
+func (service *PrintService) printPayment(
+	printer *escpos.Escpos,
+	sale *models.Sale,
+	currency string,
+	columns int,
+) {
+	printer.Write(leftRightText("Amount Paid", formatReceiptAmount(sale.AmountPaid, currency), columns) + "\n")
+
+	change := sale.AmountPaid - sale.TotalAmount
+	if change > 0 {
+		printer.SetEmphasize(1)
+		printer.Write(leftRightText("Change", formatReceiptAmount(change, currency), columns) + "\n")
+		printer.SetEmphasize(0)
+	}
 }
 
 // printFooter writes the receipt footer text and timestamp.

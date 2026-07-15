@@ -198,6 +198,7 @@ func (s *SaleService) buildSaleRecord(input CreateSaleInput, receiptNumber strin
 		TaxAmount:     taxAmount,
 		PaymentType:   input.PaymentType,
 		SaleType:      saleType,
+		AmountPaid:    input.AmountPaid,
 	}
 }
 

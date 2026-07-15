@@ -36,11 +36,14 @@ type Settings struct {
 	// Printer hardware configuration
 	// PrinterEnabled controls whether the system attempts to print after each sale.
 	// PrinterPort is the OS device path: "COM3" on Windows, "/dev/usb/lp0" or "/dev/ttyUSB0" on Linux.
+	// PrinterModel is a free-text label the user can attach to the detected device (e.g.
+	// "Epson TM-T20III") — cosmetic only, never used to select a driver.
 	// PrinterBaudRate is only relevant for serial (RS-232) printers; USB printers ignore it.
 	// PrinterPaperWidth is 58 or 80 (mm) — controls receipt line width.
 	// OpenCashDrawer sends the ESC/POS drawer-kick pulse after printing when true.
 	PrinterEnabled    bool   `gorm:"column:printer_enabled;default:false"        json:"printer_enabled"`
 	PrinterPort       string `gorm:"column:printer_port;default:''"              json:"printer_port"`
+	PrinterModel      string `gorm:"column:printer_model;default:''"             json:"printer_model"`
 	PrinterBaudRate   int    `gorm:"column:printer_baud_rate;default:9600"       json:"printer_baud_rate"`
 	PrinterPaperWidth int    `gorm:"column:printer_paper_width;default:80"       json:"printer_paper_width"`
 	OpenCashDrawer    bool   `gorm:"column:open_cash_drawer;default:false"       json:"open_cash_drawer"`

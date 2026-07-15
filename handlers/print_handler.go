@@ -55,3 +55,32 @@ func (h *PrintHandler) PrinterStatus(c *fiber.Ctx) error {
 		"auto_print":   settings.PrintReceiptAutomatically,
 	})
 }
+
+// ListDevices handles GET /api/print/devices
+// Enumerates connected USB/serial ports so the settings UI can offer a
+// pick list instead of asking the user to type a raw OS device path.
+func (h *PrintHandler) ListDevices(c *fiber.Ctx) error {
+	devices, err := h.service.ListDevices()
+	if err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+	return utils.Success(c, "Devices detected", devices)
+}
+
+// TestPrint handles POST /api/print/test
+// Body: { port?: string } — port lets the UI test a port before saving it;
+// omitted falls back to the currently saved settings port.
+func (h *PrintHandler) TestPrint(c *fiber.Ctx) error {
+	var body struct {
+		Port string `json:"port"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return utils.Error(c, fiber.StatusBadRequest, "Invalid request body")
+	}
+
+	if err := h.service.TestPrint(body.Port); err != nil {
+		return utils.Error(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	return utils.Success(c, "Test print sent", nil)
+}
