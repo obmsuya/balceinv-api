@@ -61,11 +61,13 @@ type UpdateSettingsInput struct {
 	// → settings table: printer hardware
 	// PrinterEnabled turns printing on/off without clearing the port config.
 	// PrinterPort is the OS device path e.g. "COM3" or "/dev/usb/lp0".
+	// PrinterModel is a cosmetic label only, never used to select a driver.
 	// PrinterBaudRate matters only for serial RS-232 printers (typically 9600 or 19200).
 	// PrinterPaperWidth is 58 or 80 (mm).
 	// OpenCashDrawer sends the ESC/POS DK pulse to open the drawer after printing.
 	PrinterEnabled    *bool   `json:"printer_enabled"`
 	PrinterPort       *string `json:"printer_port"`
+	PrinterModel      *string `json:"printer_model"`
 	PrinterBaudRate   *int    `json:"printer_baud_rate"`
 	PrinterPaperWidth *int    `json:"printer_paper_width"`
 	OpenCashDrawer    *bool   `json:"open_cash_drawer"`
@@ -181,6 +183,9 @@ func (s *SettingsService) Update(input UpdateSettingsInput, updatedBy uint) (*mo
 	}
 	if input.PrinterPort != nil {
 		settingsUpdates["printer_port"] = *input.PrinterPort
+	}
+	if input.PrinterModel != nil {
+		settingsUpdates["printer_model"] = *input.PrinterModel
 	}
 	if input.PrinterBaudRate != nil {
 		settingsUpdates["printer_baud_rate"] = *input.PrinterBaudRate
