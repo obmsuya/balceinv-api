@@ -78,11 +78,15 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	addonService := services.NewAddonService(addonRepository, productRepository)
 	addonHandler := handlers.NewAddonHandler(addonService)
 
+	imageUploadService := services.NewImageUploadSessionService()
+	imageUploadHandler := handlers.NewImageUploadHandler(imageUploadService, configuration.Port)
+
 	productRoutes := application.Group("/api/products", protected)
 	productRoutes.Get("/", productHandler.GetAll)
 	productRoutes.Get("/low-stock", productHandler.GetLowStock)
 	productRoutes.Get("/template", productHandler.GetTemplate)
 	productRoutes.Post("/upload", productHandler.UploadExcel)
+	productRoutes.Post("/image-session", imageUploadHandler.CreateSession)
 	productRoutes.Get("/:id", productHandler.GetByID)
 	productRoutes.Post("/", productHandler.Create)
 	productRoutes.Put("/:id", productHandler.Update)
@@ -91,6 +95,11 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	productRoutes.Get("/:id/variants", productHandler.GetVariants)
 	productRoutes.Get("/:id/addons", addonHandler.GetByProduct)
 	productRoutes.Post("/:id/addons", addonHandler.Create)
+
+	// Phone-facing upload handoff — no login on the phone, the token is the auth.
+	application.Get("/api/products/image-session/:token", imageUploadHandler.GetSessionStatus)
+	application.Get("/upload/:token", imageUploadHandler.ServeUploadPage)
+	application.Post("/upload/:token", imageUploadHandler.SubmitImage)
 
 	addonRoutes := application.Group("/api/addons", protected)
 	addonRoutes.Put("/:id", addonHandler.Update)
