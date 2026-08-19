@@ -97,7 +97,9 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	productRoutes.Post("/:id/addons", addonHandler.Create)
 
 	// Phone-facing upload handoff — no login on the phone, the token is the auth.
-	application.Get("/api/products/image-session/:token", imageUploadHandler.GetSessionStatus)
+	// Kept out of the /api/products/ prefix so it can't collide with the
+	// protected group's own :id routes in Fiber's route tree.
+	application.Get("/api/image-session/:token", imageUploadHandler.GetSessionStatus)
 	application.Get("/upload/:token", imageUploadHandler.ServeUploadPage)
 	application.Post("/upload/:token", imageUploadHandler.SubmitImage)
 
