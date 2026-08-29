@@ -19,24 +19,26 @@ func NewImageUploadHandler(sessionService *services.ImageUploadSessionService, s
 	return &ImageUploadHandler{sessionService: sessionService, serverPort: serverPort}
 }
 
-// lanIPAddress returns this machine's first non-loopback IPv4 address, so a
-// phone on the same Wi-Fi can reach the POS machine directly.
+// lanIPAddress returns the IP this machine actually routes outbound traffic
+// through, so a phone on the same Wi-Fi can reach the POS machine directly.
+// Machines commonly carry extra IPv4-capable interfaces (Docker/Internet
+// Sharing bridges, VPN tunnels) that aren't reachable from the LAN; picking
+// "the first non-loopback address" can land on one of those depending on
+// interface enumeration order. Dialing UDP doesn't send a packet — it just
+// asks the OS routing table which local address would be used, which is
+// always the real LAN-facing interface.
 func lanIPAddress() (string, error) {
-	interfaceAddresses, addressLookupError := net.InterfaceAddrs()
-	if addressLookupError != nil {
-		return "", addressLookupError
+	probeConnection, dialError := net.Dial("udp", "8.8.8.8:80")
+	if dialError != nil {
+		return "", fmt.Errorf("could not determine outbound network route: %w", dialError)
 	}
-	for _, address := range interfaceAddresses {
-		ipNet, isIPNet := address.(*net.IPNet)
-		if !isIPNet || ipNet.IP.IsLoopback() {
-			continue
-		}
-		ipv4 := ipNet.IP.To4()
-		if ipv4 != nil {
-			return ipv4.String(), nil
-		}
+	defer probeConnection.Close()
+
+	localAddress, isUDPAddr := probeConnection.LocalAddr().(*net.UDPAddr)
+	if !isUDPAddr {
+		return "", fmt.Errorf("unexpected local address type %T", probeConnection.LocalAddr())
 	}
-	return "", fmt.Errorf("no LAN IPv4 address found")
+	return localAddress.IP.String(), nil
 }
 
 // CreateSession is called by the desktop app to start a phone-upload handoff.
