@@ -19,10 +19,11 @@ func NewUserService(repo *repository.UserRepository, roleRepo *repository.RoleRe
 }
 
 type CreateUserInput struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	RoleID   uint   `json:"roleId"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	RoleID    uint   `json:"roleId"`
+	CompanyID uint   `json:"-"`
 }
 
 type UpdateUserInput struct {
@@ -68,6 +69,7 @@ func (s *UserService) Create(input CreateUserInput) (*models.User, error) {
 		Email:        input.Email,
 		PasswordHash: hash,
 		RoleID:       input.RoleID,
+		CompanyID:    input.CompanyID,
 	}
 
 	if err := s.repo.Create(user); err != nil {

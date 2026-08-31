@@ -42,6 +42,7 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 	if err := c.BodyParser(&input); err != nil {
 		return utils.Error(c, fiber.StatusBadRequest, "Invalid request body")
 	}
+	input.CompanyID = c.Locals("user").(*utils.TokenPayload).CompanyID
 
 	user, err := h.service.Create(input)
 	if err != nil {
@@ -55,7 +56,11 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		if err.Error() == "name, email, password, and role are required" {
 			status = fiber.StatusBadRequest
 		}
-		return utils.Error(c, status, err.Error())
+		message := err.Error()
+		if status == fiber.StatusInternalServerError {
+			message = utils.FriendlyDBError(err)
+		}
+		return utils.Error(c, status, message)
 	}
 	return utils.Success(c, "User created successfully", user)
 }
