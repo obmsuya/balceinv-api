@@ -1,12 +1,11 @@
 package services
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/chrisostomemataba/balceinv-api/models"
+	"github.com/chrisostomemataba/balceinv-api/repository"
 	"github.com/chrisostomemataba/balceinv-api/utils"
 	"gorm.io/gorm"
 )
@@ -115,7 +114,7 @@ func (s *SetupService) Run(input SetupInput) error {
 		fmt.Printf("warn: could not assign permissions to Admin role: %v\n", err)
 	}
 
-	if err := s.seedCatalog(company.ID, company.BusinessType); err != nil {
+	if err := NewCatalogService(s.db, repository.NewCatalogRepository(s.db)).SeedIfEmpty(company.BusinessType); err != nil {
 		fmt.Printf("catalog seed skipped for %s: %v\n", company.BusinessType, err)
 	}
 
@@ -145,23 +144,4 @@ func (s *SetupService) assignAllPermissionsToRole(roleID uint) error {
 	}
 
 	return s.db.Create(&rows).Error
-}
-
-func (s *SetupService) seedCatalog(companyID uint, businessType string) error {
-	filePath := fmt.Sprintf("seeds/%s.json", businessType)
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil
-	}
-
-	var items []models.CatalogProduct
-	if err := json.Unmarshal(data, &items); err != nil {
-		return err
-	}
-
-	for i := range items {
-		items[i].BusinessType = businessType
-	}
-
-	return s.db.CreateInBatches(items, 50).Error
 }
