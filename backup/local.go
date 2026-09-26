@@ -2,6 +2,7 @@ package backup
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -165,4 +166,66 @@ func StageLocalRestore(databasePath string, backupDate string) error {
 	defer backupFile.Close()
 
 	return stageRestoreFromGzip(databasePath, backupFile)
+}
+
+func checkBackupFilePath(backupFilePath string) error {
+	pathIsAbsolute := filepath.IsAbs(backupFilePath)
+	pathHasBackupExtension := strings.HasSuffix(strings.ToLower(backupFilePath), ".gz")
+	if !pathIsAbsolute || !pathHasBackupExtension {
+		return fmt.Errorf("backup file must be a full path ending in .gz")
+	}
+	return nil
+}
+
+func ExportBackup(database *gorm.DB, targetFilePath string) error {
+	pathCheckError := checkBackupFilePath(targetFilePath)
+	if pathCheckError != nil {
+		return pathCheckError
+	}
+
+	freshBackup, backupWriteError := WriteLocalBackup(database)
+	if backupWriteError != nil {
+		return backupWriteError
+	}
+
+	backupDirectory, backupDirectoryError := localBackupDirectory()
+	if backupDirectoryError != nil {
+		return backupDirectoryError
+	}
+
+	sourceFile, sourceOpenError := os.Open(localBackupFilePath(backupDirectory, freshBackup.Date))
+	if sourceOpenError != nil {
+		return sourceOpenError
+	}
+	defer sourceFile.Close()
+
+	targetFile, targetCreateError := os.Create(targetFilePath)
+	if targetCreateError != nil {
+		return fmt.Errorf("could not write to %s: %w", targetFilePath, targetCreateError)
+	}
+
+	_, copyError := io.Copy(targetFile, sourceFile)
+	closeError := targetFile.Close()
+	if copyError != nil {
+		return fmt.Errorf("could not write backup file: %w", copyError)
+	}
+	if closeError != nil {
+		return fmt.Errorf("could not finish backup file: %w", closeError)
+	}
+	return nil
+}
+
+func StageFileRestore(databasePath string, sourceFilePath string) error {
+	pathCheckError := checkBackupFilePath(sourceFilePath)
+	if pathCheckError != nil {
+		return pathCheckError
+	}
+
+	sourceFile, sourceOpenError := os.Open(sourceFilePath)
+	if sourceOpenError != nil {
+		return fmt.Errorf("could not open %s: %w", sourceFilePath, sourceOpenError)
+	}
+	defer sourceFile.Close()
+
+	return stageRestoreFromGzip(databasePath, sourceFile)
 }
