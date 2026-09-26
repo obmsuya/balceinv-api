@@ -197,8 +197,16 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	application.Post("/api/setup", setupHandler.Run)
 
 	// --- Catalog ---
-	catalogHandler := handlers.NewCatalogHandler(database)
+	catalogService := services.NewCatalogService(database, repository.NewCatalogRepository(database))
+	catalogHandler := handlers.NewCatalogHandler(catalogService)
 	application.Get("/api/catalog", protected, catalogHandler.GetAll)
+
+	catalogTeamRoutes := application.Group("/api/catalog/team", protected, middleware.RequireSupportPasscode(configuration.SupportPasscodeHash))
+	catalogTeamRoutes.Get("/summary", catalogHandler.TeamSummary)
+	catalogTeamRoutes.Get("/items", catalogHandler.TeamItems)
+	catalogTeamRoutes.Get("/template", catalogHandler.TeamTemplate)
+	catalogTeamRoutes.Post("/import", catalogHandler.TeamImport)
+	catalogTeamRoutes.Delete("/", catalogHandler.TeamClear)
 
 	// --- Cloud backup ---
 	backupHandler := handlers.NewBackupHandler(database, configuration.DBPath)
