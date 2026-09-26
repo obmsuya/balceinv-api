@@ -274,7 +274,7 @@ func checkSqliteFile(databaseFilePath string) error {
 	databaseFile.Close()
 	fileHasSqliteHeader := headerReadError == nil && string(headerBytes) == sqliteFileHeader
 	if !fileHasSqliteHeader {
-		return errors.New("backup is not a Balce database")
+		return errors.New("this file is not a POS backup")
 	}
 
 	checkDatabase, checkOpenError := gorm.Open(sqlite.Open(databaseFilePath), &gorm.Config{})

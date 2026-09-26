@@ -84,7 +84,7 @@ func (handler *BackupHandler) Restore(fiberContext *fiber.Ctx) error {
 	if restoreError != nil {
 		return respondWithCloudError(fiberContext, restoreError)
 	}
-	return utils.Success(fiberContext, "Backup downloaded. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
+	return utils.Success(fiberContext, "Backup downloaded. Restart the POS to finish restoring.", fiber.Map{"restart_required": true})
 }
 
 func (handler *BackupHandler) Status(fiberContext *fiber.Ctx) error {
@@ -129,7 +129,7 @@ func (handler *BackupHandler) RestoreFromThisPC(fiberContext *fiber.Ctx) error {
 	if restoreError != nil {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
 	}
-	return utils.Success(fiberContext, "Backup ready. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
+	return utils.Success(fiberContext, "Backup ready. Restart the POS to finish restoring.", fiber.Map{"restart_required": true})
 }
 
 func (handler *BackupHandler) ExportToFile(fiberContext *fiber.Ctx) error {
@@ -171,5 +171,5 @@ func (handler *BackupHandler) RestoreFromFile(fiberContext *fiber.Ctx) error {
 	if restoreError != nil {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
 	}
-	return utils.Success(fiberContext, "Backup ready. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
+	return utils.Success(fiberContext, "Backup ready. Restart the POS to finish restoring.", fiber.Map{"restart_required": true})
 }
