@@ -56,6 +56,25 @@ type LicenseState struct {
 
 const TrialDurationDays = 14
 
+var ErrLicensingServerUnreachable = errors.New("no internet connection, check the connection and try again")
+
+func activationWouldShortenLicense(newExpiresAt string) bool {
+	existingLicenseState, existingLicenseLoadError := LoadLicenseState()
+	if existingLicenseLoadError != nil {
+		return false
+	}
+	existingLicenseIsTrial := existingLicenseState.IsTrial || existingLicenseState.LicenseKey == "trial"
+	if existingLicenseIsTrial {
+		return false
+	}
+	existingExpiryTime, existingExpiryParseError := time.Parse(time.RFC3339, existingLicenseState.ExpiresAt)
+	newExpiryTime, newExpiryParseError := time.Parse(time.RFC3339, newExpiresAt)
+	if existingExpiryParseError != nil || newExpiryParseError != nil {
+		return false
+	}
+	return !newExpiryTime.After(existingExpiryTime)
+}
+
 func IssueTrialLicense() error {
 	_, existingLicenseError := LoadLicenseState()
 	if existingLicenseError == nil {
@@ -412,7 +431,7 @@ func ActivateFromDjango() error {
 
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Get(activateURL)
 	if djangoHttpNetworkError != nil {
-		return fmt.Errorf("licensing server unreachable: %w", djangoHttpNetworkError)
+		return fmt.Errorf("%w: %v", ErrLicensingServerUnreachable, djangoHttpNetworkError)
 	}
 	defer djangoHttpResponse.Body.Close()
 
@@ -445,6 +464,10 @@ func ActivateFromDjango() error {
 	expectedSignatureHex := ComputeSignature(djangoActivateResponseObject.LicenseKey, djangoActivateResponseObject.LicenseData.ExpiresAt, djangoActivateResponseObject.LicenseData.MaxDevices, djangoActivateResponseObject.LicenseData.DaysGranted)
 	if !hmac.Equal([]byte(expectedSignatureHex), []byte(djangoActivateResponseObject.Signature)) {
 		return errors.New("django returned invalid signature")
+	}
+
+	if activationWouldShortenLicense(djangoActivateResponseObject.LicenseData.ExpiresAt) {
+		return nil
 	}
 
 	newLicenseStateObject := &LicenseState{
