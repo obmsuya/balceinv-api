@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/chrisostomemataba/balceinv-api/backup"
 	"github.com/chrisostomemataba/balceinv-api/config"
 	"github.com/chrisostomemataba/balceinv-api/database"
 	"github.com/chrisostomemataba/balceinv-api/license"
@@ -23,6 +24,11 @@ func main() {
 	licenseSecretNotCompiledIn := license.LicenseSecret == ""
 	if licenseSecretNotCompiledIn {
 		license.LicenseSecret = cfg.LicenseSecret
+	}
+
+	pendingRestoreError := backup.ApplyPendingRestore(cfg.DBPath)
+	if pendingRestoreError != nil {
+		log.Printf("cloud restore not applied: %v", pendingRestoreError)
 	}
 
 	db, err := database.Connect(cfg.DBPath)
@@ -65,6 +71,7 @@ func main() {
 
 	license.StartTimestampWriter()
 	go license.SyncWithDjango()
+	backup.StartAutomaticCloudBackup(db)
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	if err := app.Listen(":" + cfg.Port); err != nil {
