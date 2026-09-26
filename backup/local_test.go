@@ -90,3 +90,38 @@ func TestLocalBackupRestoreAndPrune(t *testing.T) {
 		t.Fatal("a rejected restore left a pending file behind")
 	}
 }
+
+func TestExportThenRestoreFromFile(t *testing.T) {
+	testDirectory := useTemporaryAppData(t)
+
+	sourceDatabase := openTestDatabase(t, filepath.Join(testDirectory, "source.db"), "moved to new pc")
+	exportedFilePath := filepath.Join(testDirectory, "usb", "shop-backup.db.gz")
+	os.MkdirAll(filepath.Dir(exportedFilePath), 0o755)
+
+	if ExportBackup(sourceDatabase, "relative/backup.db.gz") == nil {
+		t.Fatal("a relative export path must be rejected")
+	}
+	if ExportBackup(sourceDatabase, filepath.Join(testDirectory, "backup.txt")) == nil {
+		t.Fatal("an export path without .gz must be rejected")
+	}
+	exportError := ExportBackup(sourceDatabase, exportedFilePath)
+	if exportError != nil {
+		t.Fatal(exportError)
+	}
+
+	targetDatabasePath := filepath.Join(testDirectory, "balce.db")
+	closedEmptyDatabase(t, targetDatabasePath)
+
+	restoreError := StageFileRestore(targetDatabasePath, exportedFilePath)
+	if restoreError != nil {
+		t.Fatal(restoreError)
+	}
+	applyError := ApplyPendingRestore(targetDatabasePath)
+	if applyError != nil {
+		t.Fatal(applyError)
+	}
+	restoredNote := readRestoredNote(t, targetDatabasePath)
+	if restoredNote != "moved to new pc" {
+		t.Fatalf("restored database has %q", restoredNote)
+	}
+}
