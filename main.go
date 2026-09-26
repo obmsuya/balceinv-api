@@ -9,7 +9,9 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/license"
 	"github.com/chrisostomemataba/balceinv-api/middleware"
 	"github.com/chrisostomemataba/balceinv-api/models"
+	"github.com/chrisostomemataba/balceinv-api/repository"
 	"github.com/chrisostomemataba/balceinv-api/routes"
+	"github.com/chrisostomemataba/balceinv-api/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -43,6 +45,11 @@ func main() {
 	// Seed permissions if not already seeded
 	seedPermissions(db)
 
+	catalogSeedError := services.NewCatalogService(db, repository.NewCatalogRepository(db)).SeedCompanyCatalogIfEmpty()
+	if catalogSeedError != nil {
+		log.Printf("catalog seed skipped: %v", catalogSeedError)
+	}
+
 	app := fiber.New(fiber.Config{
 		AppName: "BalceInv API",
 	})
@@ -53,7 +60,7 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000,tauri://localhost,https://tauri.localhost,http://tauri.localhost",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization," + middleware.SupportPasscodeHeader,
 		AllowCredentials: true,
 		ExposeHeaders:    "Set-Cookie",
 	}))
