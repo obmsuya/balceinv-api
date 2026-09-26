@@ -203,10 +203,15 @@ func Setup(application *fiber.App, database *gorm.DB, configuration *config.Conf
 	// --- Cloud backup ---
 	backupHandler := handlers.NewBackupHandler(database, configuration.DBPath)
 
-	backupRoutes := application.Group("/api/backup/cloud", protected)
-	backupRoutes.Get("/", backupHandler.List)
-	backupRoutes.Post("/", backupHandler.BackupNow)
-	backupRoutes.Post("/restore", backupHandler.Restore)
+	backupRoutes := application.Group("/api/backup", protected)
+	backupRoutes.Get("/cloud", backupHandler.List)
+	backupRoutes.Post("/cloud", backupHandler.BackupNow)
+	backupRoutes.Post("/cloud/restore", backupHandler.Restore)
+	backupRoutes.Get("/status", backupHandler.Status)
+	backupRoutes.Post("/local", backupHandler.BackupOnThisPC)
+	backupRoutes.Post("/local/restore", backupHandler.RestoreFromThisPC)
+	backupRoutes.Post("/export", backupHandler.ExportToFile)
+	backupRoutes.Post("/import", backupHandler.RestoreFromFile)
 
 	// License — public routes, work even when license is expired
 	application.Get("/api/license/status", handlers.GetLicenseStatus)
