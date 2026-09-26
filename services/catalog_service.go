@@ -355,7 +355,7 @@ func ParseCatalogRows(businessType string, fileRows [][]string) (*ParsedCatalog,
 		return nil, ErrCatalogTooManyRows
 	}
 
-	parsedCatalog := &ParsedCatalog{}
+	parsedCatalog := &ParsedCatalog{Problems: []CatalogRowProblem{}}
 	firstRowByName := map[string]int{}
 	for dataRowIndex, dataRow := range dataRows {
 		if rowIsBlank(dataRow) {
