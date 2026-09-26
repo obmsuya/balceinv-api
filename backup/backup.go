@@ -22,6 +22,7 @@ const djangoRequestTimeoutSeconds = 20
 const cloudTransferTimeoutMinutes = 10
 const automaticBackupIntervalHours = 6
 const automaticBackupFirstDelayMinutes = 2
+const cloudRetryIntervalMinutes = 15
 const trialLicenseKey = "trial"
 const sqliteFileHeader = "SQLite format 3\x00"
 
@@ -362,16 +363,28 @@ func ApplyPendingRestore(databasePath string) error {
 func StartAutomaticCloudBackup(database *gorm.DB) {
 	go func() {
 		time.Sleep(automaticBackupFirstDelayMinutes * time.Minute)
-		backupTicker := time.NewTicker(automaticBackupIntervalHours * time.Hour)
-		defer backupTicker.Stop()
 
 		for {
-			_, uploadError := UploadCloudBackup(database)
-			licenseIsMissing := errors.Is(uploadError, ErrNoPaidLicense)
-			if uploadError != nil && !licenseIsMissing {
-				log.Printf("automatic cloud backup failed: %v", uploadError)
+			nextScheduledBackupAt := time.Now().Add(automaticBackupIntervalHours * time.Hour)
+
+			_, localBackupError := WriteLocalBackup(database)
+			if localBackupError != nil {
+				log.Printf("automatic local backup failed: %v", localBackupError)
 			}
-			<-backupTicker.C
+
+			_, uploadError := UploadCloudBackup(database)
+			for cloudUploadShouldRetry(uploadError) && time.Now().Add(cloudRetryIntervalMinutes*time.Minute).Before(nextScheduledBackupAt) {
+				log.Printf("automatic cloud backup failed, retrying in %d minutes: %v", cloudRetryIntervalMinutes, uploadError)
+				time.Sleep(cloudRetryIntervalMinutes * time.Minute)
+				_, uploadError = UploadCloudBackup(database)
+			}
+
+			time.Sleep(time.Until(nextScheduledBackupAt))
 		}
 	}()
+}
+
+func cloudUploadShouldRetry(uploadError error) bool {
+	licenseIsMissing := errors.Is(uploadError, ErrNoPaidLicense)
+	return uploadError != nil && !licenseIsMissing
 }
