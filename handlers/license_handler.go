@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -13,6 +14,11 @@ import (
 )
 
 const djangoProxyTimeoutSeconds = 20
+const noInternetMessage = "No internet connection. Check the connection and try again."
+const paymentServiceTroubleMessage = "The payment service is not responding. Try again in a few minutes."
+
+var supportedMobileMoneyProviders = map[string]bool{"Mpesa": true, "Tigo": true, "Airtel": true, "Halopesa": true, "Azampesa": true}
+
 const contentTypeHeader = "Content-Type"
 const applicationJsonContentType = "application/json"
 
@@ -38,40 +44,42 @@ func GetHardwareId(fiberContext *fiber.Ctx) error {
 	})
 }
 
-// GetLicenseStatus returns the current license state to the frontend including
 func GetLicenseStatus(fiberContext *fiber.Ctx) error {
-	licenseStateObject, licenseLoadError := license.LoadLicenseState()
-	licenseIsCurrentlyValid := licenseLoadError == nil && license.Check() == nil
-
-	if !licenseIsCurrentlyValid {
-		if activateError := license.ActivateFromDjango(); activateError == nil {
-			licenseStateObject, licenseLoadError = license.LoadLicenseState()
+	licenseStatus := license.CurrentStatus()
+	shouldAskServerForLicense := !licenseStatus.Licensed && licenseStatus.LockReason != license.LockReasonClock
+	if shouldAskServerForLicense {
+		activationError := license.ActivateFromDjango()
+		if activationError == nil {
+			licenseStatus = license.CurrentStatus()
 		}
 	}
+	return utils.Success(fiberContext, "License status", licenseStatus)
+}
 
-	licenseFileExists := licenseLoadError == nil
-	if !licenseFileExists {
-		return utils.Success(fiberContext, "License status", fiber.Map{
-			"licensed":        false,
-			"is_grace_period": false,
-			"is_trial":        false,
-		})
+func RefreshLicense(fiberContext *fiber.Ctx) error {
+	activationError := license.ActivateFromDjango()
+	serverIsUnreachable := errors.Is(activationError, license.ErrLicensingServerUnreachable)
+	if serverIsUnreachable {
+		return fiberContext.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": noInternetMessage})
+	}
+	return utils.Success(fiberContext, "License status", license.CurrentStatus())
+}
+
+func sendDjangoResponse(fiberContext *fiber.Ctx, djangoHttpResponse *http.Response) error {
+	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(djangoHttpResponse.Body)
+	if djangoResponseBodyReadError != nil {
+		return fiberContext.Status(fiber.StatusBadGateway).JSON(fiber.Map{"success": false, "error": paymentServiceTroubleMessage})
 	}
 
-	daysRemainingInt := license.GetDaysRemaining()
-	isInGracePeriodBool := license.IsInGracePeriod()
-	licenseCheckError := license.Check()
-	licenseIsValidBool := licenseCheckError == nil
+	djangoServerFailed := djangoHttpResponse.StatusCode >= http.StatusInternalServerError
+	djangoBodyIsJson := json.Valid(djangoResponseBodyBytes)
+	if djangoServerFailed || !djangoBodyIsJson {
+		return fiberContext.Status(fiber.StatusBadGateway).JSON(fiber.Map{"success": false, "error": paymentServiceTroubleMessage})
+	}
 
-	return utils.Success(fiberContext, "License status", fiber.Map{
-		"licensed":        licenseIsValidBool,
-		"expires_at":      licenseStateObject.ExpiresAt,
-		"days_remaining":  daysRemainingInt,
-		"is_grace_period": isInGracePeriodBool,
-		"is_trial":        licenseStateObject.IsTrial,
-		"plan":            licenseStateObject.DaysGranted,
-		"max_devices":     licenseStateObject.MaxDevices,
-	})
+	fiberContext.Set(contentTypeHeader, applicationJsonContentType)
+	fiberContext.Status(djangoHttpResponse.StatusCode)
+	return fiberContext.Send(djangoResponseBodyBytes)
 }
 
 // GetLicensePackages proxies the package list request to Django and returns
@@ -87,18 +95,11 @@ func GetLicensePackages(fiberContext *fiber.Ctx) error {
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Do(djangoGetRequest)
 	djangoServerIsUnreachable := djangoHttpNetworkError != nil
 	if djangoServerIsUnreachable {
-		return fiberContext.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": "licensing server is unreachable"})
+		return fiberContext.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": noInternetMessage})
 	}
 	defer djangoHttpResponse.Body.Close()
 
-	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(djangoHttpResponse.Body)
-	if djangoResponseBodyReadError != nil {
-		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to read licensing server response"})
-	}
-
-	fiberContext.Set(contentTypeHeader, applicationJsonContentType)
-	fiberContext.Status(djangoHttpResponse.StatusCode)
-	return fiberContext.Send(djangoResponseBodyBytes)
+	return sendDjangoResponse(fiberContext, djangoHttpResponse)
 }
 
 // InitiateLicensePayment receives the payment request from the frontend, injects
@@ -109,6 +110,19 @@ func InitiateLicensePayment(fiberContext *fiber.Ctx) error {
 	frontendPayloadIsInvalid := frontendPayloadUnmarshalError != nil
 	if frontendPayloadIsInvalid {
 		return fiberContext.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "invalid request body"})
+	}
+
+	phoneNumber, _ := frontendRequestPayloadMap["phone"].(string)
+	mobileMoneyProvider, _ := frontendRequestPayloadMap["provider"].(string)
+	packageId, _ := frontendRequestPayloadMap["package_id"].(float64)
+	if phoneNumber == "" {
+		return fiberContext.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Enter the phone number that will pay."})
+	}
+	if !supportedMobileMoneyProviders[mobileMoneyProvider] {
+		return fiberContext.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Choose the mobile money network."})
+	}
+	if packageId <= 0 {
+		return fiberContext.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Choose a plan first."})
 	}
 
 	hardwareIdString, hardwareIdComputeError := license.ComputeHardwareId()
@@ -134,16 +148,9 @@ func InitiateLicensePayment(fiberContext *fiber.Ctx) error {
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Do(djangoPostRequest)
 	djangoServerIsUnreachable := djangoHttpNetworkError != nil
 	if djangoServerIsUnreachable {
-		return fiberContext.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": "licensing server is unreachable"})
+		return fiberContext.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": noInternetMessage})
 	}
 	defer djangoHttpResponse.Body.Close()
 
-	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(djangoHttpResponse.Body)
-	if djangoResponseBodyReadError != nil {
-		return fiberContext.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to read licensing server response"})
-	}
-
-	fiberContext.Set(contentTypeHeader, applicationJsonContentType)
-	fiberContext.Status(djangoHttpResponse.StatusCode)
-	return fiberContext.Send(djangoResponseBodyBytes)
+	return sendDjangoResponse(fiberContext, djangoHttpResponse)
 }
