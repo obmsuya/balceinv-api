@@ -212,20 +212,8 @@ func ListCloudBackups() ([]CloudBackup, error) {
 	return cloudBackups, nil
 }
 
-func downloadAndUnzip(downloadURL string, targetFilePath string) error {
-	httpClientObject := &http.Client{Timeout: cloudTransferTimeoutMinutes * time.Minute}
-	downloadResponse, downloadNetworkError := httpClientObject.Get(downloadURL)
-	if downloadNetworkError != nil {
-		return fmt.Errorf("download failed: %w", downloadNetworkError)
-	}
-	defer downloadResponse.Body.Close()
-
-	downloadWasSuccessful := downloadResponse.StatusCode == http.StatusOK
-	if !downloadWasSuccessful {
-		return fmt.Errorf("storage returned %d on download", downloadResponse.StatusCode)
-	}
-
-	gzipReader, gzipReaderError := gzip.NewReader(downloadResponse.Body)
+func unzipToFile(gzipSource io.Reader, targetFilePath string) error {
+	gzipReader, gzipReaderError := gzip.NewReader(gzipSource)
 	if gzipReaderError != nil {
 		return fmt.Errorf("backup is not a valid gzip file: %w", gzipReaderError)
 	}
@@ -239,6 +227,24 @@ func downloadAndUnzip(downloadURL string, targetFilePath string) error {
 
 	_, unzipCopyError := io.Copy(targetFile, gzipReader)
 	return unzipCopyError
+}
+
+func stageRestoreFromGzip(databasePath string, gzipSource io.Reader) error {
+	pendingRestorePath := PendingRestorePath(databasePath)
+	downloadingFilePath := pendingRestorePath + ".downloading"
+	defer os.Remove(downloadingFilePath)
+
+	unzipError := unzipToFile(gzipSource, downloadingFilePath)
+	if unzipError != nil {
+		return unzipError
+	}
+
+	sqliteCheckError := checkSqliteFile(downloadingFilePath)
+	if sqliteCheckError != nil {
+		return sqliteCheckError
+	}
+
+	return os.Rename(downloadingFilePath, pendingRestorePath)
 }
 
 func checkSqliteFile(databaseFilePath string) error {
@@ -296,22 +302,25 @@ func StageCloudRestore(databasePath string, backupDate string) error {
 		return fmt.Errorf("no cloud backup found for %s", backupDate)
 	}
 
-	pendingRestorePath := PendingRestorePath(databasePath)
-	downloadingFilePath := pendingRestorePath + ".downloading"
-	defer os.Remove(downloadingFilePath)
+	httpClientObject := &http.Client{Timeout: cloudTransferTimeoutMinutes * time.Minute}
+	downloadResponse, downloadNetworkError := httpClientObject.Get(chosenBackup.DownloadURL)
+	if downloadNetworkError != nil {
+		return fmt.Errorf("download failed: %w", downloadNetworkError)
+	}
+	defer downloadResponse.Body.Close()
 
-	downloadError := downloadAndUnzip(chosenBackup.DownloadURL, downloadingFilePath)
-	if downloadError != nil {
-		return downloadError
+	downloadWasSuccessful := downloadResponse.StatusCode == http.StatusOK
+	if !downloadWasSuccessful {
+		return fmt.Errorf("storage returned %d on download", downloadResponse.StatusCode)
 	}
 
-	sqliteCheckError := checkSqliteFile(downloadingFilePath)
-	if sqliteCheckError != nil {
-		return sqliteCheckError
+	stageError := stageRestoreFromGzip(databasePath, downloadResponse.Body)
+	if stageError != nil {
+		return stageError
 	}
 
 	log.Printf("cloud restore staged date=%s", backupDate)
-	return os.Rename(downloadingFilePath, pendingRestorePath)
+	return nil
 }
 
 // ApplyPendingRestore runs before the database is opened. The replaced database is
