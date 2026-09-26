@@ -141,7 +141,7 @@ func (service *PrintService) buildTestReceipt(paperWidthMM int) []byte {
 	printer.Init()
 	printer.SetAlign("center")
 	printer.SetEmphasize(1)
-	printer.Write("Balce Inventory\n")
+	printer.Write("POS\n")
 	printer.SetEmphasize(0)
 	printer.Write(centerText("Test Print OK", columns) + "\n")
 	printer.Write(centerText(time.Now().Format("02/01/2006 15:04:05"), columns) + "\n")

@@ -106,7 +106,7 @@ func uploadPageHTML(token string) string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Balce — Product Photo</title>
+<title>POS — Product Photo</title>
 <style>
   body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #fafafa; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; box-sizing: border-box; text-align: center; }
   h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 24px; }
