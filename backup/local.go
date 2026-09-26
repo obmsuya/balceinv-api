@@ -19,6 +19,7 @@ const localBackupFolderName = "backups"
 const localBackupFilePrefix = "balce-"
 const localBackupFileSuffix = ".db.gz"
 const backupDateLayout = "2006-01-02"
+const BeforeRestoreBackupName = "before-restore"
 
 var localBackupMutex sync.Mutex
 
@@ -145,9 +146,42 @@ func ListLocalBackups() ([]LocalBackup, error) {
 	return localBackups, nil
 }
 
+func SaveBeforeRestoreCopy(database *gorm.DB) error {
+	localBackupMutex.Lock()
+	defer localBackupMutex.Unlock()
+
+	backupDirectory, backupDirectoryError := localBackupDirectory()
+	if backupDirectoryError != nil {
+		return backupDirectoryError
+	}
+
+	beforeRestoreFilePath := localBackupFilePath(backupDirectory, BeforeRestoreBackupName)
+	writingFilePath := beforeRestoreFilePath + ".writing"
+	defer os.Remove(writingFilePath)
+
+	snapshotError := writeGzippedSnapshot(database, writingFilePath)
+	if snapshotError != nil {
+		return fmt.Errorf("could not save current data before restoring: %w", snapshotError)
+	}
+	return os.Rename(writingFilePath, beforeRestoreFilePath)
+}
+
+func FindBeforeRestoreCopy() (*LocalBackup, error) {
+	backupDirectory, backupDirectoryError := localBackupDirectory()
+	if backupDirectoryError != nil {
+		return nil, backupDirectoryError
+	}
+	beforeRestoreBackup, backupReadError := localBackupFromFile(backupDirectory, BeforeRestoreBackupName)
+	if backupReadError != nil {
+		return nil, nil
+	}
+	return &beforeRestoreBackup, nil
+}
+
 func StageLocalRestore(databasePath string, backupDate string) error {
 	_, dateParseError := time.Parse(backupDateLayout, backupDate)
-	if dateParseError != nil {
+	backupNameIsValid := dateParseError == nil || backupDate == BeforeRestoreBackupName
+	if !backupNameIsValid {
 		return fmt.Errorf("invalid backup date %q", backupDate)
 	}
 
