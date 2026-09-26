@@ -19,6 +19,7 @@ type BackupStatus struct {
 	LastCloudError     string        `json:"last_cloud_error"`
 	RestorePending     bool          `json:"restore_pending"`
 	LocalBackups       []LocalBackup `json:"local_backups"`
+	BeforeRestoreCopy  *LocalBackup  `json:"before_restore_copy"`
 }
 
 func recordCloudBackupResult(uploadError error) {
@@ -46,6 +47,11 @@ func GetBackupStatus(databasePath string) (BackupStatus, error) {
 		return BackupStatus{}, localListError
 	}
 
+	beforeRestoreCopy, beforeRestoreError := FindBeforeRestoreCopy()
+	if beforeRestoreError != nil {
+		return BackupStatus{}, beforeRestoreError
+	}
+
 	_, licenseError := loadPaidLicenseState()
 	_, pendingStatError := os.Stat(PendingRestorePath(databasePath))
 
@@ -59,5 +65,6 @@ func GetBackupStatus(databasePath string) (BackupStatus, error) {
 		LastCloudError:     lastCloudError,
 		RestorePending:     pendingStatError == nil,
 		LocalBackups:       localBackups,
+		BeforeRestoreCopy:  beforeRestoreCopy,
 	}, nil
 }
