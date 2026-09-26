@@ -17,6 +17,7 @@ var licenseCheckSkippedPaths = []string{
 	"/api/license/status",
 	"/api/license/packages",
 	"/api/license/pay",
+	"/api/license/refresh",
 	"/api/license/hardware-id",
 }
 
