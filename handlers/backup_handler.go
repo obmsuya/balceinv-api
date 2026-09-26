@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log"
 
 	"github.com/chrisostomemataba/balceinv-api/backup"
 	"github.com/chrisostomemataba/balceinv-api/utils"
@@ -23,7 +24,16 @@ func cloudBackupErrorStatus(cloudBackupError error) int {
 	if licenseIsMissing {
 		return fiber.StatusPaymentRequired
 	}
+	cloudIsUnreachable := errors.Is(cloudBackupError, backup.ErrCloudUnreachable)
+	if cloudIsUnreachable {
+		return fiber.StatusServiceUnavailable
+	}
 	return fiber.StatusBadGateway
+}
+
+func respondWithCloudError(fiberContext *fiber.Ctx, cloudBackupError error) error {
+	log.Printf("cloud backup request failed: %v", cloudBackupError)
+	return utils.Error(fiberContext, cloudBackupErrorStatus(cloudBackupError), backup.UserFacingCloudError(cloudBackupError))
 }
 
 func requestIsFromAdmin(fiberContext *fiber.Ctx) bool {
@@ -42,7 +52,7 @@ func (handler *BackupHandler) stageRestoreKeepingCurrentData(stageRestore func()
 func (handler *BackupHandler) BackupNow(fiberContext *fiber.Ctx) error {
 	backupKey, uploadError := backup.UploadCloudBackup(handler.database)
 	if uploadError != nil {
-		return utils.Error(fiberContext, cloudBackupErrorStatus(uploadError), uploadError.Error())
+		return respondWithCloudError(fiberContext, uploadError)
 	}
 	return utils.Success(fiberContext, "Backup uploaded", fiber.Map{"key": backupKey})
 }
@@ -50,7 +60,7 @@ func (handler *BackupHandler) BackupNow(fiberContext *fiber.Ctx) error {
 func (handler *BackupHandler) List(fiberContext *fiber.Ctx) error {
 	cloudBackups, backupListError := backup.ListCloudBackups()
 	if backupListError != nil {
-		return utils.Error(fiberContext, cloudBackupErrorStatus(backupListError), backupListError.Error())
+		return respondWithCloudError(fiberContext, backupListError)
 	}
 	return utils.Success(fiberContext, "Cloud backups", cloudBackups)
 }
@@ -72,7 +82,7 @@ func (handler *BackupHandler) Restore(fiberContext *fiber.Ctx) error {
 		return backup.StageCloudRestore(handler.databasePath, restoreRequest.Date)
 	})
 	if restoreError != nil {
-		return utils.Error(fiberContext, cloudBackupErrorStatus(restoreError), restoreError.Error())
+		return respondWithCloudError(fiberContext, restoreError)
 	}
 	return utils.Success(fiberContext, "Backup downloaded. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
 }
