@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/models"
@@ -20,8 +21,6 @@ type CatalogMergeResult struct {
 	Added   int
 	Updated int
 }
-
-const catalogInsertBatchSize = 200
 
 func NewCatalogRepository(database *gorm.DB) *CatalogRepository {
 	return &CatalogRepository{database: database}
@@ -59,7 +58,9 @@ func (repository *CatalogRepository) CreateAll(catalogProducts []models.CatalogP
 	if len(catalogProducts) == 0 {
 		return nil
 	}
-	return repository.database.CreateInBatches(catalogProducts, catalogInsertBatchSize).Error
+	return repository.database.Transaction(func(transaction *gorm.DB) error {
+		return createEachCatalogProduct(transaction, catalogProducts)
+	})
 }
 
 func (repository *CatalogRepository) Replace(businessType string, catalogProducts []models.CatalogProduct) error {
@@ -68,10 +69,7 @@ func (repository *CatalogRepository) Replace(businessType string, catalogProduct
 		if deleteError != nil {
 			return deleteError
 		}
-		if len(catalogProducts) == 0 {
-			return nil
-		}
-		return transaction.CreateInBatches(catalogProducts, catalogInsertBatchSize).Error
+		return createEachCatalogProduct(transaction, catalogProducts)
 	})
 }
 
@@ -104,11 +102,9 @@ func (repository *CatalogRepository) Merge(businessType string, catalogProducts 
 			mergeResult.Updated++
 		}
 
-		if len(newCatalogProducts) > 0 {
-			createError := transaction.CreateInBatches(newCatalogProducts, catalogInsertBatchSize).Error
-			if createError != nil {
-				return createError
-			}
+		createError := createEachCatalogProduct(transaction, newCatalogProducts)
+		if createError != nil {
+			return createError
 		}
 		mergeResult.Added = len(newCatalogProducts)
 		return nil
@@ -119,6 +115,16 @@ func (repository *CatalogRepository) Merge(businessType string, catalogProducts 
 func (repository *CatalogRepository) DeleteByBusinessType(businessType string) (int64, error) {
 	deleteResult := repository.database.Where("business_type = ?", businessType).Delete(&models.CatalogProduct{})
 	return deleteResult.RowsAffected, deleteResult.Error
+}
+
+func createEachCatalogProduct(transaction *gorm.DB, catalogProducts []models.CatalogProduct) error {
+	for catalogProductIndex := range catalogProducts {
+		createError := transaction.Create(&catalogProducts[catalogProductIndex]).Error
+		if createError != nil {
+			return fmt.Errorf("could not save %q: %w", catalogProducts[catalogProductIndex].Name, createError)
+		}
+	}
+	return nil
 }
 
 func CatalogNameKey(name string) string {
