@@ -11,16 +11,18 @@ import (
 
 var CompiledAccessTokenSecret = ""
 var CompiledRefreshTokenSecret = ""
+var CompiledSupportPasscodeHash = ""
 
 // Config holds every value the application needs from the environment.
 // All other packages receive this struct — they never call os.Getenv themselves.
 type Config struct {
-	Port               string
-	DBPath             string
-	AccessTokenSecret  string
-	RefreshTokenSecret string
-	LicenseSecret      string
-	Env                string
+	Port                string
+	DBPath              string
+	AccessTokenSecret   string
+	RefreshTokenSecret  string
+	LicenseSecret       string
+	SupportPasscodeHash string
+	Env                 string
 }
 
 // Load reads the .env file and returns a populated Config struct.
@@ -35,12 +37,13 @@ func Load() *Config {
 	}
 
 	cfg := &Config{
-		Port:               getEnv("PORT", "8080"),
-		DBPath:             getEnv("DB_PATH", defaultDBPath()),
-		AccessTokenSecret:  getEnv("ACCESS_TOKEN_SECRET", CompiledAccessTokenSecret),
-		RefreshTokenSecret: getEnv("REFRESH_TOKEN_SECRET", CompiledRefreshTokenSecret),
-		LicenseSecret:      getEnv("BALCE_LICENSE_SECRET", ""),
-		Env:                getEnv("ENV", "development"),
+		Port:                getEnv("PORT", "8080"),
+		DBPath:              getEnv("DB_PATH", defaultDBPath()),
+		AccessTokenSecret:   getEnv("ACCESS_TOKEN_SECRET", CompiledAccessTokenSecret),
+		RefreshTokenSecret:  getEnv("REFRESH_TOKEN_SECRET", CompiledRefreshTokenSecret),
+		LicenseSecret:       getEnv("BALCE_LICENSE_SECRET", ""),
+		SupportPasscodeHash: getEnv("BALCE_SUPPORT_PASSCODE_HASH", CompiledSupportPasscodeHash),
+		Env:                 getEnv("ENV", "development"),
 	}
 
 	// Warn loudly if secrets are missing — a server running without proper
