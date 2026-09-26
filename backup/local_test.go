@@ -125,3 +125,41 @@ func TestExportThenRestoreFromFile(t *testing.T) {
 		t.Fatalf("restored database has %q", restoredNote)
 	}
 }
+
+func TestBeforeRestoreCopySurvivesDailyBackupsAndCanBeRestored(t *testing.T) {
+	testDirectory := useTemporaryAppData(t)
+
+	liveDatabase := openTestDatabase(t, filepath.Join(testDirectory, "live.db"), "sales before restore")
+	saveError := SaveBeforeRestoreCopy(liveDatabase)
+	if saveError != nil {
+		t.Fatal(saveError)
+	}
+	liveDatabase.Exec("UPDATE notes SET text = ?", "restored old data")
+	_, dailyBackupError := WriteLocalBackup(liveDatabase)
+	if dailyBackupError != nil {
+		t.Fatal(dailyBackupError)
+	}
+
+	localBackups, _ := ListLocalBackups()
+	for _, localBackup := range localBackups {
+		if localBackup.Date == BeforeRestoreBackupName {
+			t.Fatal("the before-restore copy must not appear among the daily backups")
+		}
+	}
+	beforeRestoreCopy, findError := FindBeforeRestoreCopy()
+	if findError != nil || beforeRestoreCopy == nil {
+		t.Fatal("before-restore copy was not found")
+	}
+
+	targetDatabasePath := filepath.Join(testDirectory, "balce.db")
+	closedEmptyDatabase(t, targetDatabasePath)
+	restoreError := StageLocalRestore(targetDatabasePath, BeforeRestoreBackupName)
+	if restoreError != nil {
+		t.Fatal(restoreError)
+	}
+	ApplyPendingRestore(targetDatabasePath)
+	restoredNote := readRestoredNote(t, targetDatabasePath)
+	if restoredNote != "sales before restore" {
+		t.Fatalf("undo restored %q", restoredNote)
+	}
+}
