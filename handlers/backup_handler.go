@@ -31,6 +31,14 @@ func requestIsFromAdmin(fiberContext *fiber.Ctx) bool {
 	return payload.Role == "Admin"
 }
 
+func (handler *BackupHandler) stageRestoreKeepingCurrentData(stageRestore func() error) error {
+	saveError := backup.SaveBeforeRestoreCopy(handler.database)
+	if saveError != nil {
+		return saveError
+	}
+	return stageRestore()
+}
+
 func (handler *BackupHandler) BackupNow(fiberContext *fiber.Ctx) error {
 	backupKey, uploadError := backup.UploadCloudBackup(handler.database)
 	if uploadError != nil {
@@ -60,7 +68,9 @@ func (handler *BackupHandler) Restore(fiberContext *fiber.Ctx) error {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, "date is required")
 	}
 
-	restoreError := backup.StageCloudRestore(handler.databasePath, restoreRequest.Date)
+	restoreError := handler.stageRestoreKeepingCurrentData(func() error {
+		return backup.StageCloudRestore(handler.databasePath, restoreRequest.Date)
+	})
 	if restoreError != nil {
 		return utils.Error(fiberContext, cloudBackupErrorStatus(restoreError), restoreError.Error())
 	}
@@ -96,7 +106,16 @@ func (handler *BackupHandler) RestoreFromThisPC(fiberContext *fiber.Ctx) error {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, "date is required")
 	}
 
-	restoreError := backup.StageLocalRestore(handler.databasePath, restoreRequest.Date)
+	stageLocalRestore := func() error {
+		return backup.StageLocalRestore(handler.databasePath, restoreRequest.Date)
+	}
+	var restoreError error
+	restoringBeforeRestoreCopy := restoreRequest.Date == backup.BeforeRestoreBackupName
+	if restoringBeforeRestoreCopy {
+		restoreError = stageLocalRestore()
+	} else {
+		restoreError = handler.stageRestoreKeepingCurrentData(stageLocalRestore)
+	}
 	if restoreError != nil {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
 	}
@@ -136,7 +155,9 @@ func (handler *BackupHandler) RestoreFromFile(fiberContext *fiber.Ctx) error {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, "path is required")
 	}
 
-	restoreError := backup.StageFileRestore(handler.databasePath, restoreRequest.Path)
+	restoreError := handler.stageRestoreKeepingCurrentData(func() error {
+		return backup.StageFileRestore(handler.databasePath, restoreRequest.Path)
+	})
 	if restoreError != nil {
 		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
 	}
