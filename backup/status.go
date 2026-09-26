@@ -34,7 +34,7 @@ func recordCloudBackupResult(uploadError error) {
 	attemptTime := time.Now()
 	lastCloudAttemptAt = &attemptTime
 	if uploadError != nil {
-		lastCloudError = uploadError.Error()
+		lastCloudError = UserFacingCloudError(uploadError)
 		return
 	}
 	lastCloudSuccessAt = &attemptTime
