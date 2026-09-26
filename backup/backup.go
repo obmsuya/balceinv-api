@@ -30,6 +30,16 @@ var cloudBackupMutex sync.Mutex
 
 var ErrNoPaidLicense = errors.New("cloud backup needs an activated license")
 
+var ErrCloudUnreachable = errors.New("could not reach the cloud, check the internet connection")
+
+func UserFacingCloudError(cloudError error) string {
+	cloudIsUnreachable := errors.Is(cloudError, ErrCloudUnreachable)
+	if cloudIsUnreachable {
+		return ErrCloudUnreachable.Error()
+	}
+	return cloudError.Error()
+}
+
 type CloudBackup struct {
 	Date        string `json:"date"`
 	Key         string `json:"key"`
@@ -72,7 +82,7 @@ func postToDjango(djangoPath string, licenseStateObject *license.LicenseState, r
 	httpClientObject := &http.Client{Timeout: djangoRequestTimeoutSeconds * time.Second}
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Post(djangoURL, "application/json", bytes.NewReader(requestPayloadBytes))
 	if djangoHttpNetworkError != nil {
-		return fmt.Errorf("licensing server unreachable: %w", djangoHttpNetworkError)
+		return fmt.Errorf("%w: licensing server: %v", ErrCloudUnreachable, djangoHttpNetworkError)
 	}
 	defer djangoHttpResponse.Body.Close()
 
@@ -144,7 +154,7 @@ func putFileToURL(uploadURL string, filePath string) error {
 	httpClientObject := &http.Client{Timeout: cloudTransferTimeoutMinutes * time.Minute}
 	uploadResponse, uploadNetworkError := httpClientObject.Do(uploadRequest)
 	if uploadNetworkError != nil {
-		return fmt.Errorf("upload failed: %w", uploadNetworkError)
+		return fmt.Errorf("%w: upload: %v", ErrCloudUnreachable, uploadNetworkError)
 	}
 	defer uploadResponse.Body.Close()
 
@@ -312,7 +322,7 @@ func StageCloudRestore(databasePath string, backupDate string) error {
 	httpClientObject := &http.Client{Timeout: cloudTransferTimeoutMinutes * time.Minute}
 	downloadResponse, downloadNetworkError := httpClientObject.Get(chosenBackup.DownloadURL)
 	if downloadNetworkError != nil {
-		return fmt.Errorf("download failed: %w", downloadNetworkError)
+		return fmt.Errorf("%w: download: %v", ErrCloudUnreachable, downloadNetworkError)
 	}
 	defer downloadResponse.Body.Close()
 
