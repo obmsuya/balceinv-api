@@ -26,6 +26,11 @@ func cloudBackupErrorStatus(cloudBackupError error) int {
 	return fiber.StatusBadGateway
 }
 
+func requestIsFromAdmin(fiberContext *fiber.Ctx) bool {
+	payload := fiberContext.Locals("user").(*utils.TokenPayload)
+	return payload.Role == "Admin"
+}
+
 func (handler *BackupHandler) BackupNow(fiberContext *fiber.Ctx) error {
 	backupKey, uploadError := backup.UploadCloudBackup(handler.database)
 	if uploadError != nil {
@@ -43,9 +48,7 @@ func (handler *BackupHandler) List(fiberContext *fiber.Ctx) error {
 }
 
 func (handler *BackupHandler) Restore(fiberContext *fiber.Ctx) error {
-	payload := fiberContext.Locals("user").(*utils.TokenPayload)
-	userIsAdmin := payload.Role == "Admin"
-	if !userIsAdmin {
+	if !requestIsFromAdmin(fiberContext) {
 		return utils.Error(fiberContext, fiber.StatusForbidden, "Only an admin can restore a backup")
 	}
 
@@ -62,4 +65,80 @@ func (handler *BackupHandler) Restore(fiberContext *fiber.Ctx) error {
 		return utils.Error(fiberContext, cloudBackupErrorStatus(restoreError), restoreError.Error())
 	}
 	return utils.Success(fiberContext, "Backup downloaded. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
+}
+
+func (handler *BackupHandler) Status(fiberContext *fiber.Ctx) error {
+	backupStatus, statusError := backup.GetBackupStatus(handler.databasePath)
+	if statusError != nil {
+		return utils.Error(fiberContext, fiber.StatusInternalServerError, statusError.Error())
+	}
+	return utils.Success(fiberContext, "Backup status", backupStatus)
+}
+
+func (handler *BackupHandler) BackupOnThisPC(fiberContext *fiber.Ctx) error {
+	localBackup, localBackupError := backup.WriteLocalBackup(handler.database)
+	if localBackupError != nil {
+		return utils.Error(fiberContext, fiber.StatusInternalServerError, localBackupError.Error())
+	}
+	return utils.Success(fiberContext, "Backup saved on this PC", localBackup)
+}
+
+func (handler *BackupHandler) RestoreFromThisPC(fiberContext *fiber.Ctx) error {
+	if !requestIsFromAdmin(fiberContext) {
+		return utils.Error(fiberContext, fiber.StatusForbidden, "Only an admin can restore a backup")
+	}
+
+	var restoreRequest struct {
+		Date string `json:"date"`
+	}
+	bodyParseError := fiberContext.BodyParser(&restoreRequest)
+	if bodyParseError != nil || restoreRequest.Date == "" {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, "date is required")
+	}
+
+	restoreError := backup.StageLocalRestore(handler.databasePath, restoreRequest.Date)
+	if restoreError != nil {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
+	}
+	return utils.Success(fiberContext, "Backup ready. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
+}
+
+func (handler *BackupHandler) ExportToFile(fiberContext *fiber.Ctx) error {
+	if !requestIsFromAdmin(fiberContext) {
+		return utils.Error(fiberContext, fiber.StatusForbidden, "Only an admin can save a backup file")
+	}
+
+	var exportRequest struct {
+		Path string `json:"path"`
+	}
+	bodyParseError := fiberContext.BodyParser(&exportRequest)
+	if bodyParseError != nil || exportRequest.Path == "" {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, "path is required")
+	}
+
+	exportError := backup.ExportBackup(handler.database, exportRequest.Path)
+	if exportError != nil {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, exportError.Error())
+	}
+	return utils.Success(fiberContext, "Backup file saved", fiber.Map{"path": exportRequest.Path})
+}
+
+func (handler *BackupHandler) RestoreFromFile(fiberContext *fiber.Ctx) error {
+	if !requestIsFromAdmin(fiberContext) {
+		return utils.Error(fiberContext, fiber.StatusForbidden, "Only an admin can restore a backup")
+	}
+
+	var restoreRequest struct {
+		Path string `json:"path"`
+	}
+	bodyParseError := fiberContext.BodyParser(&restoreRequest)
+	if bodyParseError != nil || restoreRequest.Path == "" {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, "path is required")
+	}
+
+	restoreError := backup.StageFileRestore(handler.databasePath, restoreRequest.Path)
+	if restoreError != nil {
+		return utils.Error(fiberContext, fiber.StatusBadRequest, restoreError.Error())
+	}
+	return utils.Success(fiberContext, "Backup ready. Restart Balce to finish restoring.", fiber.Map{"restart_required": true})
 }
