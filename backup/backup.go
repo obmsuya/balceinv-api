@@ -159,6 +159,12 @@ func UploadCloudBackup(database *gorm.DB) (string, error) {
 	cloudBackupMutex.Lock()
 	defer cloudBackupMutex.Unlock()
 
+	backupKey, uploadError := uploadCloudSnapshot(database)
+	recordCloudBackupResult(uploadError)
+	return backupKey, uploadError
+}
+
+func uploadCloudSnapshot(database *gorm.DB) (string, error) {
 	licenseStateObject, licenseError := loadPaidLicenseState()
 	if licenseError != nil {
 		return "", licenseError
