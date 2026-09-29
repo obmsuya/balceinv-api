@@ -50,6 +50,9 @@ var invoiceLabels = map[string]map[string]string{
 		"cash":        "Cash",
 		"card":        "Card",
 		"mobile":      "Mobile money",
+		"customer":    "Customer",
+		"order":       "Order",
+		"credit":      "Balance owed (pay later)",
 		"wholesale":   "wholesale",
 		"efd":         "EFD verification",
 		"efdPending":  "EFD receipt to follow",
@@ -76,6 +79,9 @@ var invoiceLabels = map[string]map[string]string{
 		"cash":        "Taslimu",
 		"card":        "Kadi",
 		"mobile":      "Pesa ya simu",
+		"customer":    "Mteja",
+		"order":       "Oda",
+		"credit":      "Deni (lipa baadaye)",
 		"wholesale":   "jumla",
 		"efd":         "Uthibitisho wa EFD",
 		"efdPending":  "Risiti ya EFD itafuata",
@@ -143,11 +149,7 @@ func (service *Service) SaleDocument(ctx context.Context, querier database.Queri
 		Subtitle:    joinLines(branding.ReceiptHeader),
 		GeneratedBy: viewer.Name,
 		GeneratedAt: time.Now(),
-		Details: []documents.Field{
-			{Label: label("date"), Value: saleView.CreatedAt, Kind: documents.DateTime},
-			{Label: label("servedBy"), Value: saleView.CashierName},
-			{Label: label("shop"), Value: receiptView.Shop.Name},
-		},
+		Details:     saleDetails(saleView, receiptView.Shop.Name, label),
 		Tables: []documents.Table{{
 			Title: label("items"),
 			Columns: []documents.Column{
@@ -223,6 +225,11 @@ func totalFields(saleView sales.SaleView, showsTax bool, label func(string) stri
 		totals = append(totals, documents.Field{Label: strings.ReplaceAll(label("includesVat"), "{rate}", rateText), Value: saleView.TaxTotal, Kind: documents.Money})
 	}
 	for _, payment := range saleView.Payments {
+		isOnCredit := payment.Method == "credit"
+		if isOnCredit {
+			totals = append(totals, documents.Field{Label: label("credit"), Value: payment.Amount, Kind: documents.Money, Strong: true})
+			continue
+		}
 		methodName := label(payment.Method)
 		if methodName == "" {
 			methodName = payment.Method
@@ -233,6 +240,25 @@ func totalFields(saleView sales.SaleView, showsTax bool, label func(string) stri
 		totals = append(totals, documents.Field{Label: label("change"), Value: saleView.ChangeGiven, Kind: documents.Money})
 	}
 	return totals
+}
+
+func saleDetails(saleView sales.SaleView, shopName string, label func(string) string) []documents.Field {
+	details := []documents.Field{
+		{Label: label("date"), Value: saleView.CreatedAt, Kind: documents.DateTime},
+		{Label: label("servedBy"), Value: saleView.CashierName},
+		{Label: label("shop"), Value: shopName},
+	}
+	if saleView.CustomerName != nil {
+		customerText := *saleView.CustomerName
+		if saleView.CustomerPhone != nil && *saleView.CustomerPhone != "" {
+			customerText = customerText + " · " + *saleView.CustomerPhone
+		}
+		details = append(details, documents.Field{Label: label("customer"), Value: customerText})
+	}
+	if saleView.OrderNumber != nil {
+		details = append(details, documents.Field{Label: label("order"), Value: *saleView.OrderNumber})
+	}
+	return details
 }
 
 func joinLines(multilineText string) string {
