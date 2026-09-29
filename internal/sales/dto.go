@@ -51,6 +51,13 @@ type LineView struct {
 	InStock         *int        `json:"in_stock,omitempty"`
 }
 
+type TillOptionsView struct {
+	NumpadEnabled             bool `json:"numpad_enabled"`
+	CustomerDisplayEnabled    bool `json:"customer_display_enabled"`
+	EfdEnabled                bool `json:"efd_enabled"`
+	PrintReceiptAutomatically bool `json:"print_receipt_automatically"`
+}
+
 type QuoteView struct {
 	Lines              []LineView `json:"lines"`
 	Subtotal           int64      `json:"subtotal"`

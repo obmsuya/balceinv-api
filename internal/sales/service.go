@@ -258,6 +258,21 @@ func (service *Service) price(ctx context.Context, querier database.Querier, pri
 	return PriceSale(pricingLines, applicableDiscounts, taxRateBasisPoints), nil
 }
 
+func (service *Service) TillOptions(ctx context.Context, querier database.Querier, companyId uuid.UUID) (TillOptionsView, error) {
+	companySettings, settingsError := service.findSettings(ctx, querier, companyId)
+	if settingsError != nil {
+		return TillOptionsView{}, settingsError
+	}
+
+	tillOptions := TillOptionsView{
+		NumpadEnabled:             companySettings.TillNumpadEnabled,
+		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
+		EfdEnabled:                companySettings.EfdEnabled,
+		PrintReceiptAutomatically: companySettings.PrintReceiptAutomatically,
+	}
+	return tillOptions, nil
+}
+
 func (service *Service) findSettings(ctx context.Context, querier database.Querier, companyId uuid.UUID) (*settings.Settings, error) {
 	companySettings, settingsError := service.settingsRepository.FindSettings(ctx, querier, companyId)
 	if settingsError != nil {
