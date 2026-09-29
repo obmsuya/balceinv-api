@@ -21,7 +21,13 @@ func staticApp(staticDirectory string) fiber.Handler {
 		}
 
 		cleanedPath := path.Clean("/" + requestPath)
-		candidatePath := filepath.Join(staticDirectory, filepath.FromSlash(cleanedPath))
+		relativePath := filepath.FromSlash(strings.TrimPrefix(cleanedPath, "/"))
+		hasBackslash := strings.Contains(requestPath, `\`)
+		isInsideStaticDirectory := relativePath == "" || filepath.IsLocal(relativePath)
+		if hasBackslash || !isInsideStaticDirectory {
+			return response.Error(c, fiber.StatusNotFound, "not_found", "File not found")
+		}
+		candidatePath := filepath.Join(staticDirectory, relativePath)
 		candidateInfo, statError := os.Stat(candidatePath)
 		if statError == nil && candidateInfo.IsDir() {
 			candidatePath = filepath.Join(candidatePath, "index.html")
