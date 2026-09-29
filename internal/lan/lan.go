@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -94,7 +95,7 @@ func NetworkUrls(listenAddress string) []string {
 	if interfacesError == nil {
 		for _, networkInterface := range interfaceList {
 			isUsable := networkInterface.Flags&net.FlagUp != 0 && networkInterface.Flags&net.FlagLoopback == 0
-			if !isUsable {
+			if !isUsable || isVirtualInterface(networkInterface.Name) {
 				continue
 			}
 			interfaceAddresses, addressesError := networkInterface.Addrs()
@@ -125,6 +126,18 @@ func NetworkUrls(listenAddress string) []string {
 		networkUrls = append(networkUrls, "http://"+net.JoinHostPort(candidateAddress, port))
 	}
 	return networkUrls
+}
+
+var virtualInterfaceMarkers = []string{"bridge", "docker", "br-", "veth", "vmnet", "vboxnet", "virbr", "utun", "vethernet", "virtual", "vmware", "hyper-v", "wsl"}
+
+func isVirtualInterface(interfaceName string) bool {
+	lowerName := strings.ToLower(interfaceName)
+	for _, marker := range virtualInterfaceMarkers {
+		if strings.Contains(lowerName, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func routedAddress() string {
