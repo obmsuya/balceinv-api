@@ -26,6 +26,12 @@ type Config struct {
 	AllowedOrigins  []string
 	LogDirectory    string
 	StaticDirectory string
+	MediaDirectory  string
+	S3Endpoint      string
+	S3Bucket        string
+	S3Region        string
+	S3AccessKeyId   string
+	S3SecretKey     string
 }
 
 type LookupFunc func(key string) (string, bool)
@@ -91,6 +97,37 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		logDirectory = defaultLogDirectory(engine, sqlitePath)
 	}
 
+	s3Endpoint := readTrimmed(lookup, "S3_ENDPOINT")
+	s3Bucket := readTrimmed(lookup, "S3_BUCKET")
+	s3AccessKeyId := readTrimmed(lookup, "S3_ACCESS_KEY_ID")
+	s3SecretKey := readTrimmed(lookup, "S3_SECRET_ACCESS_KEY")
+	s3Region := readTrimmed(lookup, "S3_REGION")
+	if s3Region == "" {
+		s3Region = "garage"
+	}
+
+	usesObjectStorage := s3Endpoint != ""
+	if engine == EnginePostgres && !usesObjectStorage {
+		problems = append(problems, "S3_ENDPOINT is required in cloud mode (object storage for logos and images)")
+	}
+	if usesObjectStorage {
+		requiredS3Values := map[string]string{
+			"S3_BUCKET":            s3Bucket,
+			"S3_ACCESS_KEY_ID":     s3AccessKeyId,
+			"S3_SECRET_ACCESS_KEY": s3SecretKey,
+		}
+		for _, requiredName := range []string{"S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"} {
+			if requiredS3Values[requiredName] == "" {
+				problems = append(problems, requiredName+" is required when S3_ENDPOINT is set")
+			}
+		}
+	}
+
+	mediaDirectory := readTrimmed(lookup, "MEDIA_DIR")
+	if mediaDirectory == "" && engine == EngineSqlite && sqlitePath != "" {
+		mediaDirectory = filepath.Join(filepath.Dir(sqlitePath), "media")
+	}
+
 	hasProblems := len(problems) > 0
 	if hasProblems {
 		return nil, errors.New("invalid configuration:\n  - " + strings.Join(problems, "\n  - "))
@@ -104,6 +141,12 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		AllowedOrigins:  allowedOrigins,
 		LogDirectory:    logDirectory,
 		StaticDirectory: readTrimmed(lookup, "BALCE_STATIC_DIR"),
+		MediaDirectory:  mediaDirectory,
+		S3Endpoint:      s3Endpoint,
+		S3Bucket:        s3Bucket,
+		S3Region:        s3Region,
+		S3AccessKeyId:   s3AccessKeyId,
+		S3SecretKey:     s3SecretKey,
 	}
 
 	return loadedConfig, nil
