@@ -110,6 +110,12 @@ func TestSettingsSurviveRestartsAndBadFilesMeanOff(t *testing.T) {
 		}
 	}
 
+	for interfaceName, isVirtual := range map[string]bool{"en0": false, "Wi-Fi": false, "Ethernet 2": false, "bridge100": true, "docker0": true, "vEthernet (WSL)": true, "VirtualBox Host-Only Network": true} {
+		if lan.IsVirtualInterface(interfaceName) != isVirtual {
+			t.Fatalf("%q virtual = %v", interfaceName, !isVirtual)
+		}
+	}
+
 	restartRequests := make(chan struct{}, 1)
 	controller := lan.NewController(dataDirectory, "127.0.0.1:8080", false, restartRequests)
 	status, setError := controller.SetEnabled(true)
