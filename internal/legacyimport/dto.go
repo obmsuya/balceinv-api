@@ -27,14 +27,15 @@ type PreviewCountsView struct {
 }
 
 type PreviewView struct {
-	BusinessName   string            `json:"business_name"`
-	CurrencyCode   string            `json:"currency_code"`
-	Counts         PreviewCountsView `json:"counts"`
-	FirstSaleAt    *time.Time        `json:"first_sale_at"`
-	LastSaleAt     *time.Time        `json:"last_sale_at"`
-	OwnerChoices   []OldUserView     `json:"owner_choices"`
-	DefaultOwnerId *int64            `json:"default_owner_id"`
-	PasswordsKept  bool              `json:"passwords_kept"`
+	BusinessName     string            `json:"business_name"`
+	CurrencyCode     string            `json:"currency_code"`
+	CurrencyDecimals int               `json:"currency_decimals"`
+	Counts           PreviewCountsView `json:"counts"`
+	FirstSaleAt      *time.Time        `json:"first_sale_at"`
+	LastSaleAt       *time.Time        `json:"last_sale_at"`
+	OwnerChoices     []OldUserView     `json:"owner_choices"`
+	DefaultOwnerId   *int64            `json:"default_owner_id"`
+	PasswordsKept    bool              `json:"passwords_kept"`
 }
 
 type CountCheckView struct {

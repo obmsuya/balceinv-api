@@ -91,12 +91,13 @@ func (service *Service) Preview(ctx context.Context, querier database.Querier, o
 		return PreviewView{}, readError
 	}
 
-	currencyCode, _ := currencyOf(loadedData)
+	currencyCode, currencyDecimals := currencyOf(loadedData)
 	preview := PreviewView{
-		BusinessName:  companyNameOf(loadedData),
-		CurrencyCode:  currencyCode,
-		OwnerChoices:  []OldUserView{},
-		PasswordsKept: true,
+		BusinessName:     companyNameOf(loadedData),
+		CurrencyCode:     currencyCode,
+		CurrencyDecimals: currencyDecimals,
+		OwnerChoices:     []OldUserView{},
+		PasswordsKept:    true,
 		Counts: PreviewCountsView{
 			Users:     len(loadedData.Users),
 			Sales:     len(loadedData.Sales),
