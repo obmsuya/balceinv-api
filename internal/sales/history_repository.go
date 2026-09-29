@@ -28,6 +28,9 @@ func saleWhere(companyId uuid.UUID, shopId uuid.UUID, filter SaleFilter) (string
 	if filter.To != nil {
 		addCondition("s.created_at < ?", *filter.To)
 	}
+	if filter.FiscalWaiting {
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id AND f.status <> 'sent')")
+	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), arguments
 }
@@ -56,7 +59,8 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 	offsetPosition := strconv.Itoa(len(whereArguments) + 2)
 	query := `
 		SELECT s.id, s.receipt_number, s.total, s.discount_total, u.name, s.created_at,
-		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id)
+		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id),
+		       (SELECT f.status FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id)
 		FROM sales s
 		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id` + whereClause + `
 		ORDER BY s.created_at DESC, s.id DESC
@@ -81,6 +85,7 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 			&summary.CashierName,
 			&summary.CreatedAt,
 			&summary.UnitCount,
+			&summary.FiscalStatus,
 		)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan sale: %w", scanError)

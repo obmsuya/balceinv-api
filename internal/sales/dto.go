@@ -93,6 +93,30 @@ type SaleView struct {
 	CreatedAt          time.Time     `json:"created_at"`
 	Items              []LineView    `json:"items"`
 	Payments           []PaymentView `json:"payments"`
+	Fiscal             *FiscalView   `json:"fiscal"`
+}
+
+type FiscalView struct {
+	Status           string     `json:"status"`
+	Attempts         int        `json:"attempts"`
+	VerificationCode *string    `json:"verification_code"`
+	VerificationUrl  *string    `json:"verification_url"`
+	LastError        *string    `json:"last_error"`
+	SentAt           *time.Time `json:"sent_at"`
+}
+
+type FiscalResult struct {
+	Status           string
+	VerificationCode *string
+	VerificationUrl  *string
+	LastError        *string
+	SentAt           *time.Time
+}
+
+type SendWaitingView struct {
+	Sent         int   `json:"sent"`
+	Failed       int   `json:"failed"`
+	StillWaiting int64 `json:"still_waiting"`
 }
 
 type SaleSummaryView struct {
@@ -103,6 +127,7 @@ type SaleSummaryView struct {
 	UnitCount      int64     `json:"unit_count"`
 	PaymentMethods []string  `json:"payment_methods"`
 	CashierName    string    `json:"cashier_name"`
+	FiscalStatus   *string   `json:"fiscal_status"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -114,9 +139,10 @@ type TotalsView struct {
 }
 
 type SaleFilter struct {
-	SearchText string
-	From       *time.Time
-	To         *time.Time
+	SearchText    string
+	From          *time.Time
+	To            *time.Time
+	FiscalWaiting bool
 }
 
 type ReceiptCompanyView struct {

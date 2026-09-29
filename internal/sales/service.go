@@ -168,6 +168,12 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	if insertPaymentsError != nil {
 		return SaleView{}, insertPaymentsError
 	}
+	if companySettings.EfdEnabled {
+		queueError := service.repository.InsertFiscalPending(ctx, querier, principal.CompanyId, newSale.Id, createdAt)
+		if queueError != nil {
+			return SaleView{}, queueError
+		}
+	}
 
 	for _, pricedLine := range pricedSale.Lines {
 		saleMovement := stock.MovementRequest{
@@ -206,8 +212,14 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 		return SaleView{}, paymentsError
 	}
 
+	fiscalView, fiscalError := service.repository.FindFiscal(ctx, querier, companyId, saleId)
+	if fiscalError != nil {
+		return SaleView{}, fiscalError
+	}
+
 	saleView.Items = lineViews
 	saleView.Payments = paymentViews
+	saleView.Fiscal = fiscalView
 	return *saleView, nil
 }
 
