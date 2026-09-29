@@ -146,3 +146,62 @@ func TestSchemaGuardsProductsAndStock(t *testing.T) {
 		}
 	})
 }
+
+func TestSchemaGuardsTransfersAndNotifications(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		openDatabase := testkit.OpenMigrated(t, engineCase)
+		testContext := context.Background()
+		firstCompanyId, _ := insertCompanyWithRole(t, openDatabase, "Owner", true)
+		secondCompanyId, _ := insertCompanyWithRole(t, openDatabase, "Owner", true)
+
+		insertShop := func(companyId uuid.UUID, name string) uuid.UUID {
+			shopId := uuid.Must(uuid.NewV7())
+			_, shopError := openDatabase.Writer.ExecContext(testContext, `INSERT INTO shops (id, company_id, name) VALUES ($1, $2, $3)`, shopId, companyId, name)
+			if shopError != nil {
+				t.Fatalf("insert shop: %v", shopError)
+			}
+			return shopId
+		}
+		mainShopId := insertShop(firstCompanyId, "Main")
+		branchShopId := insertShop(firstCompanyId, "Branch")
+		foreignShopId := insertShop(secondCompanyId, "Foreign")
+
+		foreignProductId := uuid.Must(uuid.NewV7())
+		_, productError := openDatabase.Writer.ExecContext(testContext,
+			`INSERT INTO products (id, company_id, sku, name, price) VALUES ($1, $2, $3, $4, $5)`, foreignProductId, secondCompanyId, "FOREIGN", "Foreign", 100)
+		if productError != nil {
+			t.Fatalf("insert product: %v", productError)
+		}
+
+		insertTransfer := func(fromShopId uuid.UUID, toShopId uuid.UUID) (uuid.UUID, error) {
+			transferId := uuid.Must(uuid.NewV7())
+			_, insertError := openDatabase.Writer.ExecContext(testContext,
+				`INSERT INTO stock_transfers (id, company_id, from_shop_id, to_shop_id) VALUES ($1, $2, $3, $4)`,
+				transferId, firstCompanyId, fromShopId, toShopId)
+			return transferId, insertError
+		}
+		if _, sameShopError := insertTransfer(mainShopId, mainShopId); sameShopError == nil {
+			t.Fatal("a transfer to the same shop was accepted")
+		}
+		if _, foreignShopError := insertTransfer(mainShopId, foreignShopId); foreignShopError == nil {
+			t.Fatal("a transfer to another company's shop was accepted")
+		}
+		transferId, transferError := insertTransfer(mainShopId, branchShopId)
+		if transferError != nil {
+			t.Fatalf("insert transfer: %v", transferError)
+		}
+		_, foreignItemError := openDatabase.Writer.ExecContext(testContext,
+			`INSERT INTO stock_transfer_items (company_id, transfer_id, product_id, quantity) VALUES ($1, $2, $3, $4)`,
+			firstCompanyId, transferId, foreignProductId, 1)
+		if foreignItemError == nil {
+			t.Fatal("a transfer item pointing at another company's product was accepted")
+		}
+
+		_, unknownKindError := openDatabase.Writer.ExecContext(testContext,
+			`INSERT INTO notifications (id, company_id, shop_id, product_id, kind, quantity, min_stock) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			uuid.Must(uuid.NewV7()), secondCompanyId, foreignShopId, foreignProductId, "overstock", 1, 1)
+		if unknownKindError == nil {
+			t.Fatal("an unknown notification kind was accepted")
+		}
+	})
+}
