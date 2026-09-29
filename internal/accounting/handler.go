@@ -367,11 +367,11 @@ func statusFor(serviceError error) (int, string, bool) {
 		{ErrSystemAccount, fiber.StatusConflict, "system_account"},
 		{ErrCloseBackwards, fiber.StatusBadRequest, "close_backwards"},
 		{ErrCloseTooRecent, fiber.StatusBadRequest, "close_too_recent"},
-		{ErrClientRefReused, fiber.StatusConflict, "client_ref_reused"},
+		{ErrClientRefReused, fiber.StatusConflict, "entry_ref_reused"},
 		{ErrInvalidAttachment, fiber.StatusBadRequest, "invalid_attachment"},
 		{media.ErrEmptyImage, fiber.StatusBadRequest, "invalid_image"},
 		{media.ErrUnsupportedImage, fiber.StatusBadRequest, "invalid_image"},
-		{media.ErrImageTooLarge, fiber.StatusRequestEntityTooLarge, "image_too_large"},
+		{media.ErrImageTooLarge, fiber.StatusRequestEntityTooLarge, "receipt_too_large"},
 	}
 	for _, errorResponse := range errorResponses {
 		if errors.Is(serviceError, errorResponse.target) {

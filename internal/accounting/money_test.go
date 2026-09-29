@@ -62,7 +62,7 @@ func TestMoneyPageEntriesReversalsAndPermissions(t *testing.T) {
 		reusedRef := harness.Call(http.MethodPost, "/api/accounting/money", clerkToken, map[string]any{
 			"client_ref": "money-rent-0001", "kind": "owner_in", "amount": 5, "money_account": "cash",
 		})
-		if reusedRef.Status != http.StatusConflict || reusedRef.Code() != "client_ref_reused" {
+		if reusedRef.Status != http.StatusConflict || reusedRef.Code() != "entry_ref_reused" {
 			t.Fatalf("reusing a reference for another kind returned %d %s", reusedRef.Status, reusedRef.Code())
 		}
 
