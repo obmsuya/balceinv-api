@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/google/uuid"
 )
 
@@ -314,16 +315,21 @@ func (repository *Repository) Shops(ctx context.Context, querier database.Querie
 
 func (repository *Repository) StockTotals(ctx context.Context, querier database.Querier, scope Scope) (StockTotalsView, error) {
 	arguments := &queryArguments{}
+	companyPlaceholder := arguments.add(scope.CompanyId)
+	shopFilter := shopCondition("sh.id", scope, arguments)
+	defaultMinimumPlaceholder := arguments.add(stock.DefaultMinimumStock)
 	query := `
-		SELECT COUNT(DISTINCT ss.product_id),
-		       CAST(COALESCE(SUM(ss.quantity), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(ss.quantity * p.cost_price), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(ss.quantity * p.price), 0) AS BIGINT),
-		       COALESCE(SUM(CASE WHEN ss.quantity > 0 AND ss.quantity <= ss.min_stock THEN 1 ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN ss.quantity = 0 THEN 1 ELSE 0 END), 0)
-		FROM shop_stock ss
-		JOIN products p ON p.company_id = ss.company_id AND p.id = ss.product_id
-		WHERE ss.company_id = ` + arguments.add(scope.CompanyId) + ` AND p.is_active` + shopCondition("ss.shop_id", scope, arguments)
+		SELECT COUNT(DISTINCT p.id),
+		       CAST(COALESCE(SUM(COALESCE(ss.quantity, 0)), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(COALESCE(ss.quantity, 0) * p.cost_price), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(COALESCE(ss.quantity, 0) * p.price), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(CASE WHEN COALESCE(ss.quantity, 0) > 0 AND COALESCE(ss.quantity, 0) <= COALESCE(ss.min_stock, ` + defaultMinimumPlaceholder + `) THEN 1 ELSE 0 END), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(CASE WHEN COALESCE(ss.quantity, 0) = 0 THEN 1 ELSE 0 END), 0) AS BIGINT)
+		FROM products p
+		JOIN shops sh ON sh.company_id = p.company_id AND sh.is_active` + shopFilter + `
+		LEFT JOIN shop_stock ss ON ss.company_id = p.company_id AND ss.product_id = p.id AND ss.shop_id = sh.id
+		WHERE p.company_id = ` + companyPlaceholder + ` AND p.is_active
+	`
 
 	stockTotals := StockTotalsView{}
 	scanError := querier.QueryRowContext(ctx, query, arguments.values...).Scan(

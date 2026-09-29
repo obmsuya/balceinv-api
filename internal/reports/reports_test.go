@@ -114,7 +114,7 @@ func TestReportsGiveExactTotalsFromSnapshots(t *testing.T) {
 		inventory := harness.Call(http.MethodGet, "/api/reports/inventory", company.OwnerToken, nil).Data()
 		deadStock := inventory["dead_stock"].([]any)
 		stockTotals := inventory["stock"].(map[string]any)
-		if len(deadStock) != 1 || deadStock[0].(map[string]any)["product_id"] != idleId || deadStock[0].(map[string]any)["last_sold_at"] != nil || number(t, stockTotals, "units") != 97+99+7 {
+		if len(deadStock) != 1 || deadStock[0].(map[string]any)["product_id"] != idleId || deadStock[0].(map[string]any)["last_sold_at"] != nil || number(t, stockTotals, "units") != 97+99+7 || number(t, stockTotals, "out_count") != 0 || number(t, stockTotals, "product_count") != 3 {
 			t.Fatalf("inventory was %v", inventory)
 		}
 
@@ -217,6 +217,7 @@ func TestReportsFollowShopsAndTenants(t *testing.T) {
 		otherCompany := harness.CreateCompany("Rival", "owner@rival.test")
 		breadId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "BREAD", "name": "Bread", "price": 1000, "cost_price": 400, "opening_quantity": 50})
 		sell(t, harness, company.OwnerToken, "main-sale-1", breadId, 3, cash(3000))
+		newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "JAM", "name": "Jam", "price": 900, "cost_price": 500, "opening_quantity": 0})
 
 		branch := harness.Call(http.MethodPost, "/api/shops", company.OwnerToken, map[string]any{"name": "Branch"})
 		branchId := branch.Data()["id"].(string)
@@ -254,6 +255,12 @@ func TestReportsFollowShopsAndTenants(t *testing.T) {
 		if _, managerAll := totalFor(managerToken, "all"); managerAll != 3000 {
 			t.Fatalf("all shops for the manager totalled %d, want only their shop", managerAll)
 		}
+		allStock := harness.Call(http.MethodGet, "/api/reports/inventory?shop=all", company.OwnerToken, nil).Data()["stock"].(map[string]any)
+		branchStock := harness.Call(http.MethodGet, "/api/reports/inventory", company.OwnerToken, nil).Data()["stock"].(map[string]any)
+		if number(t, allStock, "units") != 47+7 || number(t, allStock, "out_count") != 2 || number(t, allStock, "product_count") != 2 || number(t, branchStock, "units") != 7 || number(t, branchStock, "out_count") != 1 {
+			t.Fatalf("stock over all shops %v, branch %v", allStock, branchStock)
+		}
+
 		cashierToken := harness.CreateStaff(company, "cashier@twoshops.test", []string{"sales:create"}, []uuid.UUID{company.ShopId})
 		if harness.Call(http.MethodGet, "/api/dashboard", cashierToken, nil).Status != http.StatusForbidden {
 			t.Fatal("a cashier without reports:view read the dashboard")
