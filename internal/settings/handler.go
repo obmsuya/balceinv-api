@@ -78,7 +78,9 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrSettingsNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
-	case errors.Is(serviceError, ErrInvalidEfdEndpoint), errors.Is(serviceError, ErrInvalidEmail):
+	case errors.Is(serviceError, ErrCurrencyLocked):
+		return response.Error(c, fiber.StatusConflict, "currency_locked", serviceError.Error())
+	case errors.Is(serviceError, ErrInvalidEfdEndpoint), errors.Is(serviceError, ErrInvalidEmail), errors.Is(serviceError, ErrReceiptFormat):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_setting", serviceError.Error())
 	case errors.Is(serviceError, media.ErrEmptyImage), errors.Is(serviceError, media.ErrUnsupportedImage):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_logo", serviceError.Error())
