@@ -1,6 +1,11 @@
 package response
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/gofiber/fiber/v2"
+)
 
 const RequestIdLocalKey = "requestId"
 
@@ -44,7 +49,7 @@ func Error(c *fiber.Ctx, status int, code string, message string) error {
 	return c.Status(status).JSON(fiber.Map{
 		"success":   false,
 		"code":      code,
-		"message":   message,
+		"message":   sentenceCase(message),
 		"requestId": requestIdOf(c),
 	})
 }
@@ -53,7 +58,7 @@ func ErrorWithDetails(c *fiber.Ctx, status int, code string, message string, det
 	return c.Status(status).JSON(fiber.Map{
 		"success":   false,
 		"code":      code,
-		"message":   message,
+		"message":   sentenceCase(message),
 		"data":      details,
 		"requestId": requestIdOf(c),
 	})
@@ -75,4 +80,12 @@ func requestIdOf(c *fiber.Ctx) string {
 		return ""
 	}
 	return requestId
+}
+
+func sentenceCase(message string) string {
+	firstLetter, letterSize := utf8.DecodeRuneInString(message)
+	if letterSize == 0 {
+		return message
+	}
+	return string(unicode.ToUpper(firstLetter)) + message[letterSize:]
 }
