@@ -3,39 +3,25 @@ package settings
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
-	"net/http"
 	"net/mail"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
+	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/google/uuid"
 )
 
 const MaximumLogoBytes = 1 << 20
 
 var (
-	ErrSettingsNotFound    = errors.New("settings not found")
-	ErrInvalidEfdEndpoint  = errors.New("EFD endpoint must be an https:// address")
-	ErrInvalidEmail        = errors.New("notification email is not a valid address")
-	ErrEmptyLogo           = errors.New("the logo file is empty")
-	ErrLogoTooLarge        = errors.New("the logo must be 1 MB or smaller")
-	ErrUnsupportedLogoType = errors.New("the logo must be a PNG, JPEG or WebP image")
-	ErrLogoNotFound        = errors.New("logo not found")
+	ErrSettingsNotFound   = errors.New("settings not found")
+	ErrInvalidEfdEndpoint = errors.New("EFD endpoint must be an https:// address")
+	ErrInvalidEmail       = errors.New("notification email is not a valid address")
 )
-
-var logoFileNamePattern = regexp.MustCompile(`^[0-9a-f-]{36}\.(png|jpg|webp)$`)
-
-var logoExtensionByContentType = map[string]string{
-	"image/png":  "png",
-	"image/jpeg": "jpg",
-	"image/webp": "webp",
-}
 
 type Service struct {
 	repository  *Repository
@@ -101,25 +87,9 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 }
 
 func (service *Service) UploadLogo(ctx context.Context, querier database.Querier, companyId uuid.UUID, logoBytes []byte) (SettingsView, error) {
-	isEmpty := len(logoBytes) == 0
-	if isEmpty {
-		return SettingsView{}, ErrEmptyLogo
-	}
-	isTooLarge := len(logoBytes) > MaximumLogoBytes
-	if isTooLarge {
-		return SettingsView{}, ErrLogoTooLarge
-	}
-
-	detectedContentType := http.DetectContentType(logoBytes)
-	logoExtension, isSupported := logoExtensionByContentType[detectedContentType]
-	if !isSupported {
-		return SettingsView{}, ErrUnsupportedLogoType
-	}
-
-	logoKey := fmt.Sprintf("logos/%s/%s.%s", companyId, uuid.Must(uuid.NewV7()), logoExtension)
-	putError := service.objectStore.Put(ctx, logoKey, detectedContentType, logoBytes)
-	if putError != nil {
-		return SettingsView{}, fmt.Errorf("failed to store logo: %w", putError)
+	logoKey, storeError := media.StoreImage(ctx, service.objectStore, media.FolderLogos, companyId, logoBytes, MaximumLogoBytes)
+	if storeError != nil {
+		return SettingsView{}, storeError
 	}
 
 	updateError := service.repository.UpdateLogoKey(ctx, querier, companyId, logoKey)
@@ -128,32 +98,6 @@ func (service *Service) UploadLogo(ctx context.Context, querier database.Querier
 	}
 
 	return service.Get(ctx, querier, companyId)
-}
-
-func (service *Service) ReadLogo(ctx context.Context, rawCompanyId string, fileName string) (*storage.Object, error) {
-	companyId, parseError := uuid.Parse(rawCompanyId)
-	isValidFileName := logoFileNamePattern.MatchString(fileName)
-	if parseError != nil || !isValidFileName {
-		return nil, ErrLogoNotFound
-	}
-
-	logoObject, getError := service.objectStore.Get(ctx, "logos/"+companyId.String()+"/"+fileName)
-	if errors.Is(getError, storage.ErrObjectNotFound) {
-		return nil, ErrLogoNotFound
-	}
-	if getError != nil {
-		return nil, getError
-	}
-
-	return logoObject, nil
-}
-
-func LogoUrl(logoKey *string) *string {
-	if logoKey == nil {
-		return nil
-	}
-	logoPath := "/api/branding/logo/" + strings.TrimPrefix(*logoKey, "logos/")
-	return &logoPath
 }
 
 func applyProfileChanges(companyProfile CompanyProfile, request UpdateSettingsRequest) CompanyProfile {
@@ -313,7 +257,7 @@ func toSettingsView(companySettings Settings, companyProfile CompanyProfile) Set
 			Phone:            companyProfile.Phone,
 			Address:          companyProfile.Address,
 			Tin:              companyProfile.Tin,
-			LogoUrl:          LogoUrl(companyProfile.LogoKey),
+			LogoUrl:          media.PublicUrl(companyProfile.LogoKey),
 			PrimaryColor:     companyProfile.PrimaryColor,
 			CurrencyCode:     companyProfile.CurrencyCode,
 			CurrencyDecimals: companyProfile.CurrencyDecimals,

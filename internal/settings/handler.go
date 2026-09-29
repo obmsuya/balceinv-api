@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -52,7 +53,7 @@ func (handler *Handler) UploadLogo(c *fiber.Ctx) error {
 	}
 	isTooLarge := uploadedFile.Size > MaximumLogoBytes
 	if isTooLarge {
-		return respondWithServiceError(c, ErrLogoTooLarge)
+		return respondWithServiceError(c, media.ErrImageTooLarge)
 	}
 
 	openedFile, openError := uploadedFile.Open()
@@ -73,28 +74,16 @@ func (handler *Handler) UploadLogo(c *fiber.Ctx) error {
 	return response.Success(c, "Logo updated", settingsView)
 }
 
-func (handler *Handler) ServeLogo(c *fiber.Ctx) error {
-	logoObject, readError := handler.service.ReadLogo(c.UserContext(), c.Params("companyId"), c.Params("fileName"))
-	if readError != nil {
-		return respondWithServiceError(c, readError)
-	}
-
-	c.Set(fiber.HeaderContentType, logoObject.ContentType)
-	c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
-	c.Set("Cross-Origin-Resource-Policy", "cross-origin")
-	return c.Send(logoObject.Body)
-}
-
 func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
-	case errors.Is(serviceError, ErrSettingsNotFound), errors.Is(serviceError, ErrLogoNotFound):
+	case errors.Is(serviceError, ErrSettingsNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidEfdEndpoint), errors.Is(serviceError, ErrInvalidEmail):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_setting", serviceError.Error())
-	case errors.Is(serviceError, ErrEmptyLogo), errors.Is(serviceError, ErrUnsupportedLogoType):
+	case errors.Is(serviceError, media.ErrEmptyImage), errors.Is(serviceError, media.ErrUnsupportedImage):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_logo", serviceError.Error())
-	case errors.Is(serviceError, ErrLogoTooLarge):
-		return response.Error(c, fiber.StatusRequestEntityTooLarge, "logo_too_large", serviceError.Error())
+	case errors.Is(serviceError, media.ErrImageTooLarge):
+		return response.Error(c, fiber.StatusRequestEntityTooLarge, "logo_too_large", "The logo must be 1 MB or smaller")
 	default:
 		return serviceError
 	}

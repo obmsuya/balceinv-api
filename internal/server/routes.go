@@ -10,6 +10,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
+	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
@@ -38,6 +39,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	usersHandler := users.NewHandler(usersService)
 	accessHandler := access.NewHandler(accessService)
 	settingsHandler := settings.NewHandler(settingsService)
+	mediaHandler := media.NewHandler(objectStore)
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -77,7 +79,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/settings", permitted("settings:view", settingsHandler.Get)...)
 	application.Put("/api/settings", permitted("settings:edit", settingsHandler.Update)...)
 	application.Post("/api/settings/upload-logo", permitted("settings:edit", settingsHandler.UploadLogo)...)
-	application.Get("/api/branding/logo/:companyId/:fileName", settingsHandler.ServeLogo)
+	application.Get("/api/media/:folder/:companyId/:fileName", mediaHandler.Serve)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)
