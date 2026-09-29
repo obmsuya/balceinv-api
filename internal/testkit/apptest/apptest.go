@@ -126,6 +126,36 @@ func (harness *Harness) CreateCompany(businessName string, ownerEmail string) Co
 	return createdCompany
 }
 
+func (harness *Harness) CreateStaff(company Company, email string, permissionIds []string, shopIds []uuid.UUID) string {
+	harness.t.Helper()
+
+	staffRole := harness.Call(http.MethodPost, "/api/roles", company.OwnerToken, map[string]any{
+		"name":           "Role for " + email,
+		"permission_ids": permissionIds,
+	})
+	if staffRole.Status != http.StatusCreated {
+		harness.t.Fatalf("create role for %s returned %d: %v", email, staffRole.Status, staffRole.Body)
+	}
+
+	shopIdTexts := make([]string, 0, len(shopIds))
+	for _, shopId := range shopIds {
+		shopIdTexts = append(shopIdTexts, shopId.String())
+	}
+	staffPassword := "staff-password-123"
+	staffUser := harness.Call(http.MethodPost, "/api/users", company.OwnerToken, map[string]any{
+		"name":     "Staff " + email,
+		"email":    email,
+		"password": staffPassword,
+		"role_id":  staffRole.Data()["id"],
+		"shop_ids": shopIdTexts,
+	})
+	if staffUser.Status != http.StatusCreated {
+		harness.t.Fatalf("create user %s returned %d: %v", email, staffUser.Status, staffUser.Body)
+	}
+
+	return harness.MustLogin(email, staffPassword)
+}
+
 func (harness *Harness) MustLogin(email string, password string) string {
 	harness.t.Helper()
 
