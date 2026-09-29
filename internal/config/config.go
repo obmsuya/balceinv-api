@@ -11,6 +11,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+var CompiledSupportPasscodeHash = ""
+
 type Engine string
 
 const (
@@ -32,6 +34,8 @@ type Config struct {
 	S3Region        string
 	S3AccessKeyId   string
 	S3SecretKey     string
+
+	SupportPasscodeHash string
 }
 
 type LookupFunc func(key string) (string, bool)
@@ -128,6 +132,11 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		mediaDirectory = filepath.Join(filepath.Dir(sqlitePath), "media")
 	}
 
+	supportPasscodeHash := readTrimmed(lookup, "BALCE_SUPPORT_PASSCODE_HASH")
+	if supportPasscodeHash == "" {
+		supportPasscodeHash = CompiledSupportPasscodeHash
+	}
+
 	hasProblems := len(problems) > 0
 	if hasProblems {
 		return nil, errors.New("invalid configuration:\n  - " + strings.Join(problems, "\n  - "))
@@ -147,6 +156,8 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		S3Region:        s3Region,
 		S3AccessKeyId:   s3AccessKeyId,
 		S3SecretKey:     s3SecretKey,
+
+		SupportPasscodeHash: supportPasscodeHash,
 	}
 
 	return loadedConfig, nil
