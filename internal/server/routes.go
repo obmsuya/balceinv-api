@@ -31,6 +31,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
+	"github.com/chrisostomemataba/balceinv-api/internal/suppliers"
 	"github.com/chrisostomemataba/balceinv-api/internal/support"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/transfers"
@@ -85,6 +86,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository, objectStore))
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
+	suppliersHandler := suppliers.NewHandler(suppliers.NewService(suppliers.NewRepository(), featuresRepository, settingsRepository, stockService, objectStore))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -205,7 +207,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 
 	phoneUploadHandler := phoneupload.NewHandler(phoneupload.NewService(), desktop.Network, isPostgres)
-	application.Post("/api/phone-uploads", authenticate, httpx.RequirePermission("products:create", "products:edit"), phoneUploadHandler.Create)
+	application.Post("/api/phone-uploads", authenticate, httpx.RequirePermission("products:create", "products:edit", "purchases:create", "purchases:edit"), phoneUploadHandler.Create)
 	application.Get("/api/phone-uploads/:token", authenticate, phoneUploadHandler.Collect)
 	application.Get("/upload/:token", phoneUploadHandler.Page)
 	application.Post("/upload/:token", newPhoneUploadLimiter(), phoneUploadHandler.Submit)
@@ -241,7 +243,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
 	application.Get("/api/sales/:id/document", permittedAny(sellingOrViewing, invoicesHandler.SaleDocument)...)
 
-	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
+	application.Get("/api/stock", permittedAny([]string{"stock_movements:view", "purchases:create", "purchases:edit"}, stockHandler.Levels)...)
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
 	application.Get("/api/stock-movements", permitted("stock_movements:view", stockHandler.Movements)...)
 	application.Post("/api/stock-movements", permitted("stock_movements:create", stockHandler.Adjust)...)
@@ -249,6 +251,37 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/stock-transfers", permitted("stock_movements:view", transfersHandler.List)...)
 	application.Get("/api/stock-transfers/:id", permitted("stock_movements:view", transfersHandler.Get)...)
 	application.Post("/api/stock-transfers", permitted("stock_movements:create", transfersHandler.Create)...)
+
+	application.Get("/api/suppliers", permitted("suppliers:view", suppliersHandler.ListSuppliers)...)
+	application.Get("/api/suppliers/aging", permitted("suppliers:view", suppliersHandler.Aging)...)
+	application.Get("/api/suppliers/:id", permitted("suppliers:view", suppliersHandler.GetSupplier)...)
+	application.Get("/api/suppliers/:id/statement", permitted("suppliers:view", suppliersHandler.Statement)...)
+	application.Post("/api/suppliers", permitted("suppliers:create", suppliersHandler.CreateSupplier)...)
+	application.Put("/api/suppliers/:id", permitted("suppliers:edit", suppliersHandler.UpdateSupplier)...)
+	application.Delete("/api/suppliers/:id", permitted("suppliers:delete", suppliersHandler.DeactivateSupplier)...)
+
+	recordingPurchases := []string{"purchases:create", "purchases:edit"}
+	application.Get("/api/purchases", permitted("purchases:view", suppliersHandler.ListPurchases)...)
+	application.Get("/api/purchases/last-cost", permittedAny(recordingPurchases, suppliersHandler.LastCost)...)
+	application.Get("/api/purchases/vat-rate", permittedAny(recordingPurchases, suppliersHandler.VatRate)...)
+	application.Get("/api/purchases/:id", permitted("purchases:view", suppliersHandler.GetPurchase)...)
+	application.Post("/api/purchases", permitted("purchases:create", suppliersHandler.RecordPurchase)...)
+	application.Post("/api/purchases/:id/cancel", permitted("purchases:delete", suppliersHandler.CancelPurchase)...)
+	application.Post("/api/purchases/:id/attachment", permittedAny(recordingPurchases, suppliersHandler.AttachInvoicePhoto)...)
+
+	application.Get("/api/supplier-payments", permitted("purchases:view", suppliersHandler.ListPayments)...)
+	application.Post("/api/supplier-payments", permitted("purchases:edit", suppliersHandler.RecordPayment)...)
+	application.Post("/api/supplier-payments/:id/void", permitted("purchases:delete", suppliersHandler.VoidPayment)...)
+
+	application.Get("/api/supplier-returns", permitted("purchases:view", suppliersHandler.ListReturns)...)
+	application.Get("/api/supplier-returns/:id", permitted("purchases:view", suppliersHandler.GetReturn)...)
+	application.Post("/api/supplier-returns", permitted("purchases:edit", suppliersHandler.RecordReturn)...)
+
+	application.Get("/api/purchase-orders", permitted("purchases:view", suppliersHandler.ListOrders)...)
+	application.Get("/api/purchase-orders/:id", permitted("purchases:view", suppliersHandler.GetOrder)...)
+	application.Post("/api/purchase-orders", permitted("purchases:edit", suppliersHandler.CreateOrder)...)
+	application.Post("/api/purchase-orders/:id/send", permitted("purchases:edit", suppliersHandler.SendOrder)...)
+	application.Post("/api/purchase-orders/:id/cancel", permitted("purchases:delete", suppliersHandler.CancelOrder)...)
 
 	application.Get("/api/notifications", permitted("notifications:view", notificationsHandler.List)...)
 	application.Get("/api/notifications/unread-count", permitted("notifications:view", notificationsHandler.UnreadCount)...)

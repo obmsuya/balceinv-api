@@ -21,7 +21,7 @@ func NewRepository() *Repository {
 const productColumns = `
 	p.id, p.company_id, p.parent_id, p.sku, p.name, p.variant_label, p.price, p.cost_price,
 	p.wholesale_price, p.wholesale_min, p.category, p.unit, p.pieces_per_unit, p.image_key,
-	p.metadata, p.is_active, p.created_at, p.updated_at, ss.quantity, ss.min_stock,
+	p.metadata, p.preferred_supplier_id, p.is_active, p.created_at, p.updated_at, ss.quantity, ss.min_stock,
 	(SELECT COUNT(*) FROM products v WHERE v.company_id = p.company_id AND v.parent_id = p.id AND v.is_active)
 `
 
@@ -117,8 +117,8 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 	query := `
 		INSERT INTO products (id, company_id, parent_id, sku, name, variant_label, price, cost_price,
 		                      wholesale_price, wholesale_min, category, unit, pieces_per_unit, image_key,
-		                      metadata, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		                      metadata, is_active, created_at, updated_at, preferred_supplier_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
 	_, insertError := querier.ExecContext(ctx, query,
@@ -140,6 +140,7 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 		newProduct.IsActive,
 		newProduct.CreatedAt,
 		newProduct.UpdatedAt,
+		newProduct.PreferredSupplierId,
 	)
 	if insertError != nil {
 		return fmt.Errorf("failed to insert product: %w", insertError)
@@ -153,7 +154,7 @@ func (repository *Repository) Update(ctx context.Context, querier database.Queri
 		UPDATE products
 		SET sku = $3, name = $4, variant_label = $5, price = $6, cost_price = $7, wholesale_price = $8,
 		    wholesale_min = $9, category = $10, unit = $11, pieces_per_unit = $12, metadata = $13,
-		    is_active = $14, updated_at = $15
+		    is_active = $14, updated_at = $15, preferred_supplier_id = $16
 		WHERE company_id = $1 AND id = $2
 	`
 
@@ -173,6 +174,7 @@ func (repository *Repository) Update(ctx context.Context, querier database.Queri
 		string(changedProduct.Metadata),
 		changedProduct.IsActive,
 		time.Now().UTC(),
+		changedProduct.PreferredSupplierId,
 	)
 	if updateError != nil {
 		return fmt.Errorf("failed to update product: %w", updateError)
@@ -317,6 +319,18 @@ func (repository *Repository) ListCategories(ctx context.Context, querier databa
 	return categories, categoryRows.Err()
 }
 
+func (repository *Repository) IsActiveSupplier(ctx context.Context, querier database.Querier, companyId uuid.UUID, supplierId uuid.UUID) (bool, error) {
+	query := `SELECT COUNT(*) FROM suppliers WHERE company_id = $1 AND id = $2 AND is_active`
+
+	matchCount := 0
+	scanError := querier.QueryRowContext(ctx, query, companyId, supplierId).Scan(&matchCount)
+	if scanError != nil {
+		return false, fmt.Errorf("failed to find supplier: %w", scanError)
+	}
+
+	return matchCount > 0, nil
+}
+
 func (repository *Repository) FindCurrencyDecimals(ctx context.Context, querier database.Querier, companyId uuid.UUID) (int, error) {
 	query := `SELECT currency_decimals FROM companies WHERE id = $1`
 
@@ -394,6 +408,7 @@ func (repository *Repository) queryProducts(ctx context.Context, querier databas
 			&foundProduct.PiecesPerUnit,
 			&foundProduct.ImageKey,
 			&metadataText,
+			&foundProduct.PreferredSupplierId,
 			&foundProduct.IsActive,
 			&foundProduct.CreatedAt,
 			&foundProduct.UpdatedAt,
