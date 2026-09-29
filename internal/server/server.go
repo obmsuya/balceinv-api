@@ -6,7 +6,6 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
-	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
@@ -32,8 +31,9 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, writeLogS
 		ExposeHeaders:    "X-Request-Id",
 	}))
 
-	platformHandler := platform.NewHandler(openDatabase)
-	application.Get("/health", platformHandler.Health)
+	application.Use(httpx.OriginGuard(loadedConfig.AllowedOrigins))
+
+	registerRoutes(application, openDatabase)
 
 	return application
 }
