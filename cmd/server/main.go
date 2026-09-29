@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
+	"github.com/chrisostomemataba/balceinv-api/license"
 )
 
 func main() {
@@ -83,6 +84,13 @@ func main() {
 	if loadedConfig.IsDesktop() {
 		desktop.Backups = backup.NewStore(openDatabase, loadedConfig.SqlitePath, loadedConfig.DataDirectory)
 		desktop.Backups.StartAutomaticBackups(backgroundContext)
+	}
+	if loadedConfig.EnforceLicense {
+		if license.LicenseSecret == "" {
+			license.LicenseSecret = loadedConfig.LicenseSecret
+		}
+		license.StartTimestampWriter()
+		go license.SyncWithDjango()
 	}
 
 	application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator, desktop)

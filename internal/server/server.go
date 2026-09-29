@@ -8,6 +8,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
@@ -38,6 +39,9 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 	}))
 
 	application.Use(httpx.OriginGuard(loadedConfig.AllowedOrigins))
+	if loadedConfig.EnforceLicense {
+		application.Use(licensing.Enforce())
+	}
 
 	registerRoutes(application, loadedConfig, openDatabase, objectStore, desktop)
 
