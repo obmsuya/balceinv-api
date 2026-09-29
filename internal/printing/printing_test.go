@@ -141,6 +141,13 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 			t.Fatalf("printing returned %d %v, port got %q", printed.Status, printed.Body, portBytes)
 		}
 
+		viewerToken := harness.CreateStaff(company, "viewer@print.test", []string{"sales:view"}, []uuid.UUID{company.ShopId})
+		if harness.Call(http.MethodPost, "/api/print/receipt", viewerToken, map[string]any{"sale_id": saleId, "open_drawer": true}).Status != http.StatusForbidden {
+			t.Fatal("someone who only views sales opened the cash drawer")
+		}
+		if harness.Call(http.MethodPost, "/api/print/receipt", viewerToken, map[string]any{"sale_id": saleId}).Status != http.StatusOK {
+			t.Fatal("someone who views sales could not reprint a receipt")
+		}
 		if harness.Call(http.MethodPost, "/api/print/receipt", cashierToken, map[string]any{"sale_id": uuid.NewString()}).Status != http.StatusNotFound {
 			t.Fatal("printing an unknown sale did not answer 404")
 		}

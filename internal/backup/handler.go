@@ -101,7 +101,15 @@ func (handler *Handler) ListCloud(c *fiber.Ctx) error {
 	if listError != nil {
 		return respondWithBackupError(c, listError)
 	}
-	return response.Success(c, "Cloud backups", cloudBackups)
+	backupViews := make([]CloudBackupView, 0, len(cloudBackups))
+	for _, cloudBackup := range cloudBackups {
+		backupViews = append(backupViews, CloudBackupView{
+			Date: cloudBackup.Date,
+			Key:  cloudBackup.Key,
+			Size: cloudBackup.Size,
+		})
+	}
+	return response.Success(c, "Cloud backups", backupViews)
 }
 
 func (handler *Handler) BackupToCloud(c *fiber.Ctx) error {
