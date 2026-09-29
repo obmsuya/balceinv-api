@@ -1,0 +1,10 @@
+DROP POLICY tenant_isolation ON sale_payments;
+ALTER TABLE sale_payments DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON sale_item_addons;
+ALTER TABLE sale_item_addons DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON sale_items;
+ALTER TABLE sale_items DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON sales;
+ALTER TABLE sales DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON discounts;
+ALTER TABLE discounts DISABLE ROW LEVEL SECURITY;
