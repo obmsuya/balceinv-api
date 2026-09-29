@@ -8,6 +8,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
+	"github.com/chrisostomemataba/balceinv-api/internal/documents"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -242,6 +243,9 @@ func (handler *Handler) Overview(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) ProfitAndLoss(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportProfitAndLoss)
+	}
 	report, reportError := handler.service.ProfitAndLoss(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), reportRequest(c))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -250,6 +254,9 @@ func (handler *Handler) ProfitAndLoss(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) BalanceSheet(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportBalanceSheet)
+	}
 	report, reportError := handler.service.BalanceSheet(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("as_of"))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -258,6 +265,9 @@ func (handler *Handler) BalanceSheet(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) TrialBalance(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportTrialBalance)
+	}
 	report, reportError := handler.service.TrialBalance(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("as_of"))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -266,6 +276,9 @@ func (handler *Handler) TrialBalance(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) Statement(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportStatement)
+	}
 	report, reportError := handler.service.Statement(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), reportRequest(c), c.Query("account"))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -274,6 +287,9 @@ func (handler *Handler) Statement(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) VatReport(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportVat)
+	}
 	report, reportError := handler.service.VatReport(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), reportRequest(c))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -289,10 +305,27 @@ func (handler *Handler) Integrity(c *fiber.Ctx) error {
 	return response.Success(c, "Books check", report)
 }
 
+func (handler *Handler) export(c *fiber.Ctx, report string) error {
+	exportRequest := ExportRequest{
+		Report:   report,
+		Format:   c.Query("format"),
+		Language: c.Query("lang"),
+		Account:  c.Query("account"),
+		Range:    reportRequest(c),
+	}
+	exportedFile, exportError := handler.service.Export(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), exportRequest)
+	if exportError != nil {
+		return respondWithServiceError(c, exportError)
+	}
+	c.Set(fiber.HeaderContentType, exportedFile.ContentType)
+	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+exportedFile.Name+`"`)
+	return c.Send(exportedFile.Bytes)
+}
+
 func reportRequest(c *fiber.Ctx) ReportRequest {
 	return ReportRequest{
 		FromDate: c.Query("from"),
-		ToDate:   c.Query("to"),
+		ToDate:   c.Query("to", c.Query("as_of")),
 		Shop:     c.Query("shop"),
 	}
 }
@@ -369,6 +402,8 @@ func statusFor(serviceError error) (int, string, bool) {
 		{ErrCloseTooRecent, fiber.StatusBadRequest, "close_too_recent"},
 		{ErrClientRefReused, fiber.StatusConflict, "entry_ref_reused"},
 		{ErrInvalidAttachment, fiber.StatusBadRequest, "invalid_attachment"},
+		{documents.ErrUnknownFormat, fiber.StatusBadRequest, "invalid_format"},
+		{ErrUnknownExport, fiber.StatusNotFound, "not_found"},
 		{media.ErrEmptyImage, fiber.StatusBadRequest, "invalid_image"},
 		{media.ErrUnsupportedImage, fiber.StatusBadRequest, "invalid_image"},
 		{media.ErrImageTooLarge, fiber.StatusRequestEntityTooLarge, "receipt_too_large"},

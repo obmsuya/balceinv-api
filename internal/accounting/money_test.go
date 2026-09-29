@@ -306,6 +306,26 @@ func TestFullModeAccountsManualEntriesAndClosing(t *testing.T) {
 		if balanceSheet["is_balanced"] != true || number(t, balanceSheet, "profit_to_date") != -3000 || number(t, balanceSheet, "total_assets") != 10000-3000+500-100 {
 			t.Fatalf("balance sheet %v", balanceSheet)
 		}
+		for _, exportPath := range []string{
+			"/api/accounting/profit-and-loss?format=xlsx&lang=sw",
+			"/api/accounting/profit-and-loss?format=pdf",
+			"/api/accounting/balance-sheet?format=pdf",
+			"/api/accounting/balance-sheet?format=xlsx&as_of=" + localDate(1),
+			"/api/accounting/trial-balance?format=xlsx",
+			"/api/accounting/statement?account=cash&format=pdf&lang=sw",
+			"/api/accounting/statement?account=" + securityId + "&format=xlsx&from=" + localDate(30),
+			"/api/accounting/vat?format=pdf",
+		} {
+			exported := harness.Call(http.MethodGet, exportPath, company.OwnerToken, nil)
+			contentType := exported.Headers.Get("Content-Type")
+			isDocument := contentType == "application/pdf" || contentType == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+			if exported.Status != http.StatusOK || !isDocument || len(exported.Raw) < 500 {
+				t.Fatalf("%s returned %d %s (%d bytes)", exportPath, exported.Status, contentType, len(exported.Raw))
+			}
+		}
+		if harness.Call(http.MethodGet, "/api/accounting/vat?format=doc", company.OwnerToken, nil).Code() != "invalid_format" {
+			t.Fatal("an unknown export format was accepted")
+		}
 		if harness.Call(http.MethodGet, "/api/accounting/statement?account=cash&from=2020-01-01&to=2026-12-31", company.OwnerToken, nil).Code() != "range_too_long" {
 			t.Fatal("a statement for years of lines was accepted")
 		}
