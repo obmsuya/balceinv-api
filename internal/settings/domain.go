@@ -34,6 +34,8 @@ type Settings struct {
 	PrinterBaudRate           int
 	PrinterPaperWidth         int
 	OpenCashDrawer            bool
+	TillNumpadEnabled         bool
+	CustomerDisplayEnabled    bool
 	UpdatedBy                 *uuid.UUID
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time

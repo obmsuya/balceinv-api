@@ -242,6 +242,12 @@ func applySettingsChanges(companySettings Settings, request UpdateSettingsReques
 	if request.OpenCashDrawer != nil {
 		companySettings.OpenCashDrawer = *request.OpenCashDrawer
 	}
+	if request.TillNumpadEnabled != nil {
+		companySettings.TillNumpadEnabled = *request.TillNumpadEnabled
+	}
+	if request.CustomerDisplayEnabled != nil {
+		companySettings.CustomerDisplayEnabled = *request.CustomerDisplayEnabled
+	}
 	return companySettings, nil
 }
 
@@ -307,6 +313,8 @@ func toSettingsView(companySettings Settings, companyProfile CompanyProfile) Set
 		PrinterBaudRate:           companySettings.PrinterBaudRate,
 		PrinterPaperWidth:         companySettings.PrinterPaperWidth,
 		OpenCashDrawer:            companySettings.OpenCashDrawer,
+		TillNumpadEnabled:         companySettings.TillNumpadEnabled,
+		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
 		UpdatedAt:                 companySettings.UpdatedAt,
 	}
 }
