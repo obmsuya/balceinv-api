@@ -3,6 +3,7 @@ package database_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit"
@@ -202,6 +203,110 @@ func TestSchemaGuardsTransfersAndNotifications(t *testing.T) {
 			uuid.Must(uuid.NewV7()), secondCompanyId, foreignShopId, foreignProductId, "overstock", 1, 1)
 		if unknownKindError == nil {
 			t.Fatal("an unknown notification kind was accepted")
+		}
+	})
+}
+
+func TestSchemaGuardsDiscountsAndSales(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		openDatabase := testkit.OpenMigrated(t, engineCase)
+		testContext := context.Background()
+		companyId, roleId := insertCompanyWithRole(t, openDatabase, "Owner", true)
+
+		exec := func(statement string, arguments ...any) error {
+			_, execError := openDatabase.Writer.ExecContext(testContext, statement, arguments...)
+			return execError
+		}
+		mustExec := func(statement string, arguments ...any) {
+			t.Helper()
+			if execError := exec(statement, arguments...); execError != nil {
+				t.Fatalf("%s: %v", statement, execError)
+			}
+		}
+
+		userId := uuid.Must(uuid.NewV7())
+		mustExec(`INSERT INTO users (id, company_id, role_id, name, email, password_hash) VALUES ($1, $2, $3, $4, $5, $6)`, userId, companyId, roleId, "Cashier", "cashier-"+userId.String()[:8]+"@example.com", "x")
+		mainShopId := uuid.Must(uuid.NewV7())
+		branchShopId := uuid.Must(uuid.NewV7())
+		mustExec(`INSERT INTO shops (id, company_id, name) VALUES ($1, $2, $3)`, mainShopId, companyId, "Main")
+		mustExec(`INSERT INTO shops (id, company_id, name) VALUES ($1, $2, $3)`, branchShopId, companyId, "Branch")
+		productId := uuid.Must(uuid.NewV7())
+		mustExec(`INSERT INTO products (id, company_id, sku, name, price) VALUES ($1, $2, $3, $4, $5)`, productId, companyId, "SODA", "Soda", 1000)
+
+		insertDiscount := func(kind string, value int64, startsAt time.Time, endsAt time.Time) error {
+			return exec(`INSERT INTO discounts (id, company_id, name, kind, value, starts_at, ends_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+				uuid.Must(uuid.NewV7()), companyId, "Promo", kind, value, startsAt, endsAt)
+		}
+		now := time.Now().UTC()
+		if insertDiscount("percent", 10001, now, now.Add(time.Hour)) == nil {
+			t.Fatal("a discount above 100% was accepted")
+		}
+		if insertDiscount("fixed", 0, now, now.Add(time.Hour)) == nil {
+			t.Fatal("a zero fixed discount was accepted")
+		}
+		if insertDiscount("percent", 1000, now, now) == nil {
+			t.Fatal("a discount that ends when it starts was accepted")
+		}
+		if discountError := insertDiscount("percent", 1000, now, now.Add(time.Hour)); discountError != nil {
+			t.Fatalf("a valid discount was refused: %v", discountError)
+		}
+
+		insertSale := func(shopId uuid.UUID, clientRef string, receiptNumber string, subtotal int64, discountTotal int64, total int64, amountPaid int64, changeGiven int64) (uuid.UUID, error) {
+			saleId := uuid.Must(uuid.NewV7())
+			insertError := exec(`
+				INSERT INTO sales (id, company_id, shop_id, user_id, client_ref, request_hash, receipt_number, subtotal, discount_total, total,
+				                   tax_total, tax_rate_basis_points, amount_paid, change_given, currency_code, currency_decimals)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+				saleId, companyId, shopId, userId, clientRef, "hash", receiptNumber, subtotal, discountTotal, total, 0, 1800, amountPaid, changeGiven, "TZS", 0)
+			return saleId, insertError
+		}
+		saleId, saleError := insertSale(mainShopId, "client-ref-0001", "SALE-0001", 2000, 0, 2000, 5000, 3000)
+		if saleError != nil {
+			t.Fatalf("a valid sale was refused: %v", saleError)
+		}
+		refusedSales := []struct {
+			why  string
+			fail func() error
+		}{
+			{"a repeated client_ref", func() error {
+				_, e := insertSale(branchShopId, "client-ref-0001", "SALE-0009", 1, 0, 1, 1, 0)
+				return e
+			}},
+			{"a repeated receipt number in one shop", func() error { _, e := insertSale(mainShopId, "client-ref-0002", "SALE-0001", 1, 0, 1, 1, 0); return e }},
+			{"a total that is not subtotal minus discount", func() error {
+				_, e := insertSale(mainShopId, "client-ref-0003", "SALE-0002", 1000, 100, 1000, 1000, 0)
+				return e
+			}},
+			{"a payment that does not equal total plus change", func() error {
+				_, e := insertSale(mainShopId, "client-ref-0004", "SALE-0003", 1000, 0, 1000, 900, 0)
+				return e
+			}},
+			{"a too-short client_ref", func() error { _, e := insertSale(mainShopId, "short", "SALE-0004", 1, 0, 1, 1, 0); return e }},
+		}
+		for _, refusedSale := range refusedSales {
+			if refusedSale.fail() == nil {
+				t.Fatalf("%s was accepted", refusedSale.why)
+			}
+		}
+		if _, sameNumberOtherShop := insertSale(branchShopId, "client-ref-0005", "SALE-0001", 1, 0, 1, 1, 0); sameNumberOtherShop != nil {
+			t.Fatalf("the same receipt number in another shop was refused: %v", sameNumberOtherShop)
+		}
+
+		insertItem := func(position int, quantity int, unitPrice int64, addonsUnitTotal int64, discountAmount int64, lineTotal int64) error {
+			return exec(`
+				INSERT INTO sale_items (id, company_id, sale_id, position, product_id, product_name, sku, unit, quantity, unit_price, unit_cost,
+				                        addons_unit_total, discount_amount, line_total)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+				uuid.Must(uuid.NewV7()), companyId, saleId, position, productId, "Soda", "SODA", "btl", quantity, unitPrice, 600, addonsUnitTotal, discountAmount, lineTotal)
+		}
+		if itemError := insertItem(0, 2, 1000, 100, 200, 2000); itemError != nil {
+			t.Fatalf("a valid line was refused: %v", itemError)
+		}
+		if insertItem(1, 2, 1000, 0, 0, 1999) == nil {
+			t.Fatal("a line whose total does not add up was accepted")
+		}
+		if exec(`INSERT INTO sale_payments (company_id, sale_id, method, amount) VALUES ($1, $2, $3, $4)`, companyId, saleId, "cheque", 100) == nil {
+			t.Fatal("an unknown payment method was accepted")
 		}
 	})
 }

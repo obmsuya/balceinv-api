@@ -19,11 +19,11 @@ func NewRepository() *Repository {
 
 func (repository *Repository) InsertDefaults(ctx context.Context, querier database.Querier, companyId uuid.UUID, createdAt time.Time) error {
 	query := `
-		INSERT INTO settings (company_id, created_at, updated_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO settings (company_id, receipt_number_format, created_at, updated_at)
+		VALUES ($1, $2, $3, $4)
 	`
 
-	_, insertError := querier.ExecContext(ctx, query, companyId, createdAt, createdAt)
+	_, insertError := querier.ExecContext(ctx, query, companyId, DefaultReceiptNumberFormat, createdAt, createdAt)
 	if insertError != nil {
 		return fmt.Errorf("failed to insert default settings: %w", insertError)
 	}

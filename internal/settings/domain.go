@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const DefaultReceiptNumberFormat = "{SHOP}-{DATE}-{COUNTER}"
+
 type Settings struct {
 	CompanyId                 uuid.UUID
 	TaxRateBasisPoints        int
