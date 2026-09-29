@@ -175,9 +175,24 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 
 	hasShopChanges := request.ShopIds != nil
 	if hasShopChanges {
+		previousShopIds, listShopsError := service.repository.ListShopIds(ctx, querier, principal.CompanyId, []uuid.UUID{userId})
+		if listShopsError != nil {
+			return UserView{}, listShopsError
+		}
 		assignShopsError := service.assignShops(ctx, querier, principal.CompanyId, userId, request.ShopIds)
 		if assignShopsError != nil {
 			return UserView{}, assignShopsError
+		}
+		lostAShop := losesAnyShop(previousShopIds[userId], uniqueUuids(request.ShopIds))
+		if lostAShop {
+			keptSessionId := uuid.Nil
+			if userId == principal.UserId {
+				keptSessionId = principal.SessionId
+			}
+			revokeError := service.repository.RevokeSessions(ctx, querier, principal.CompanyId, userId, keptSessionId)
+			if revokeError != nil {
+				return UserView{}, revokeError
+			}
 		}
 	}
 
@@ -372,6 +387,19 @@ func (service *Service) assignShops(ctx context.Context, querier database.Querie
 	}
 
 	return nil
+}
+
+func losesAnyShop(previousShopIds []uuid.UUID, nextShopIds []uuid.UUID) bool {
+	keptShops := make(map[uuid.UUID]bool, len(nextShopIds))
+	for _, nextShopId := range nextShopIds {
+		keptShops[nextShopId] = true
+	}
+	for _, previousShopId := range previousShopIds {
+		if !keptShops[previousShopId] {
+			return true
+		}
+	}
+	return false
 }
 
 func NormalizeEmail(rawEmail string) string {

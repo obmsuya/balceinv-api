@@ -246,3 +246,34 @@ func TestUserEditorsCannotReachAboveTheirOwnPermissions(t *testing.T) {
 		}
 	})
 }
+
+func TestRemovingAShopSignsThePersonOut(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Shop Access", "owner@shopaccess.test")
+		cashierRoleId := createRole(t, harness, company.OwnerToken, "Till", []string{"sales:create"})
+		cashierId := createUser(t, harness, company.OwnerToken, "till@shopaccess.test", cashierRoleId, []string{company.ShopId.String()}).Data()["id"].(string)
+		cashierToken := harness.MustLogin("till@shopaccess.test", "user-password-1")
+		secondShopId := harness.Call(http.MethodPost, "/api/shops", company.OwnerToken, map[string]any{"name": "Second Branch", "receipt_prefix": "SEC"}).Data()["id"].(string)
+
+		updateShops := func(shopIds []string) {
+			t.Helper()
+			answer := harness.Call(http.MethodPut, "/api/users/"+cashierId, company.OwnerToken, map[string]any{
+				"name": "Till", "email": "till@shopaccess.test", "role_id": cashierRoleId, "shop_ids": shopIds,
+			})
+			if answer.Status != http.StatusOK {
+				t.Fatalf("updating shops returned %d %v", answer.Status, answer.Body)
+			}
+		}
+
+		updateShops([]string{company.ShopId.String(), secondShopId})
+		if harness.Call(http.MethodGet, "/api/auth/me", cashierToken, nil).Status != http.StatusOK {
+			t.Fatal("adding a shop signed the cashier out")
+		}
+
+		updateShops([]string{secondShopId})
+		if harness.Call(http.MethodGet, "/api/auth/me", cashierToken, nil).Status != http.StatusUnauthorized {
+			t.Fatal("the cashier kept working after losing a shop")
+		}
+	})
+}
