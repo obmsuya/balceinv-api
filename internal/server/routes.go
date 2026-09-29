@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -52,7 +53,13 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
 
 	platformHandler := platform.NewHandler(openDatabase, desktop.Network)
-	tenancyHandler := tenancy.NewHandler(tenancyService, isPostgres)
+	oldDatabasePath := ""
+	oldAppDatabasePath := filepath.Join(loadedConfig.DataDirectory, "balce.db")
+	isOldAppDatabaseElsewhere := oldAppDatabasePath != loadedConfig.SqlitePath
+	if loadedConfig.IsDesktop() && isOldAppDatabaseElsewhere {
+		oldDatabasePath = oldAppDatabasePath
+	}
+	tenancyHandler := tenancy.NewHandler(tenancyService, isPostgres, oldDatabasePath)
 	authHandler := auth.NewHandler(authService, isPostgres)
 	usersHandler := users.NewHandler(usersService)
 	accessHandler := access.NewHandler(accessService)
