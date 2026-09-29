@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
@@ -19,7 +20,7 @@ func TestConcurrentSalesNeverOversell(t *testing.T) {
 		harness := apptest.Start(t, engineCase)
 		company := harness.CreateCompany("Stock Shop", "owner@stock.test")
 		testContext := context.Background()
-		stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository())
+		stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository(), accounting.NewLedger(accounting.NewRepository()))
 
 		productId := uuid.Must(uuid.NewV7())
 		harness.ExecForCompany(company.Id, `INSERT INTO products (id, company_id, sku, name, price) VALUES ($1, $2, $3, $4, $5)`, productId, company.Id, "SODA", "Soda", 1000)

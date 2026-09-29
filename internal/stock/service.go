@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/google/uuid"
@@ -27,12 +28,14 @@ type MovementRequest struct {
 type Service struct {
 	repository              *Repository
 	notificationsRepository *notifications.Repository
+	ledger                  *accounting.Ledger
 }
 
-func NewService(repository *Repository, notificationsRepository *notifications.Repository) *Service {
+func NewService(repository *Repository, notificationsRepository *notifications.Repository, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:              repository,
 		notificationsRepository: notificationsRepository,
+		ledger:                  ledger,
 	}
 }
 
@@ -90,6 +93,18 @@ func (service *Service) RecordMovement(ctx context.Context, querier database.Que
 		return Movement{}, notifyError
 	}
 
+	return recordedMovement, nil
+}
+
+func (service *Service) RecordAndBookMovement(ctx context.Context, querier database.Querier, request MovementRequest) (Movement, error) {
+	recordedMovement, recordError := service.RecordMovement(ctx, querier, request)
+	if recordError != nil {
+		return Movement{}, recordError
+	}
+	postError := service.ledger.PostStockMovementById(ctx, querier, request.CompanyId, recordedMovement.Id)
+	if postError != nil {
+		return Movement{}, postError
+	}
 	return recordedMovement, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
@@ -37,14 +38,16 @@ type Service struct {
 	discountsService   *discounts.Service
 	settingsRepository *settings.Repository
 	stockService       *stock.Service
+	ledger             *accounting.Ledger
 }
 
-func NewService(repository *Repository, discountsService *discounts.Service, settingsRepository *settings.Repository, stockService *stock.Service) *Service {
+func NewService(repository *Repository, discountsService *discounts.Service, settingsRepository *settings.Repository, stockService *stock.Service, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:         repository,
 		discountsService:   discountsService,
 		settingsRepository: settingsRepository,
 		stockService:       stockService,
+		ledger:             ledger,
 	}
 }
 
@@ -189,6 +192,11 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		if movementError != nil {
 			return SaleView{}, movementError
 		}
+	}
+
+	postError := service.ledger.PostSaleById(ctx, querier, principal.CompanyId, newSale.Id)
+	if postError != nil {
+		return SaleView{}, postError
 	}
 
 	return service.Get(ctx, querier, principal.CompanyId, newSale.Id)

@@ -404,7 +404,7 @@ func (service *Service) prepareStock(ctx context.Context, querier database.Queri
 	}
 
 	openingReference := "Opening stock"
-	_, movementError := service.stockService.RecordMovement(ctx, querier, stock.MovementRequest{
+	_, movementError := service.stockService.RecordAndBookMovement(ctx, querier, stock.MovementRequest{
 		CompanyId: principal.CompanyId,
 		ShopId:    shopId,
 		ProductId: productId,

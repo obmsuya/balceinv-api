@@ -115,7 +115,7 @@ func (service *Service) Adjust(ctx context.Context, querier database.Querier, pr
 		Reference: trimmedOrNil(request.Reference),
 		UserId:    &principal.UserId,
 	}
-	recordedMovement, recordError := service.RecordMovement(ctx, querier, movementRequest)
+	recordedMovement, recordError := service.RecordAndBookMovement(ctx, querier, movementRequest)
 	if recordError != nil {
 		return MovementView{}, recordError
 	}
