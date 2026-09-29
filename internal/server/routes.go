@@ -14,6 +14,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
+	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
@@ -90,7 +91,16 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/platform", platformHandler.Describe)
 
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
-	application.Post("/api/setup", requestTransaction, tenancyHandler.RunFirstSetup)
+	if loadedConfig.IsDesktop() {
+		application.Post("/api/setup", licensing.IssueTrialAfterSetup(), requestTransaction, tenancyHandler.RunFirstSetup)
+		application.Get("/api/license/status", licensing.Status)
+		application.Post("/api/license/refresh", licensing.Refresh)
+		application.Get("/api/license/hardware-id", licensing.HardwareId)
+		application.Get("/api/license/packages", licensing.Packages)
+		application.Post("/api/license/pay", licensing.Pay)
+	} else {
+		application.Post("/api/setup", requestTransaction, tenancyHandler.RunFirstSetup)
+	}
 
 	application.Post("/api/auth/login", newLoginLimiter(), authHandler.Login)
 	application.Post("/api/auth/logout", signedIn(authHandler.Logout)...)

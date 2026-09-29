@@ -59,15 +59,20 @@ type Response struct {
 
 func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
-	return start(t, engineCase, false)
+	return start(t, engineCase, false, false)
 }
 
 func StartDesktop(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
-	return start(t, engineCase, true)
+	return start(t, engineCase, true, false)
 }
 
-func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool) *Harness {
+func StartDesktopWithLicenseCheck(t *testing.T, engineCase testkit.EngineCase) *Harness {
+	t.Helper()
+	return start(t, engineCase, true, true)
+}
+
+func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforcesLicense bool) *Harness {
 	t.Helper()
 
 	openDatabase := testkit.OpenMigratedAsApp(t, engineCase)
@@ -84,6 +89,7 @@ func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool) *Harness
 	if isDesktop {
 		testConfig.SqlitePath = engineCase.SqlitePath
 		testConfig.DataDirectory = filepath.Dir(engineCase.SqlitePath)
+		testConfig.EnforceLicense = enforcesLicense
 		desktop.Backups = backup.NewStore(openDatabase, testConfig.SqlitePath, testConfig.DataDirectory)
 	}
 
