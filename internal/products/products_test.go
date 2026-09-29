@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -299,6 +300,46 @@ func TestProductAddonsAndImages(t *testing.T) {
 		servedImage := harness.Call(http.MethodGet, imageUrl, "", nil)
 		if servedImage.Status != http.StatusOK || !bytes.Equal(servedImage.Raw, encodedPicture.Bytes()) {
 			t.Fatalf("serving the product image returned %d", servedImage.Status)
+		}
+	})
+}
+
+func TestLookupFindsProductsAndVariantsByBarcodeOrSku(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Scanner Shop", "owner@scanner.test")
+		otherCompany := harness.CreateCompany("Other Scanner", "owner@otherscanner.test")
+
+		soda := createProduct(t, harness, company.OwnerToken, productBody("SODA-500", 1000, map[string]any{
+			"barcodes": []map[string]any{{"code": "6001", "pack_size": 1}, {"code": "6001-CRATE", "pack_size": 24}},
+		}))
+		largeSoda := createProduct(t, harness, company.OwnerToken, productBody("SODA-1L", 1800, map[string]any{
+			"parent_id": soda["id"], "variant_label": "1 litre", "barcodes": []map[string]any{{"code": "6002"}},
+		}))
+		createProduct(t, harness, otherCompany.OwnerToken, productBody("THEIRS", 1, map[string]any{"barcodes": []map[string]any{{"code": "9999"}}}))
+
+		lookups := []struct {
+			code         string
+			wantId       any
+			wantPackSize float64
+		}{
+			{"6001", soda["id"], 1},
+			{"6001-CRATE", soda["id"], 24},
+			{"6002", largeSoda["id"], 1},
+			{"soda-1l", largeSoda["id"], 1},
+			{" SODA-500 ", soda["id"], 1},
+		}
+		for _, lookupCase := range lookups {
+			found := harness.Call(http.MethodGet, "/api/products/lookup?code="+url.QueryEscape(lookupCase.code), company.OwnerToken, nil)
+			foundProduct, _ := found.Data()["product"].(map[string]any)
+			if found.Status != http.StatusOK || foundProduct["id"] != lookupCase.wantId || found.Data()["pack_size"] != lookupCase.wantPackSize {
+				t.Fatalf("lookup %q returned %d %v", lookupCase.code, found.Status, found.Body)
+			}
+		}
+		for _, missingCode := range []string{"9999", "nothing", ""} {
+			if harness.Call(http.MethodGet, "/api/products/lookup?code="+url.QueryEscape(missingCode), company.OwnerToken, nil).Status != http.StatusNotFound {
+				t.Fatalf("lookup %q did not return 404", missingCode)
+			}
 		}
 	})
 }
