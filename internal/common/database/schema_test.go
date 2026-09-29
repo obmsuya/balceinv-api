@@ -84,3 +84,65 @@ func TestSchemaEnforcesTenantBoundaries(t *testing.T) {
 		}
 	})
 }
+
+func TestSchemaGuardsProductsAndStock(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		openDatabase := testkit.OpenMigrated(t, engineCase)
+		testContext := context.Background()
+		firstCompanyId, _ := insertCompanyWithRole(t, openDatabase, "Owner", true)
+		secondCompanyId, _ := insertCompanyWithRole(t, openDatabase, "Owner", true)
+
+		insertProduct := func(companyId uuid.UUID, parentId *uuid.UUID, sku string) (uuid.UUID, error) {
+			productId := uuid.Must(uuid.NewV7())
+			_, insertError := openDatabase.Writer.ExecContext(testContext,
+				`INSERT INTO products (id, company_id, parent_id, sku, name, price) VALUES ($1, $2, $3, $4, $5, $6)`,
+				productId, companyId, parentId, sku, "Product "+sku, 1000)
+			return productId, insertError
+		}
+
+		firstProductId, firstInsertError := insertProduct(firstCompanyId, nil, "SKU-1")
+		if firstInsertError != nil {
+			t.Fatalf("insert product: %v", firstInsertError)
+		}
+		if _, sameSkuOtherCompanyError := insertProduct(secondCompanyId, nil, "SKU-1"); sameSkuOtherCompanyError != nil {
+			t.Fatalf("the same SKU in another company was rejected: %v", sameSkuOtherCompanyError)
+		}
+		if _, duplicateSkuError := insertProduct(firstCompanyId, nil, "SKU-1"); duplicateSkuError == nil {
+			t.Fatal("a duplicate SKU in the same company was accepted")
+		}
+		if _, foreignParentError := insertProduct(secondCompanyId, &firstProductId, "SKU-2"); foreignParentError == nil {
+			t.Fatal("a variant was allowed to point at another company's product")
+		}
+
+		insertBarcode := func(companyId uuid.UUID, productId uuid.UUID, code string) error {
+			_, insertError := openDatabase.Writer.ExecContext(testContext,
+				`INSERT INTO barcodes (id, company_id, product_id, code) VALUES ($1, $2, $3, $4)`,
+				uuid.Must(uuid.NewV7()), companyId, productId, code)
+			return insertError
+		}
+		if barcodeError := insertBarcode(firstCompanyId, firstProductId, "6001234"); barcodeError != nil {
+			t.Fatalf("insert barcode: %v", barcodeError)
+		}
+		if duplicateBarcodeError := insertBarcode(firstCompanyId, firstProductId, "6001234"); duplicateBarcodeError == nil {
+			t.Fatal("a duplicate barcode in the same company was accepted")
+		}
+
+		shopId := uuid.Must(uuid.NewV7())
+		_, shopError := openDatabase.Writer.ExecContext(testContext, `INSERT INTO shops (id, company_id, name) VALUES ($1, $2, $3)`, shopId, firstCompanyId, "Main")
+		if shopError != nil {
+			t.Fatalf("insert shop: %v", shopError)
+		}
+		_, negativeStockError := openDatabase.Writer.ExecContext(testContext,
+			`INSERT INTO shop_stock (company_id, shop_id, product_id, quantity) VALUES ($1, $2, $3, $4)`,
+			firstCompanyId, shopId, firstProductId, -1)
+		if negativeStockError == nil {
+			t.Fatal("negative stock was accepted")
+		}
+		_, unknownReasonError := openDatabase.Writer.ExecContext(testContext,
+			`INSERT INTO stock_movements (id, company_id, shop_id, product_id, change, quantity_after, reason) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			uuid.Must(uuid.NewV7()), firstCompanyId, shopId, firstProductId, 5, 5, "gift")
+		if unknownReasonError == nil {
+			t.Fatal("an unknown stock movement reason was accepted")
+		}
+	})
+}
