@@ -3,6 +3,7 @@ package tenancy
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
@@ -156,4 +157,15 @@ func decimalsOrDefault(requestedDecimals *int) int {
 		return 0
 	}
 	return *requestedDecimals
+}
+
+func OldDesktopDataExists(oldDatabasePath string) bool {
+	if oldDatabasePath == "" {
+		return false
+	}
+	oldDatabaseInfo, statError := os.Stat(oldDatabasePath)
+	if statError != nil {
+		return false
+	}
+	return oldDatabaseInfo.Size() > 0
 }

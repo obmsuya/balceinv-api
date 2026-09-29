@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -314,6 +316,29 @@ func TestEachUserChoosesTheirOwnLanguage(t *testing.T) {
 		companyDefault := harness.Call(http.MethodPut, "/api/auth/language", cashierToken, map[string]any{"locale": nil})
 		if companyDefault.Status != http.StatusOK || companyDefault.Data()["locale"] != nil {
 			t.Fatalf("going back to the company language returned %d %v", companyDefault.Status, companyDefault.Body)
+		}
+	})
+}
+
+func TestSetupWarnsWhenTheOldAppsDataIsOnThisComputer(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		if engineCase.Engine != config.EngineSqlite {
+			return
+		}
+		harness := apptest.StartDesktop(t, engineCase)
+		if harness.Call(http.MethodGet, "/api/setup/status", "", nil).Data()["old_data_found"] != false {
+			t.Fatal("old data reported on a computer without the old app")
+		}
+
+		oldDatabasePath := filepath.Join(harness.Config.DataDirectory, "balce.db")
+		os.WriteFile(oldDatabasePath, []byte("SQLite format 3\x00"), 0o600)
+		if harness.Call(http.MethodGet, "/api/setup/status", "", nil).Data()["old_data_found"] != true {
+			t.Fatal("the old app's database was not noticed before setup")
+		}
+
+		harness.CreateCompany("Duka Jipya", "owner@olddata.test")
+		if harness.Call(http.MethodGet, "/api/setup/status", "", nil).Data()["old_data_found"] != false {
+			t.Fatal("the notice stayed after the business was set up")
 		}
 	})
 }

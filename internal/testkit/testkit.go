@@ -28,7 +28,7 @@ func ForEachEngine(t *testing.T, runCase func(t *testing.T, engineCase EngineCas
 		sqliteDirectory := filepath.Join(t.TempDir(), "Application Support")
 		sqliteCase := EngineCase{
 			Engine:     config.EngineSqlite,
-			SqlitePath: filepath.Join(sqliteDirectory, "balce.db"),
+			SqlitePath: filepath.Join(sqliteDirectory, "balce.sqlite"),
 		}
 		runCase(t, sqliteCase)
 	})

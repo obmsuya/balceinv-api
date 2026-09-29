@@ -9,14 +9,16 @@ import (
 )
 
 type Handler struct {
-	service    *Service
-	isPostgres bool
+	service         *Service
+	isPostgres      bool
+	oldDatabasePath string
 }
 
-func NewHandler(service *Service, isPostgres bool) *Handler {
+func NewHandler(service *Service, isPostgres bool, oldDatabasePath string) *Handler {
 	return &Handler{
-		service:    service,
-		isPostgres: isPostgres,
+		service:         service,
+		isPostgres:      isPostgres,
+		oldDatabasePath: oldDatabasePath,
 	}
 }
 
@@ -29,7 +31,10 @@ func (handler *Handler) Status(c *fiber.Ctx) error {
 	if checkError != nil {
 		return checkError
 	}
-	return response.Success(c, "Setup status", SetupStatusView{Configured: isConfigured})
+	return response.Success(c, "Setup status", SetupStatusView{
+		Configured:   isConfigured,
+		OldDataFound: !isConfigured && OldDesktopDataExists(handler.oldDatabasePath),
+	})
 }
 
 func (handler *Handler) RunFirstSetup(c *fiber.Ctx) error {
