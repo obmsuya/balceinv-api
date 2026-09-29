@@ -23,6 +23,7 @@ var (
 	ErrInvalidEmail       = errors.New("notification email is not a valid address")
 	ErrCurrencyLocked     = errors.New("the currency can't change after the first sale; totals already recorded would stop making sense")
 	ErrReceiptFormat      = errors.New("the receipt number format must contain {COUNTER} so every receipt number is different")
+	ErrEfdIncomplete      = errors.New("add the EFD address and key before turning EFD on")
 )
 
 type Service struct {
@@ -247,6 +248,10 @@ func applySettingsChanges(companySettings Settings, request UpdateSettingsReques
 	}
 	if request.CustomerDisplayEnabled != nil {
 		companySettings.CustomerDisplayEnabled = *request.CustomerDisplayEnabled
+	}
+	isEfdIncomplete := companySettings.EfdEnabled && (companySettings.EfdEndpoint == nil || companySettings.EfdApiKey == nil)
+	if isEfdIncomplete {
+		return companySettings, ErrEfdIncomplete
 	}
 	return companySettings, nil
 }

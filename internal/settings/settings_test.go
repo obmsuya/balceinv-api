@@ -152,6 +152,11 @@ func TestEfdApiKeyIsWriteOnly(t *testing.T) {
 		if clearKey.Data()["efd_api_key_set"] != false {
 			t.Fatal("an empty key must clear the stored key")
 		}
+
+		onWithoutKey := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"efd_enabled": true})
+		if onWithoutKey.Status != http.StatusBadRequest {
+			t.Fatalf("turning EFD on without a key returned %d", onWithoutKey.Status)
+		}
 	})
 }
 
