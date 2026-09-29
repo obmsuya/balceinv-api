@@ -17,6 +17,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
+	"github.com/chrisostomemataba/balceinv-api/internal/legacyimport"
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
@@ -30,6 +31,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
+	"github.com/chrisostomemataba/balceinv-api/internal/support"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/transfers"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
@@ -115,6 +117,9 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
 	if loadedConfig.IsDesktop() {
 		application.Post("/api/setup", licensing.IssueTrialAfterSetup(), requestTransaction, tenancyHandler.RunFirstSetup)
+		legacyImportHandler := legacyimport.NewHandler(legacyimport.NewService(tenancyService, stockService), oldDatabasePath)
+		application.Get("/api/setup/import-old/preview", requestTransaction, legacyImportHandler.Preview)
+		application.Post("/api/setup/import-old", licensing.IssueTrialAfterSetup(), requestTransaction, legacyImportHandler.Import)
 		application.Get("/api/license/status", authenticate, licensing.Status)
 		application.Post("/api/license/refresh", authenticate, licensing.Refresh)
 		application.Get("/api/license/hardware-id", authenticate, licensing.HardwareId)
@@ -278,6 +283,11 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/accounting/vat", books("accounting:view", accountingHandler.VatReport)...)
 	application.Get("/api/accounting/trial-balance", fullBooks("accounting:view", accountingHandler.TrialBalance)...)
 	application.Get("/api/accounting/integrity", fullBooks("accounting:view", accountingHandler.Integrity)...)
+
+	supportHandler := support.NewHandler(support.NewService(openDatabase, loadedConfig, objectStore))
+	application.Post("/api/support", authenticate, supportHandler.Submit)
+	application.Get("/api/support/messages", signedIn(supportHandler.Messages)...)
+	application.Get("/api/support/status", signedIn(supportHandler.Status)...)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)
