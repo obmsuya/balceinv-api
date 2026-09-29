@@ -21,24 +21,24 @@ const (
 )
 
 type Config struct {
-	Engine          Engine
-	DatabaseUrl     string
-	SqlitePath      string
-	ListenAddress   string
+	Engine        Engine
+	DatabaseUrl   string
+	SqlitePath    string
+	ListenAddress string
 
 	ListenAddressIsExplicit bool
-	AllowedOrigins  []string
-	LogDirectory    string
-	StaticDirectory string
-	MediaDirectory  string
-	DataDirectory   string
-	EnforceLicense  bool
-	LicenseSecret   string
-	S3Endpoint      string
-	S3Bucket        string
-	S3Region        string
-	S3AccessKeyId   string
-	S3SecretKey     string
+	AllowedOrigins          []string
+	LogDirectory            string
+	StaticDirectory         string
+	MediaDirectory          string
+	DataDirectory           string
+	EnforceLicense          bool
+	LicenseSecret           string
+	S3Endpoint              string
+	S3Bucket                string
+	S3Region                string
+	S3AccessKeyId           string
+	S3SecretKey             string
 
 	SupportPasscodeHash string
 }
@@ -154,24 +154,24 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 	}
 
 	loadedConfig := &Config{
-		Engine:          engine,
-		DatabaseUrl:     databaseUrl,
-		SqlitePath:      sqlitePath,
-		ListenAddress:   listenAddress,
+		Engine:        engine,
+		DatabaseUrl:   databaseUrl,
+		SqlitePath:    sqlitePath,
+		ListenAddress: listenAddress,
 
 		ListenAddressIsExplicit: isListenAddressExplicit,
-		AllowedOrigins:  allowedOrigins,
-		LogDirectory:    logDirectory,
-		StaticDirectory: readTrimmed(lookup, "BALCE_STATIC_DIR"),
-		MediaDirectory:  mediaDirectory,
-		DataDirectory:   dataDirectory,
-		EnforceLicense:  dataDirectory != "" && readTrimmed(lookup, "BALCE_LICENSE_CHECK") != "off",
-		LicenseSecret:   readTrimmed(lookup, "BALCE_LICENSE_SECRET"),
-		S3Endpoint:      s3Endpoint,
-		S3Bucket:        s3Bucket,
-		S3Region:        s3Region,
-		S3AccessKeyId:   s3AccessKeyId,
-		S3SecretKey:     s3SecretKey,
+		AllowedOrigins:          allowedOrigins,
+		LogDirectory:            logDirectory,
+		StaticDirectory:         readTrimmed(lookup, "BALCE_STATIC_DIR"),
+		MediaDirectory:          mediaDirectory,
+		DataDirectory:           dataDirectory,
+		EnforceLicense:          dataDirectory != "" && readTrimmed(lookup, "BALCE_LICENSE_CHECK") != "off",
+		LicenseSecret:           readTrimmed(lookup, "BALCE_LICENSE_SECRET"),
+		S3Endpoint:              s3Endpoint,
+		S3Bucket:                s3Bucket,
+		S3Region:                s3Region,
+		S3AccessKeyId:           s3AccessKeyId,
+		S3SecretKey:             s3SecretKey,
 
 		SupportPasscodeHash: supportPasscodeHash,
 	}
