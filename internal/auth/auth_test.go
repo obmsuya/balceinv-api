@@ -287,3 +287,33 @@ func cashierRoleId(t *testing.T, harness *apptest.Harness, company apptest.Compa
 
 	return createRole.Data()["id"].(string)
 }
+
+func TestEachUserChoosesTheirOwnLanguage(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Language Shop", "owner@language.test")
+		createCashier(t, harness, company, "cashier@language.test")
+		cashierToken := harness.MustLogin("cashier@language.test", "cashier-password-1")
+
+		chosen := harness.Call(http.MethodPut, "/api/auth/language", cashierToken, map[string]any{"locale": "sw"})
+		if chosen.Status != http.StatusOK || chosen.Data()["locale"] != "sw" {
+			t.Fatalf("choosing Swahili returned %d %v", chosen.Status, chosen.Body)
+		}
+		if harness.Call(http.MethodGet, "/api/auth/me", cashierToken, nil).Data()["locale"] != "sw" {
+			t.Fatal("the chosen language was not kept")
+		}
+		if harness.Call(http.MethodGet, "/api/auth/me", company.OwnerToken, nil).Data()["locale"] != nil {
+			t.Fatal("one user's language changed another user's")
+		}
+
+		unsupported := harness.Call(http.MethodPut, "/api/auth/language", cashierToken, map[string]any{"locale": "fr"})
+		if unsupported.Status != http.StatusBadRequest || unsupported.Code() != "validation_failed" {
+			t.Fatalf("an unsupported language returned %d %v", unsupported.Status, unsupported.Body)
+		}
+
+		companyDefault := harness.Call(http.MethodPut, "/api/auth/language", cashierToken, map[string]any{"locale": nil})
+		if companyDefault.Status != http.StatusOK || companyDefault.Data()["locale"] != nil {
+			t.Fatalf("going back to the company language returned %d %v", companyDefault.Status, companyDefault.Body)
+		}
+	})
+}

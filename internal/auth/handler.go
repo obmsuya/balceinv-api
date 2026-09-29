@@ -102,6 +102,20 @@ func (handler *Handler) SwitchShop(c *fiber.Ctx) error {
 	return response.Success(c, "Shop switched", currentUserView)
 }
 
+func (handler *Handler) SetLanguage(c *fiber.Ctx) error {
+	request := LanguageRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	currentUserView, languageError := handler.service.SetLanguage(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), request.Locale)
+	if languageError != nil {
+		return languageError
+	}
+	return response.Success(c, "Language saved", currentUserView)
+}
+
 func (handler *Handler) Authenticate() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		sessionToken := sessionTokenFromRequest(c)
