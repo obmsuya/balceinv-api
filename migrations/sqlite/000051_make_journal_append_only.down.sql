@@ -1,0 +1,4 @@
+DROP TRIGGER journal_lines_refuse_delete;
+DROP TRIGGER journal_lines_refuse_update;
+DROP TRIGGER journal_entries_refuse_delete;
+DROP TRIGGER journal_entries_refuse_update;

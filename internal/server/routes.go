@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/auth"
 	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
@@ -55,7 +56,9 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	usersService := users.NewService(usersRepository, accessRepository)
 	tenancyService := tenancy.NewService(tenancyRepository, accessService, usersRepository, settingsRepository)
 	settingsService := settings.NewService(settingsRepository, objectStore)
-	stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository())
+	accountingRepository := accounting.NewRepository()
+	ledger := accounting.NewLedger(accountingRepository)
+	stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository(), ledger)
 	productsService := products.NewService(products.NewRepository(), stockService, objectStore)
 	featuresRepository := features.NewRepository()
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository, featuresRepository)
@@ -80,17 +83,18 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	discountsService := discounts.NewService(discounts.NewRepository())
 	discountsHandler := discounts.NewHandler(discountsService)
 	salesRepository := sales.NewRepository()
-	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository)
+	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository, ledger)
 	customersHandler := customers.NewHandler(customersService)
-	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService, customersService)
+	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService, customersService, ledger)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
 	invoicesHandler := invoices.NewHandler(invoices.NewService(salesService, objectStore))
 	stockHandler := stock.NewHandler(stockService)
 	ratesHandler := rates.NewHandler(rates.NewService(openDatabase, rates.NewRepository()), settingsRepository)
 	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository, objectStore))
-	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
+	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService, ledger))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
-	suppliersHandler := suppliers.NewHandler(suppliers.NewService(suppliers.NewRepository(), featuresRepository, settingsRepository, stockService, objectStore))
+	accountingHandler := accounting.NewHandler(accounting.NewService(accountingRepository, ledger, objectStore))
+	suppliersHandler := suppliers.NewHandler(suppliers.NewService(suppliers.NewRepository(), featuresRepository, settingsRepository, stockService, objectStore, ledger))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -104,6 +108,12 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 	permittedAny := func(permissionIds []string, routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionIds...), routeHandler}
+	}
+	books := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
+		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(false), routeHandler}
+	}
+	fullBooks := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
+		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(true), routeHandler}
 	}
 	supportTeam := func(routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, supportPasscode, requestTransaction, routeHandler}
@@ -217,7 +227,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/customers/:id/payments/:paymentId/void", permitted("customers:edit", customersOn(customersHandler.VoidPayment))...)
 
 	ordersOn := customers.FeatureGate(featuresRepository, customers.OrdersOn)
-	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService))
+	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService, ledger))
 	application.Get("/api/orders", permitted("orders:view", ordersOn(ordersHandler.List))...)
 	application.Post("/api/orders", permitted("orders:create", ordersOn(ordersHandler.Create))...)
 	application.Get("/api/orders/:id", permitted("orders:view", ordersOn(ordersHandler.Get))...)
@@ -236,7 +246,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 
 	phoneUploadHandler := phoneupload.NewHandler(phoneupload.NewService(), desktop.Network, isPostgres)
-	application.Post("/api/phone-uploads", authenticate, httpx.RequirePermission("products:create", "products:edit", "purchases:create", "purchases:edit"), phoneUploadHandler.Create)
+	application.Post("/api/phone-uploads", authenticate, httpx.RequirePermission("products:create", "products:edit", "purchases:create", "purchases:edit", "accounting:create"), phoneUploadHandler.Create)
 	application.Get("/api/phone-uploads/:token", authenticate, phoneUploadHandler.Collect)
 	application.Get("/upload/:token", phoneUploadHandler.Page)
 	application.Post("/upload/:token", newPhoneUploadLimiter(), phoneUploadHandler.Submit)
@@ -317,6 +327,28 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/notifications/read-all", permitted("notifications:view", notificationsHandler.MarkAllRead)...)
 	application.Post("/api/notifications/:id/read", permitted("notifications:view", notificationsHandler.MarkRead)...)
 	application.Delete("/api/notifications/read", permitted("notifications:view", notificationsHandler.ClearRead)...)
+
+	application.Get("/api/accounting/status", books("accounting:view", accountingHandler.Status)...)
+	application.Post("/api/accounting/start", books("accounting:edit", accountingHandler.Start)...)
+	application.Post("/api/accounting/catch-up", books("accounting:edit", accountingHandler.CatchUp)...)
+	application.Get("/api/accounting/accounts", books("accounting:view", accountingHandler.Accounts)...)
+	application.Post("/api/accounting/accounts", fullBooks("accounting:edit", accountingHandler.CreateAccount)...)
+	application.Put("/api/accounting/accounts/:id", fullBooks("accounting:edit", accountingHandler.UpdateAccount)...)
+	application.Get("/api/accounting/entries", books("accounting:view", accountingHandler.Entries)...)
+	application.Get("/api/accounting/entries/:id", books("accounting:view", accountingHandler.Entry)...)
+	application.Get("/api/accounting/entries/:id/receipt", books("accounting:view", accountingHandler.Receipt)...)
+	application.Post("/api/accounting/entries/:id/reverse", books("accounting:delete", accountingHandler.Reverse)...)
+	application.Post("/api/accounting/money", books("accounting:create", accountingHandler.RecordMoney)...)
+	application.Post("/api/accounting/receipts", books("accounting:create", accountingHandler.UploadReceipt)...)
+	application.Post("/api/accounting/manual", fullBooks("accounting:edit", accountingHandler.PostManual)...)
+	application.Post("/api/accounting/close", fullBooks("accounting:edit", accountingHandler.ClosePeriod)...)
+	application.Get("/api/accounting/overview", books("accounting:view", accountingHandler.Overview)...)
+	application.Get("/api/accounting/profit-and-loss", books("accounting:view", accountingHandler.ProfitAndLoss)...)
+	application.Get("/api/accounting/balance-sheet", books("accounting:view", accountingHandler.BalanceSheet)...)
+	application.Get("/api/accounting/statement", books("accounting:view", accountingHandler.Statement)...)
+	application.Get("/api/accounting/vat", books("accounting:view", accountingHandler.VatReport)...)
+	application.Get("/api/accounting/trial-balance", fullBooks("accounting:view", accountingHandler.TrialBalance)...)
+	application.Get("/api/accounting/integrity", fullBooks("accounting:view", accountingHandler.Integrity)...)
 
 	supportHandler := support.NewHandler(support.NewService(openDatabase, loadedConfig, objectStore))
 	application.Post("/api/support", authenticate, supportHandler.Submit)

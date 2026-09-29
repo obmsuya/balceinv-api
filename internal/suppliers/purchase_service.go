@@ -130,6 +130,10 @@ func (service *Service) RecordPurchase(ctx context.Context, querier database.Que
 			return PurchaseView{}, refreshError
 		}
 	}
+	postError := service.ledger.PostPurchaseById(ctx, querier, principal.CompanyId, newPurchase.Id)
+	if postError != nil {
+		return PurchaseView{}, postError
+	}
 
 	if request.AmountPaid > 0 {
 		paymentMethod := request.PaymentMethod
@@ -245,6 +249,10 @@ func (service *Service) insertPayment(ctx context.Context, querier database.Quer
 	insertError := service.repository.InsertPayment(ctx, querier, newPayment)
 	if insertError != nil {
 		return uuid.Nil, insertError
+	}
+	postError := service.ledger.PostSupplierPaymentById(ctx, querier, newPayment.CompanyId, newPayment.Id)
+	if postError != nil {
+		return uuid.Nil, postError
 	}
 	return newPayment.Id, nil
 }
@@ -454,11 +462,19 @@ func (service *Service) CancelPurchase(ctx context.Context, querier database.Que
 		if voidError != nil {
 			return PurchaseView{}, voidError
 		}
+		voidPostError := service.ledger.PostSupplierPaymentVoidById(ctx, querier, principal.CompanyId, linkedPayment.Id)
+		if voidPostError != nil {
+			return PurchaseView{}, voidPostError
+		}
 	}
 
 	cancelError := service.repository.CancelPurchase(ctx, querier, principal.CompanyId, purchaseId, principal.UserId, cancelReason, cancelledAt)
 	if cancelError != nil {
 		return PurchaseView{}, cancelError
+	}
+	cancelPostError := service.ledger.PostPurchaseCancelById(ctx, querier, principal.CompanyId, purchaseId)
+	if cancelPostError != nil {
+		return PurchaseView{}, cancelPostError
 	}
 	return service.purchaseView(ctx, querier, principal.CompanyId, purchaseId)
 }

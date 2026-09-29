@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
@@ -22,15 +23,17 @@ type Service struct {
 	settingsRepository *settings.Repository
 	stockService       *stock.Service
 	objectStore        storage.Store
+	ledger             *accounting.Ledger
 }
 
-func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository, stockService *stock.Service, objectStore storage.Store) *Service {
+func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository, stockService *stock.Service, objectStore storage.Store, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:         repository,
 		featuresRepository: featuresRepository,
 		settingsRepository: settingsRepository,
 		stockService:       stockService,
 		objectStore:        objectStore,
+		ledger:             ledger,
 	}
 }
 
@@ -220,6 +223,10 @@ func (service *Service) CreateSupplier(ctx context.Context, querier database.Que
 	if insertError != nil {
 		return SupplierView{}, insertError
 	}
+	openingError := service.ledger.SyncSupplierOpening(ctx, querier, principal.CompanyId, newSupplier.Id)
+	if openingError != nil {
+		return SupplierView{}, openingError
+	}
 
 	return service.supplierView(ctx, querier, principal.CompanyId, newSupplier.Id)
 }
@@ -251,6 +258,10 @@ func (service *Service) UpdateSupplier(ctx context.Context, querier database.Que
 	}
 	if updateError != nil {
 		return SupplierView{}, updateError
+	}
+	openingError := service.ledger.SyncSupplierOpening(ctx, querier, principal.CompanyId, supplierId)
+	if openingError != nil {
+		return SupplierView{}, openingError
 	}
 
 	return service.supplierView(ctx, querier, principal.CompanyId, supplierId)
