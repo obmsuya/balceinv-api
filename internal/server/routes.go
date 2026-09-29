@@ -15,6 +15,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
+	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
@@ -47,6 +48,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	mediaHandler := media.NewHandler(objectStore)
 	productsHandler := products.NewHandler(productsService)
 	catalogHandler := catalog.NewHandler(catalog.NewService(catalog.NewRepository()))
+	shopsHandler := shops.NewHandler(shops.NewService(shops.NewRepository()))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -91,6 +93,12 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Put("/api/settings", permitted("settings:edit", settingsHandler.Update)...)
 	application.Post("/api/settings/upload-logo", permitted("settings:edit", settingsHandler.UploadLogo)...)
 	application.Get("/api/media/:folder/:companyId/:fileName", mediaHandler.Serve)
+
+	application.Get("/api/shops", permitted("shops:view", shopsHandler.List)...)
+	application.Get("/api/shops/:id", permitted("shops:view", shopsHandler.Get)...)
+	application.Post("/api/shops", permitted("shops:create", shopsHandler.Create)...)
+	application.Put("/api/shops/:id", permitted("shops:edit", shopsHandler.Update)...)
+	application.Delete("/api/shops/:id", permitted("shops:delete", shopsHandler.Close)...)
 
 	application.Get("/api/products", permitted("products:view", productsHandler.List)...)
 	application.Get("/api/products/categories", permitted("products:view", productsHandler.Categories)...)
