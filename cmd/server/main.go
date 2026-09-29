@@ -18,6 +18,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/lan"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
+	"github.com/chrisostomemataba/balceinv-api/internal/support"
 	"github.com/chrisostomemataba/balceinv-api/license"
 )
 
@@ -87,6 +88,7 @@ func main() {
 		desktop.Backups = backup.NewStore(openDatabase, loadedConfig.SqlitePath, loadedConfig.DataDirectory)
 		desktop.Backups.StartAutomaticBackups(backgroundContext)
 	}
+	support.NewService(openDatabase, loadedConfig, objectStore).StartSending(backgroundContext)
 	if loadedConfig.EnforceLicense {
 		if license.LicenseSecret == "" {
 			license.LicenseSecret = loadedConfig.LicenseSecret

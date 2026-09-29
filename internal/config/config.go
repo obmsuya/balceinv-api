@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/license"
@@ -12,6 +13,8 @@ import (
 )
 
 var CompiledSupportPasscodeHash = ""
+
+var CompiledSupportSmtpPassword = ""
 
 type Engine string
 
@@ -42,6 +45,13 @@ type Config struct {
 	S3SecretKey             string
 
 	SupportPasscodeHash string
+
+	SupportSmtpHost     string
+	SupportSmtpPort     int
+	SupportSmtpUsername string
+	SupportSmtpPassword string
+	SupportEmailTo      string
+	SupportEmailFrom    string
 }
 
 type LookupFunc func(key string) (string, bool)
@@ -149,6 +159,17 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		supportPasscodeHash = CompiledSupportPasscodeHash
 	}
 
+	supportSmtpHost := readOrDefault(lookup, "SUPPORT_SMTP_HOST", "smtp.mail.yahoo.com")
+	supportSmtpPort, supportSmtpPortError := strconv.Atoi(readOrDefault(lookup, "SUPPORT_SMTP_PORT", "465"))
+	isSupportSmtpPortValid := supportSmtpPortError == nil && supportSmtpPort > 0 && supportSmtpPort <= 65535
+	if !isSupportSmtpPortValid {
+		problems = append(problems, "SUPPORT_SMTP_PORT must be a port number such as 465 or 587")
+	}
+	supportSmtpUsername := readOrDefault(lookup, "SUPPORT_SMTP_USERNAME", "obmsuya@yahoo.com")
+	supportSmtpPassword := readOrDefault(lookup, "SUPPORT_SMTP_PASSWORD", CompiledSupportSmtpPassword)
+	supportEmailTo := readOrDefault(lookup, "SUPPORT_EMAIL_TO", "obmsuya@gmail.com")
+	supportEmailFrom := readOrDefault(lookup, "SUPPORT_EMAIL_FROM", supportSmtpUsername)
+
 	hasProblems := len(problems) > 0
 	if hasProblems {
 		return nil, errors.New("invalid configuration:\n  - " + strings.Join(problems, "\n  - "))
@@ -176,6 +197,13 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		S3SecretKey:             s3SecretKey,
 
 		SupportPasscodeHash: supportPasscodeHash,
+
+		SupportSmtpHost:     supportSmtpHost,
+		SupportSmtpPort:     supportSmtpPort,
+		SupportSmtpUsername: supportSmtpUsername,
+		SupportSmtpPassword: supportSmtpPassword,
+		SupportEmailTo:      supportEmailTo,
+		SupportEmailFrom:    supportEmailFrom,
 	}
 
 	return loadedConfig, nil
@@ -187,6 +215,14 @@ func readTrimmed(lookup LookupFunc, key string) string {
 		return ""
 	}
 	return strings.TrimSpace(rawValue)
+}
+
+func readOrDefault(lookup LookupFunc, key string, defaultValue string) string {
+	trimmedValue := readTrimmed(lookup, key)
+	if trimmedValue == "" {
+		return defaultValue
+	}
+	return trimmedValue
 }
 
 func splitList(rawList string) []string {

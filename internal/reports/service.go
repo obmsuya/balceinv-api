@@ -7,6 +7,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/google/uuid"
 )
@@ -50,12 +51,14 @@ type RangeRequest struct {
 type Service struct {
 	repository         *Repository
 	settingsRepository *settings.Repository
+	objectStore        storage.Store
 }
 
-func NewService(repository *Repository, settingsRepository *settings.Repository) *Service {
+func NewService(repository *Repository, settingsRepository *settings.Repository, objectStore storage.Store) *Service {
 	return &Service{
 		repository:         repository,
 		settingsRepository: settingsRepository,
+		objectStore:        objectStore,
 	}
 }
 
