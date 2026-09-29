@@ -9,6 +9,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/security"
+	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/google/uuid"
 )
@@ -19,16 +20,18 @@ var (
 )
 
 type Service struct {
-	repository      *Repository
-	accessService   *access.Service
-	usersRepository *users.Repository
+	repository         *Repository
+	accessService      *access.Service
+	usersRepository    *users.Repository
+	settingsRepository *settings.Repository
 }
 
-func NewService(repository *Repository, accessService *access.Service, usersRepository *users.Repository) *Service {
+func NewService(repository *Repository, accessService *access.Service, usersRepository *users.Repository, settingsRepository *settings.Repository) *Service {
 	return &Service{
-		repository:      repository,
-		accessService:   accessService,
-		usersRepository: usersRepository,
+		repository:         repository,
+		accessService:      accessService,
+		usersRepository:    usersRepository,
+		settingsRepository: settingsRepository,
 	}
 }
 
@@ -76,6 +79,11 @@ func (service *Service) CreateCompany(ctx context.Context, querier database.Quer
 	insertCompanyError := service.repository.InsertCompany(ctx, querier, newCompany)
 	if insertCompanyError != nil {
 		return SetupResultView{}, insertCompanyError
+	}
+
+	insertSettingsError := service.settingsRepository.InsertDefaults(ctx, querier, companyId, createdAt)
+	if insertSettingsError != nil {
+		return SetupResultView{}, insertSettingsError
 	}
 
 	firstShop := Shop{
