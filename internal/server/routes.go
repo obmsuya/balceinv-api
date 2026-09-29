@@ -12,6 +12,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
+	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
@@ -35,7 +36,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	usersService := users.NewService(usersRepository, accessRepository)
 	tenancyService := tenancy.NewService(tenancyRepository, accessService, usersRepository, settingsRepository)
 	settingsService := settings.NewService(settingsRepository, objectStore)
-	stockService := stock.NewService(stock.NewRepository())
+	stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository())
 	productsService := products.NewService(products.NewRepository(), stockService, objectStore)
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
 
@@ -49,6 +50,8 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	productsHandler := products.NewHandler(productsService)
 	catalogHandler := catalog.NewHandler(catalog.NewService(catalog.NewRepository()))
 	shopsHandler := shops.NewHandler(shops.NewService(shops.NewRepository()))
+	stockHandler := stock.NewHandler(stockService)
+	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -122,6 +125,17 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/catalog/team/template", supportTeam(catalogHandler.TeamTemplate)...)
 	application.Post("/api/catalog/team/import", supportTeam(catalogHandler.TeamImport)...)
 	application.Delete("/api/catalog/team", supportTeam(catalogHandler.TeamClear)...)
+
+	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
+	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
+	application.Get("/api/stock-movements", permitted("stock_movements:view", stockHandler.Movements)...)
+	application.Post("/api/stock-movements", permitted("stock_movements:create", stockHandler.Adjust)...)
+
+	application.Get("/api/notifications", permitted("notifications:view", notificationsHandler.List)...)
+	application.Get("/api/notifications/unread-count", permitted("notifications:view", notificationsHandler.UnreadCount)...)
+	application.Post("/api/notifications/read-all", permitted("notifications:view", notificationsHandler.MarkAllRead)...)
+	application.Post("/api/notifications/:id/read", permitted("notifications:view", notificationsHandler.MarkRead)...)
+	application.Delete("/api/notifications/read", permitted("notifications:view", notificationsHandler.ClearRead)...)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)
