@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
+	"github.com/chrisostomemataba/balceinv-api/internal/reports"
 	"github.com/chrisostomemataba/balceinv-api/internal/sales"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
@@ -59,6 +60,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
 	stockHandler := stock.NewHandler(stockService)
+	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository))
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
 
@@ -152,6 +154,14 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/sales", permitted("sales:view", salesHandler.List)...)
 	application.Get("/api/sales/totals", permitted("sales:view", salesHandler.Totals)...)
 	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
+	application.Get("/api/dashboard", permitted("reports:view", reportsHandler.Dashboard)...)
+	application.Get("/api/reports/summary", permitted("reports:view", reportsHandler.Summary)...)
+	application.Get("/api/reports/daily", permitted("reports:view", reportsHandler.Daily)...)
+	application.Get("/api/reports/products", permitted("reports:view", reportsHandler.Products)...)
+	application.Get("/api/reports/cashiers", permitted("reports:view", reportsHandler.Cashiers)...)
+	application.Get("/api/reports/shops", permitted("reports:view", reportsHandler.Shops)...)
+	application.Get("/api/reports/inventory", permitted("reports:view", reportsHandler.Inventory)...)
+
 	application.Post("/api/sales/fiscal/send-waiting", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendWaitingToEfd)
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
