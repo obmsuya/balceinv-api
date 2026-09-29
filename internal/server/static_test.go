@@ -73,6 +73,12 @@ func TestStaticAppFallsBackToIndexButNeverForApi(t *testing.T) {
 				t.Fatalf("%s served a file outside the app folder", escapePath)
 			}
 		}
+		for _, windowsEscapePath := range []string{`/..\secret.txt`, `/_nuxt\..\..\secret.txt`, `/pos\..\..`} {
+			windowsStatus, _, windowsBody := fetch(windowsEscapePath)
+			if windowsStatus != http.StatusNotFound || strings.Contains(windowsBody, "<html>") {
+				t.Fatalf("%s returned %d %q, want a plain 404", windowsEscapePath, windowsStatus, windowsBody)
+			}
+		}
 	})
 }
 
