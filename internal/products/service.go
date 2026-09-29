@@ -97,6 +97,32 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, princ
 	return productViews[0], nil
 }
 
+func (service *Service) Lookup(ctx context.Context, querier database.Querier, principal *identity.Principal, code string) (LookupView, error) {
+	trimmedCode := strings.TrimSpace(code)
+	if trimmedCode == "" {
+		return LookupView{}, ErrProductNotFound
+	}
+
+	productId, packSize, findError := service.repository.FindIdByCode(ctx, querier, principal.CompanyId, trimmedCode)
+	if findError != nil {
+		return LookupView{}, findError
+	}
+	if productId == nil {
+		return LookupView{}, ErrProductNotFound
+	}
+
+	productView, getError := service.Get(ctx, querier, principal, *productId)
+	if getError != nil {
+		return LookupView{}, getError
+	}
+
+	lookupView := LookupView{
+		Product:  productView,
+		PackSize: packSize,
+	}
+	return lookupView, nil
+}
+
 func (service *Service) ListVariants(ctx context.Context, querier database.Querier, principal *identity.Principal, parentId uuid.UUID) ([]ProductView, error) {
 	parentProduct, findError := service.repository.Find(ctx, querier, principal.CompanyId, principal.ShopId, parentId)
 	if findError != nil {

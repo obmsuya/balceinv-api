@@ -101,3 +101,8 @@ type ImportResultView struct {
 	Problems      []ImportProblem `json:"problems"`
 	ProblemsTotal int             `json:"problems_total"`
 }
+
+type LookupView struct {
+	Product  ProductView `json:"product"`
+	PackSize int         `json:"pack_size"`
+}

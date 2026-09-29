@@ -114,6 +114,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Delete("/api/shops/:id", permitted("shops:delete", shopsHandler.Close)...)
 
 	application.Get("/api/products", permitted("products:view", productsHandler.List)...)
+	application.Get("/api/products/lookup", permitted("products:view", productsHandler.Lookup)...)
 	application.Get("/api/products/categories", permitted("products:view", productsHandler.Categories)...)
 	application.Get("/api/products/template", permitted("products:create", productsHandler.ImportTemplate)...)
 	application.Post("/api/products/upload", permitted("products:create", productsHandler.Import)...)
