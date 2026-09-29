@@ -124,3 +124,43 @@ func TestDesktopKeepsMediaNextToTheDatabase(t *testing.T) {
 		t.Fatalf("media directory %s, want next to the database", loadedConfig.MediaDirectory)
 	}
 }
+
+func TestSupportEmailDefaultsAndOverrides(t *testing.T) {
+	defaultConfig, defaultError := config.LoadFrom(lookupFrom(map[string]string{
+		"DB_PATH": "/tmp/balce-desktop/balce.db",
+	}))
+	if defaultError != nil {
+		t.Fatalf("desktop config: %v", defaultError)
+	}
+	usesDefaults := defaultConfig.SupportSmtpHost == "smtp.mail.yahoo.com" && defaultConfig.SupportSmtpPort == 465 &&
+		defaultConfig.SupportSmtpUsername == "obmsuya@yahoo.com" && defaultConfig.SupportEmailTo == "obmsuya@gmail.com" &&
+		defaultConfig.SupportEmailFrom == "obmsuya@yahoo.com" && defaultConfig.SupportSmtpPassword == config.CompiledSupportSmtpPassword
+	if !usesDefaults {
+		t.Fatalf("support email defaults are %+v", defaultConfig)
+	}
+
+	overriddenConfig, overrideError := config.LoadFrom(lookupFrom(map[string]string{
+		"DB_PATH":               "/tmp/balce-desktop/balce.db",
+		"SUPPORT_SMTP_HOST":     "smtp.example.com",
+		"SUPPORT_SMTP_PORT":     "587",
+		"SUPPORT_SMTP_USERNAME": "robot@example.com",
+		"SUPPORT_SMTP_PASSWORD": " app-password ",
+		"SUPPORT_EMAIL_TO":      "team@example.com",
+	}))
+	if overrideError != nil {
+		t.Fatalf("overridden config: %v", overrideError)
+	}
+	isOverridden := overriddenConfig.SupportSmtpPort == 587 && overriddenConfig.SupportSmtpPassword == "app-password" &&
+		overriddenConfig.SupportEmailFrom == "robot@example.com" && overriddenConfig.SupportEmailTo == "team@example.com"
+	if !isOverridden {
+		t.Fatalf("support email overrides are %+v", overriddenConfig)
+	}
+
+	_, badPortError := config.LoadFrom(lookupFrom(map[string]string{
+		"DB_PATH":           "/tmp/balce-desktop/balce.db",
+		"SUPPORT_SMTP_PORT": "smtp",
+	}))
+	if badPortError == nil || !strings.Contains(badPortError.Error(), "SUPPORT_SMTP_PORT") {
+		t.Fatalf("expected a bad port error, got %v", badPortError)
+	}
+}
