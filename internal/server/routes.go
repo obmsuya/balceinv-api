@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
+	"github.com/chrisostomemataba/balceinv-api/internal/rates"
 	"github.com/chrisostomemataba/balceinv-api/internal/reports"
 	"github.com/chrisostomemataba/balceinv-api/internal/sales"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
@@ -60,6 +61,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
 	stockHandler := stock.NewHandler(stockService)
+	ratesHandler := rates.NewHandler(rates.NewService(openDatabase, rates.NewRepository()), settingsRepository)
 	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository))
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
@@ -155,6 +157,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/sales/totals", permitted("sales:view", salesHandler.Totals)...)
 	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
 	application.Get("/api/dashboard", permitted("reports:view", reportsHandler.Dashboard)...)
+	application.Get("/api/exchange-rates", signedIn(ratesHandler.Latest)...)
 	application.Get("/api/reports/summary", permitted("reports:view", reportsHandler.Summary)...)
 	application.Get("/api/reports/daily", permitted("reports:view", reportsHandler.Daily)...)
 	application.Get("/api/reports/products", permitted("reports:view", reportsHandler.Products)...)
