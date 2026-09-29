@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/chrisostomemataba/balceinv-api/internal/features"
 	"log/slog"
 	"time"
 
@@ -36,20 +37,22 @@ type LoginOutcome struct {
 }
 
 type Service struct {
-	openDatabase      *database.Database
-	repository        *Repository
-	usersRepository   *users.Repository
-	accessRepository  *access.Repository
-	tenancyRepository *tenancy.Repository
+	openDatabase       *database.Database
+	repository         *Repository
+	usersRepository    *users.Repository
+	accessRepository   *access.Repository
+	tenancyRepository  *tenancy.Repository
+	featuresRepository *features.Repository
 }
 
-func NewService(openDatabase *database.Database, repository *Repository, usersRepository *users.Repository, accessRepository *access.Repository, tenancyRepository *tenancy.Repository) *Service {
+func NewService(openDatabase *database.Database, repository *Repository, usersRepository *users.Repository, accessRepository *access.Repository, tenancyRepository *tenancy.Repository, featuresRepository *features.Repository) *Service {
 	return &Service{
-		openDatabase:      openDatabase,
-		repository:        repository,
-		usersRepository:   usersRepository,
-		accessRepository:  accessRepository,
-		tenancyRepository: tenancyRepository,
+		featuresRepository: featuresRepository,
+		openDatabase:       openDatabase,
+		repository:         repository,
+		usersRepository:    usersRepository,
+		accessRepository:   accessRepository,
+		tenancyRepository:  tenancyRepository,
 	}
 }
 
@@ -317,6 +320,11 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 		return CurrentUserView{}, brandingError
 	}
 
+	companyFeatures, featuresError := service.featuresRepository.Find(ctx, querier, sessionUser.CompanyId)
+	if featuresError != nil {
+		return CurrentUserView{}, featuresError
+	}
+
 	effectivePermissions, permissionsError := service.accessRepository.ListEffectivePermissions(ctx, querier, sessionUser.CompanyId, sessionUser.Id, sessionUser.RoleIsOwner)
 	if permissionsError != nil {
 		return CurrentUserView{}, permissionsError
@@ -354,6 +362,7 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 		Permissions:        permissionViews,
 		Locale:             sessionUser.Locale,
 		MustChangePassword: sessionUser.MustChangePassword,
+		Features:           features.ToView(companyFeatures),
 	}
 
 	return currentUserView, nil
