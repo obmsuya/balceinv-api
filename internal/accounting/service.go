@@ -17,7 +17,6 @@ const (
 	receiptFolder       = "receipts"
 	maximumReceiptBytes = 5 * 1024 * 1024
 	basisPointsPerWhole = 10000
-	openingMemo         = "Opening balances"
 )
 
 type Service struct {
@@ -176,10 +175,8 @@ func (service *Service) postOpening(ctx context.Context, querier database.Querie
 	}
 	openingLines = append(openingLines, keyedLine{Key: KeyOwnerCapital, Credit: openingTotal})
 
-	memo := openingMemo
 	header := Entry{
 		SourceType: SourceOpening,
-		Memo:       &memo,
 		CreatedBy:  &principal.UserId,
 	}
 	_, postError := service.ledger.postEventWithBooks(ctx, querier, books, books.StartedAt, header, openingLines)
