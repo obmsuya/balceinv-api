@@ -1,0 +1,12 @@
+DROP POLICY tenant_isolation ON stock_movements;
+ALTER TABLE stock_movements DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON shop_stock;
+ALTER TABLE shop_stock DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON product_addons;
+ALTER TABLE product_addons DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON price_history;
+ALTER TABLE price_history DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON barcodes;
+ALTER TABLE barcodes DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON products;
+ALTER TABLE products DISABLE ROW LEVEL SECURITY;
