@@ -13,12 +13,14 @@ import (
 var ErrInvalidFilter = errors.New("the filter is not valid")
 
 type Handler struct {
-	service *Service
+	service       *Service
+	fiscalService *FiscalService
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service, fiscalService *FiscalService) *Handler {
 	return &Handler{
-		service: service,
+		service:       service,
+		fiscalService: fiscalService,
 	}
 }
 
@@ -43,6 +45,27 @@ func (handler *Handler) TillOptions(c *fiber.Ctx) error {
 		return respondWithServiceError(c, optionsError)
 	}
 	return response.Success(c, "Till options", tillOptions)
+}
+
+func (handler *Handler) SendToEfd(c *fiber.Ctx) error {
+	saleId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrSaleNotFound)
+	}
+
+	fiscalView, sendError := handler.fiscalService.Send(c.UserContext(), httpx.CurrentPrincipal(c).CompanyId, saleId)
+	if sendError != nil {
+		return respondWithServiceError(c, sendError)
+	}
+	return response.Success(c, "EFD status", fiscalView)
+}
+
+func (handler *Handler) SendWaitingToEfd(c *fiber.Ctx) error {
+	sendSummary, sendError := handler.fiscalService.SendWaiting(c.UserContext(), httpx.CurrentPrincipal(c).CompanyId)
+	if sendError != nil {
+		return respondWithServiceError(c, sendError)
+	}
+	return response.Success(c, "EFD sending finished", sendSummary)
 }
 
 func (handler *Handler) Create(c *fiber.Ctx) error {
@@ -113,8 +136,13 @@ func (handler *Handler) Receipt(c *fiber.Ctx) error {
 }
 
 func parseSaleFilter(c *fiber.Ctx) (SaleFilter, bool) {
+	fiscalFilter := c.Query("fiscal")
+	if fiscalFilter != "" && fiscalFilter != "waiting" {
+		return SaleFilter{}, false
+	}
 	saleFilter := SaleFilter{
-		SearchText: c.Query("q"),
+		SearchText:    c.Query("q"),
+		FiscalWaiting: fiscalFilter == "waiting",
 	}
 
 	for _, rawTime := range []struct {
@@ -152,6 +180,8 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusBadRequest, "invalid_payment", serviceError.Error())
 	case errors.Is(serviceError, ErrNoActiveShop):
 		return response.Error(c, fiber.StatusBadRequest, "no_active_shop", serviceError.Error())
+	case errors.Is(serviceError, ErrEfdOff), errors.Is(serviceError, ErrEfdNotReady), errors.Is(serviceError, ErrFiscalNotQueued):
+		return response.Error(c, fiber.StatusConflict, "efd_unavailable", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidFilter):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_filter", serviceError.Error())
 	default:
