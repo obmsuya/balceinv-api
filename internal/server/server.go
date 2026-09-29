@@ -27,14 +27,14 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 	application.Use(cors.New(cors.Config{
 		AllowOrigins:     strings.Join(loadedConfig.AllowedOrigins, ","),
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization," + httpx.SupportPasscodeHeader,
 		AllowCredentials: true,
 		ExposeHeaders:    "X-Request-Id",
 	}))
 
 	application.Use(httpx.OriginGuard(loadedConfig.AllowedOrigins))
 
-	registerRoutes(application, openDatabase, objectStore)
+	registerRoutes(application, openDatabase, objectStore, loadedConfig.SupportPasscodeHash)
 
 	return application
 }

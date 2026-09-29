@@ -15,7 +15,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/models"
 	"github.com/chrisostomemataba/balceinv-api/repository"
-	"github.com/chrisostomemataba/balceinv-api/seeds"
+	"github.com/chrisostomemataba/balceinv-api/internal/catalog/seeds"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )

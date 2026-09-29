@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/logging"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
@@ -52,6 +53,13 @@ func main() {
 	}
 	defer openDatabase.Close()
 
+	seededCount, seedError := seedCommonProducts(startupContext, openDatabase)
+	if seedError != nil {
+		slog.Error("startup aborted: common products could not be seeded", "error", seedError)
+		os.Exit(1)
+	}
+	slog.Info("common products ready", "seeded", seededCount)
+
 	objectStore, storageError := storage.Open(loadedConfig)
 	if storageError != nil {
 		slog.Error("startup aborted: object storage unavailable", "error", storageError)
@@ -80,4 +88,24 @@ func main() {
 	if shutdownError != nil {
 		slog.Error("graceful shutdown incomplete", "error", shutdownError)
 	}
+}
+
+func seedCommonProducts(ctx context.Context, openDatabase *database.Database) (int, error) {
+	seedTransaction, beginError := openDatabase.Writer.BeginTx(ctx, nil)
+	if beginError != nil {
+		return 0, fmt.Errorf("failed to begin seeding: %w", beginError)
+	}
+	defer seedTransaction.Rollback()
+
+	catalogService := catalog.NewService(catalog.NewRepository())
+	seededCount, seedError := catalogService.SeedEmptyLists(ctx, seedTransaction)
+	if seedError != nil {
+		return 0, seedError
+	}
+
+	commitError := seedTransaction.Commit()
+	if commitError != nil {
+		return 0, fmt.Errorf("failed to commit seeding: %w", commitError)
+	}
+	return seededCount, nil
 }

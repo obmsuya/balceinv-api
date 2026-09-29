@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
 	"github.com/chrisostomemataba/balceinv-api/internal/auth"
+	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
@@ -21,7 +22,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
-func registerRoutes(application *fiber.App, openDatabase *database.Database, objectStore storage.Store) {
+func registerRoutes(application *fiber.App, openDatabase *database.Database, objectStore storage.Store, supportPasscodeHash string) {
 	isPostgres := openDatabase.IsPostgres()
 
 	accessRepository := access.NewRepository()
@@ -45,15 +46,20 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	settingsHandler := settings.NewHandler(settingsService)
 	mediaHandler := media.NewHandler(objectStore)
 	productsHandler := products.NewHandler(productsService)
+	catalogHandler := catalog.NewHandler(catalog.NewService(catalog.NewRepository()))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
+	supportPasscode := httpx.RequireSupportPasscode(supportPasscodeHash)
 
 	signedIn := func(routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, requestTransaction, routeHandler}
 	}
 	permitted := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), routeHandler}
+	}
+	supportTeam := func(routeHandler fiber.Handler) []fiber.Handler {
+		return []fiber.Handler{authenticate, supportPasscode, requestTransaction, routeHandler}
 	}
 
 	application.Get("/health", platformHandler.Health)
@@ -100,6 +106,13 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Post("/api/products/:id/addons", permitted("products:edit", productsHandler.CreateAddon)...)
 	application.Put("/api/addons/:id", permitted("products:edit", productsHandler.UpdateAddon)...)
 	application.Delete("/api/addons/:id", permitted("products:edit", productsHandler.DeleteAddon)...)
+
+	application.Get("/api/catalog", permitted("products:create", catalogHandler.List)...)
+	application.Get("/api/catalog/team/summary", supportTeam(catalogHandler.TeamSummary)...)
+	application.Get("/api/catalog/team/items", supportTeam(catalogHandler.TeamItems)...)
+	application.Get("/api/catalog/team/template", supportTeam(catalogHandler.TeamTemplate)...)
+	application.Post("/api/catalog/team/import", supportTeam(catalogHandler.TeamImport)...)
+	application.Delete("/api/catalog/team", supportTeam(catalogHandler.TeamClear)...)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)

@@ -3,6 +3,8 @@ package apptest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -24,7 +26,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const AllowedOrigin = "http://app.balce.test"
+const (
+	AllowedOrigin   = "http://app.balce.test"
+	SupportPasscode = "team-passcode-for-tests"
+)
 
 type Harness struct {
 	t            *testing.T
@@ -59,6 +64,8 @@ func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	testConfig := &config.Config{
 		Engine:         engineCase.Engine,
 		AllowedOrigins: []string{AllowedOrigin},
+
+		SupportPasscodeHash: hashHex(SupportPasscode),
 	}
 
 	objectStore, storeError := storage.NewLocalStore(t.TempDir())
@@ -190,6 +197,11 @@ func (harness *Harness) Send(method string, path string, sessionToken string, re
 
 func (harness *Harness) Upload(path string, sessionToken string, fieldName string, fileName string, fileBytes []byte) Response {
 	harness.t.Helper()
+	return harness.UploadForm(path, sessionToken, fieldName, fileName, fileBytes, nil, nil)
+}
+
+func (harness *Harness) UploadForm(path string, sessionToken string, fieldName string, fileName string, fileBytes []byte, formValues map[string]string, extraHeaders map[string]string) Response {
+	harness.t.Helper()
 
 	formBody := &bytes.Buffer{}
 	formWriter := multipart.NewWriter(formBody)
@@ -200,11 +212,17 @@ func (harness *Harness) Upload(path string, sessionToken string, fieldName strin
 		}
 		filePart.Write(fileBytes)
 	}
+	for formKey, formValue := range formValues {
+		formWriter.WriteField(formKey, formValue)
+	}
 	formWriter.Close()
 
 	testRequest := httptest.NewRequest(http.MethodPost, path, formBody)
 	testRequest.Header.Set("Content-Type", formWriter.FormDataContentType())
 	testRequest.Header.Set("Authorization", "Bearer "+sessionToken)
+	for headerName, headerValue := range extraHeaders {
+		testRequest.Header.Set(headerName, headerValue)
+	}
 
 	testResponse, requestError := harness.App.Test(testRequest, 10000)
 	if requestError != nil {
@@ -303,4 +321,9 @@ func (response Response) Items() []any {
 func (response Response) Code() string {
 	errorCode, _ := response.Body["code"].(string)
 	return errorCode
+}
+
+func hashHex(secret string) string {
+	secretHash := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(secretHash[:])
 }
