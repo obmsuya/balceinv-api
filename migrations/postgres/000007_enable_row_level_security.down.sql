@@ -1,0 +1,16 @@
+DROP POLICY tenant_isolation ON sessions;
+ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON users;
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON user_shops;
+ALTER TABLE user_shops DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON user_permissions;
+ALTER TABLE user_permissions DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON role_permissions;
+ALTER TABLE role_permissions DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON roles;
+ALTER TABLE roles DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON shops;
+ALTER TABLE shops DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON companies;
+ALTER TABLE companies DISABLE ROW LEVEL SECURITY;
