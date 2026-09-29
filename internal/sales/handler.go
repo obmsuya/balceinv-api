@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/gofiber/fiber/v2"
 )
@@ -184,6 +185,12 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "efd_unavailable", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidFilter):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_filter", serviceError.Error())
+	case errors.Is(serviceError, ErrInvalidCustomerId):
+		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
+	case errors.Is(serviceError, customers.ErrFeatureOff), errors.Is(serviceError, customers.ErrCustomerNotFound),
+		errors.Is(serviceError, customers.ErrCustomerRequired), errors.Is(serviceError, customers.ErrCustomerInactive),
+		errors.Is(serviceError, customers.ErrCreditLimitExceeded):
+		return customers.RespondWithServiceError(c, serviceError)
 	default:
 		return stock.RespondWithServiceError(c, serviceError)
 	}
