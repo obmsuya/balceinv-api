@@ -164,6 +164,10 @@ func embeddedMigrations(engine config.Engine) (fs.FS, string) {
 	return migrations.Sqlite, "sqlite"
 }
 
+func LatestEmbeddedVersion(engine config.Engine) (uint, error) {
+	return latestEmbeddedVersion(engine)
+}
+
 func latestEmbeddedVersion(engine config.Engine) (uint, error) {
 	migrationFiles, migrationDirectory := embeddedMigrations(engine)
 

@@ -29,6 +29,7 @@ type Config struct {
 	LogDirectory    string
 	StaticDirectory string
 	MediaDirectory  string
+	DataDirectory   string
 	S3Endpoint      string
 	S3Bucket        string
 	S3Region        string
@@ -132,6 +133,11 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		mediaDirectory = filepath.Join(filepath.Dir(sqlitePath), "media")
 	}
 
+	dataDirectory := ""
+	if engine == EngineSqlite && sqlitePath != "" {
+		dataDirectory = filepath.Dir(sqlitePath)
+	}
+
 	supportPasscodeHash := readTrimmed(lookup, "BALCE_SUPPORT_PASSCODE_HASH")
 	if supportPasscodeHash == "" {
 		supportPasscodeHash = CompiledSupportPasscodeHash
@@ -151,6 +157,7 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		LogDirectory:    logDirectory,
 		StaticDirectory: readTrimmed(lookup, "BALCE_STATIC_DIR"),
 		MediaDirectory:  mediaDirectory,
+		DataDirectory:   dataDirectory,
 		S3Endpoint:      s3Endpoint,
 		S3Bucket:        s3Bucket,
 		S3Region:        s3Region,
@@ -200,4 +207,8 @@ func defaultLogDirectory(engine Engine, sqlitePath string) string {
 func fileExists(path string) bool {
 	_, statError := os.Stat(path)
 	return statError == nil
+}
+
+func (loadedConfig *Config) IsDesktop() bool {
+	return loadedConfig.Engine == EngineSqlite && loadedConfig.DataDirectory != ""
 }

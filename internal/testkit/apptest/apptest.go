@@ -10,10 +10,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
+	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
@@ -35,6 +37,7 @@ type Harness struct {
 	t            *testing.T
 	Database     *database.Database
 	App          *fiber.App
+	Config       *config.Config
 	QueryCounter *atomic.Int64
 }
 
@@ -56,6 +59,16 @@ type Response struct {
 
 func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
+	return start(t, engineCase, false)
+}
+
+func StartDesktop(t *testing.T, engineCase testkit.EngineCase) *Harness {
+	t.Helper()
+	return start(t, engineCase, true)
+}
+
+func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool) *Harness {
+	t.Helper()
 
 	openDatabase := testkit.OpenMigratedAsApp(t, engineCase)
 	queryCounter := &atomic.Int64{}
@@ -67,6 +80,12 @@ func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 
 		SupportPasscodeHash: hashHex(SupportPasscode),
 	}
+	desktop := server.Desktop{}
+	if isDesktop {
+		testConfig.SqlitePath = engineCase.SqlitePath
+		testConfig.DataDirectory = filepath.Dir(engineCase.SqlitePath)
+		desktop.Backups = backup.NewStore(openDatabase, testConfig.SqlitePath, testConfig.DataDirectory)
+	}
 
 	objectStore, storeError := storage.NewLocalStore(t.TempDir())
 	if storeError != nil {
@@ -76,7 +95,8 @@ func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	harness := &Harness{
 		t:            t,
 		Database:     openDatabase,
-		App:          server.New(testConfig, openDatabase, objectStore, func() {}),
+		App:          server.New(testConfig, openDatabase, objectStore, func() {}, desktop),
+		Config:       testConfig,
 		QueryCounter: queryCounter,
 	}
 
