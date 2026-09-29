@@ -2,6 +2,7 @@ package catalog_test
 
 import (
 	"fmt"
+	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"net/http"
 	"strings"
 	"testing"
@@ -33,6 +34,13 @@ func listNames(listResponse apptest.Response) []string {
 func TestTeamToolsMaintainCommonProductLists(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		harness := apptest.Start(t, engineCase)
+		if engineCase.Engine != config.EngineSqlite {
+			cloudCompany := harness.CreateCompany("Cloud Catalog", "owner@cloudcatalog.test")
+			if harness.Send(http.MethodGet, "/api/catalog/team/summary", cloudCompany.OwnerToken, nil, teamHeaders).Status != http.StatusNotFound {
+				t.Fatal("team tools exist in the cloud, where every business shares the list")
+			}
+			return
+		}
 		company := harness.CreateCompany("Catalog Shop", "owner@catalog.test")
 
 		emptyList := harness.Call(http.MethodGet, "/api/catalog", company.OwnerToken, nil)
@@ -147,6 +155,13 @@ func TestTeamToolsMaintainCommonProductLists(t *testing.T) {
 func TestTeamToolsHandleLargeListsAndLockOutGuessing(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		harness := apptest.Start(t, engineCase)
+		if engineCase.Engine != config.EngineSqlite {
+			cloudCompany := harness.CreateCompany("Cloud Catalog", "owner@cloudcatalog.test")
+			if harness.Send(http.MethodGet, "/api/catalog/team/summary", cloudCompany.OwnerToken, nil, teamHeaders).Status != http.StatusNotFound {
+				t.Fatal("team tools exist in the cloud, where every business shares the list")
+			}
+			return
+		}
 		company := harness.CreateCompany("Bulk Catalog", "owner@bulk-catalog.test")
 
 		largeCsv := strings.Builder{}

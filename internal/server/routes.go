@@ -160,11 +160,13 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Delete("/api/addons/:id", permitted("products:edit", productsHandler.DeleteAddon)...)
 
 	application.Get("/api/catalog", permitted("products:create", catalogHandler.List)...)
-	application.Get("/api/catalog/team/summary", supportTeam(catalogHandler.TeamSummary)...)
-	application.Get("/api/catalog/team/items", supportTeam(catalogHandler.TeamItems)...)
-	application.Get("/api/catalog/team/template", supportTeam(catalogHandler.TeamTemplate)...)
-	application.Post("/api/catalog/team/import", supportTeam(catalogHandler.TeamImport)...)
-	application.Delete("/api/catalog/team", supportTeam(catalogHandler.TeamClear)...)
+	if !isPostgres {
+		application.Get("/api/catalog/team/summary", supportTeam(catalogHandler.TeamSummary)...)
+		application.Get("/api/catalog/team/items", supportTeam(catalogHandler.TeamItems)...)
+		application.Get("/api/catalog/team/template", supportTeam(catalogHandler.TeamTemplate)...)
+		application.Post("/api/catalog/team/import", supportTeam(catalogHandler.TeamImport)...)
+		application.Delete("/api/catalog/team", supportTeam(catalogHandler.TeamClear)...)
+	}
 
 	application.Get("/api/discounts", permitted("discounts:view", discountsHandler.List)...)
 	application.Get("/api/discounts/:id", permitted("discounts:view", discountsHandler.Get)...)
