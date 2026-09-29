@@ -20,3 +20,6 @@ balceinv-api
 CLAUDE.md
 GOAL.md
 STEPS.md
+# Revamp server
+logs/
+*.pre-migration-v*
