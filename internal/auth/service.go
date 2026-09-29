@@ -11,6 +11,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/security"
+	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/google/uuid"
@@ -295,9 +296,9 @@ func (service *Service) SwitchShop(ctx context.Context, querier database.Querier
 }
 
 func (service *Service) buildCurrentUserView(ctx context.Context, querier database.Querier, sessionUser users.User, workableShops []tenancy.ShopSummary, sessionShopId *uuid.UUID) (CurrentUserView, error) {
-	companyName, companyNameError := service.tenancyRepository.FindCompanyName(ctx, querier, sessionUser.CompanyId)
-	if companyNameError != nil {
-		return CurrentUserView{}, companyNameError
+	companyBranding, brandingError := service.tenancyRepository.FindBranding(ctx, querier, sessionUser.CompanyId)
+	if brandingError != nil {
+		return CurrentUserView{}, brandingError
 	}
 
 	effectivePermissions, permissionsError := service.accessRepository.ListEffectivePermissions(ctx, querier, sessionUser.CompanyId, sessionUser.Id, sessionUser.RoleIsOwner)
@@ -316,14 +317,22 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 	}
 
 	currentUserView := CurrentUserView{
-		Id:                 sessionUser.Id,
-		Name:               sessionUser.Name,
-		Email:              sessionUser.Email,
-		Role:               sessionUser.RoleName,
-		RoleId:             sessionUser.RoleId,
-		IsOwner:            sessionUser.RoleIsOwner,
-		CompanyId:          sessionUser.CompanyId,
-		CompanyName:        companyName,
+		Id:          sessionUser.Id,
+		Name:        sessionUser.Name,
+		Email:       sessionUser.Email,
+		Role:        sessionUser.RoleName,
+		RoleId:      sessionUser.RoleId,
+		IsOwner:     sessionUser.RoleIsOwner,
+		CompanyId:   sessionUser.CompanyId,
+		CompanyName: companyBranding.Name,
+		Branding: BrandingView{
+			LogoUrl:          settings.LogoUrl(companyBranding.LogoKey),
+			PrimaryColor:     companyBranding.PrimaryColor,
+			CurrencyCode:     companyBranding.CurrencyCode,
+			CurrencyDecimals: companyBranding.CurrencyDecimals,
+			Timezone:         companyBranding.Timezone,
+			DefaultLocale:    companyBranding.DefaultLocale,
+		},
 		ShopId:             workableShopOrNil(sessionShopId, workableShops),
 		Shops:              workableShops,
 		Permissions:        permissionViews,

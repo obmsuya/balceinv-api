@@ -24,11 +24,21 @@ type CurrentUserView struct {
 	IsOwner            bool                    `json:"is_owner"`
 	CompanyId          uuid.UUID               `json:"company_id"`
 	CompanyName        string                  `json:"company_name"`
+	Branding           BrandingView            `json:"branding"`
 	ShopId             *uuid.UUID              `json:"shop_id"`
 	Shops              []tenancy.ShopSummary   `json:"shops"`
 	Permissions        []access.PermissionView `json:"permissions"`
 	Locale             *string                 `json:"locale"`
 	MustChangePassword bool                    `json:"must_change_password"`
+}
+
+type BrandingView struct {
+	LogoUrl          *string `json:"logo_url"`
+	PrimaryColor     string  `json:"primary_color"`
+	CurrencyCode     string  `json:"currency_code"`
+	CurrencyDecimals int     `json:"currency_decimals"`
+	Timezone         string  `json:"timezone"`
+	DefaultLocale    string  `json:"default_locale"`
 }
 
 type LoginView struct {
