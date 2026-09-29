@@ -103,15 +103,16 @@ func (service *Service) CreateCompany(ctx context.Context, querier database.Quer
 	}
 
 	ownerUser := users.User{
-		Id:           uuid.Must(uuid.NewV7()),
-		CompanyId:    companyId,
-		RoleId:       ownerRoleId,
-		Name:         strings.TrimSpace(request.OwnerName),
-		Email:        users.NormalizeEmail(request.OwnerEmail),
-		PasswordHash: passwordHash,
-		IsActive:     true,
-		CreatedAt:    createdAt,
-		UpdatedAt:    createdAt,
+		Id:                 uuid.Must(uuid.NewV7()),
+		CompanyId:          companyId,
+		RoleId:             ownerRoleId,
+		Name:               strings.TrimSpace(request.OwnerName),
+		Email:              users.NormalizeEmail(request.OwnerEmail),
+		PasswordHash:       passwordHash,
+		IsActive:           true,
+		MustChangePassword: request.OwnerMustReset,
+		CreatedAt:          createdAt,
+		UpdatedAt:          createdAt,
 	}
 	insertOwnerError := service.usersRepository.Insert(ctx, querier, ownerUser)
 	if insertOwnerError != nil {

@@ -14,6 +14,7 @@ type SetupRequest struct {
 	OwnerName        string  `json:"owner_name" validate:"required,max=120"`
 	OwnerEmail       string  `json:"owner_email" validate:"required,email,max=254"`
 	OwnerPassword    string  `json:"owner_password" validate:"required,min=8,max=72"`
+	OwnerMustReset   bool    `json:"-"`
 }
 
 type SetupStatusView struct {
