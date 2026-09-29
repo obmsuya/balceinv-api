@@ -487,6 +487,21 @@ func (service *Service) AttachInvoicePhoto(ctx context.Context, querier database
 	return service.purchaseView(ctx, querier, principal.CompanyId, purchaseId)
 }
 
+func (service *Service) VatRate(ctx context.Context, querier database.Querier, principal *identity.Principal) (VatRateView, error) {
+	_, featureError := service.requireFeature(ctx, querier, principal.CompanyId, purchasesRule)
+	if featureError != nil {
+		return VatRateView{}, featureError
+	}
+	companySettings, settingsError := service.settingsRepository.FindSettings(ctx, querier, principal.CompanyId)
+	if settingsError != nil {
+		return VatRateView{}, settingsError
+	}
+	if companySettings == nil {
+		return VatRateView{}, ErrMissingSettings
+	}
+	return VatRateView{TaxRateBasisPoints: companySettings.TaxRateBasisPoints}, nil
+}
+
 func (service *Service) LastCost(ctx context.Context, querier database.Querier, principal *identity.Principal, productId uuid.UUID, supplierId *uuid.UUID) (LastCostView, error) {
 	_, featureError := service.requireFeature(ctx, querier, principal.CompanyId, purchasesRule)
 	if featureError != nil {

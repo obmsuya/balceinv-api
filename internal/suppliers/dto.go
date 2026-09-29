@@ -286,6 +286,10 @@ type OrderView struct {
 	Lines           []OrderLineView `json:"lines,omitempty"`
 }
 
+type VatRateView struct {
+	TaxRateBasisPoints int `json:"tax_rate_basis_points"`
+}
+
 type LastCostView struct {
 	ProductId  uuid.UUID  `json:"product_id"`
 	UnitCost   *int64     `json:"unit_cost"`

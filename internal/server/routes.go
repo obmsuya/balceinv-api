@@ -254,6 +254,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	recordingPurchases := []string{"purchases:create", "purchases:edit"}
 	application.Get("/api/purchases", permitted("purchases:view", suppliersHandler.ListPurchases)...)
 	application.Get("/api/purchases/last-cost", permittedAny(recordingPurchases, suppliersHandler.LastCost)...)
+	application.Get("/api/purchases/vat-rate", permittedAny(recordingPurchases, suppliersHandler.VatRate)...)
 	application.Get("/api/purchases/:id", permitted("purchases:view", suppliersHandler.GetPurchase)...)
 	application.Post("/api/purchases", permitted("purchases:create", suppliersHandler.RecordPurchase)...)
 	application.Post("/api/purchases/:id/cancel", permitted("purchases:delete", suppliersHandler.CancelPurchase)...)

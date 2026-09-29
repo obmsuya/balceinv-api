@@ -331,6 +331,9 @@ func TestVatIsWorkedOutFromTheInvoice(t *testing.T) {
 		}
 
 		switchOn(t, harness, company.OwnerToken, map[string]any{"vat_registered": true, "vat_number": "40-123456-A"})
+		if harness.Call(http.MethodGet, "/api/purchases/vat-rate", company.OwnerToken, nil).Data()["tax_rate_basis_points"] != float64(1800) {
+			t.Fatal("the VAT rate for stock arrived is not the company rate")
+		}
 		inclusiveBody := arrival("vat-00002", supplierId, 0, line(juiceId, 2, 1180))
 		inclusiveBody["invoice_has_vat"] = true
 		inclusiveBody["prices_include_vat"] = true

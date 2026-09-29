@@ -226,6 +226,14 @@ func (handler *Handler) AttachInvoicePhoto(c *fiber.Ctx) error {
 	return response.Success(c, "Invoice photo saved", purchaseView)
 }
 
+func (handler *Handler) VatRate(c *fiber.Ctx) error {
+	vatRateView, rateError := handler.service.VatRate(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c))
+	if rateError != nil {
+		return respondWithServiceError(c, rateError)
+	}
+	return response.Success(c, "VAT rate", vatRateView)
+}
+
 func (handler *Handler) LastCost(c *fiber.Ctx) error {
 	productId, isValidProduct := optionalIdQuery(c, "product_id")
 	supplierId, isValidSupplier := optionalIdQuery(c, "supplier_id")
