@@ -1,0 +1,150 @@
+package auth
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/google/uuid"
+)
+
+type Repository struct{}
+
+func NewRepository() *Repository {
+	return &Repository{}
+}
+
+func (repository *Repository) FindLoginCandidate(ctx context.Context, querier database.Querier, email string) (*LoginCandidate, error) {
+	query := `
+		SELECT id, company_id, password_hash, is_active
+		FROM users
+		WHERE email = $1
+	`
+
+	foundCandidate := LoginCandidate{}
+	scanError := querier.QueryRowContext(ctx, query, email).Scan(
+		&foundCandidate.UserId,
+		&foundCandidate.CompanyId,
+		&foundCandidate.PasswordHash,
+		&foundCandidate.IsActive,
+	)
+	if scanError != nil {
+		if errors.Is(scanError, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find login candidate: %w", scanError)
+	}
+
+	return &foundCandidate, nil
+}
+
+func (repository *Repository) InsertLoginAttempt(ctx context.Context, querier database.Querier, attempt LoginAttempt) error {
+	query := `
+		INSERT INTO login_attempts (id, email, ip_address, succeeded, created_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`
+
+	_, insertError := querier.ExecContext(ctx, query,
+		attempt.Id,
+		attempt.Email,
+		attempt.IpAddress,
+		attempt.Succeeded,
+		attempt.CreatedAt,
+	)
+	if insertError != nil {
+		return fmt.Errorf("failed to record login attempt: %w", insertError)
+	}
+
+	return nil
+}
+
+func (repository *Repository) InsertSession(ctx context.Context, querier database.Querier, newSession Session) error {
+	query := `
+		INSERT INTO sessions (id, token_hash, company_id, user_id, shop_id, ip_address, user_agent, created_at, last_seen_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`
+
+	_, insertError := querier.ExecContext(ctx, query,
+		newSession.Id,
+		newSession.TokenHash,
+		newSession.CompanyId,
+		newSession.UserId,
+		newSession.ShopId,
+		newSession.IpAddress,
+		newSession.UserAgent,
+		newSession.CreatedAt,
+		newSession.LastSeenAt,
+		newSession.ExpiresAt,
+	)
+	if insertError != nil {
+		return fmt.Errorf("failed to insert session: %w", insertError)
+	}
+
+	return nil
+}
+
+func (repository *Repository) FindSessionByTokenHash(ctx context.Context, querier database.Querier, tokenHash string) (*Session, error) {
+	query := `
+		SELECT id, token_hash, company_id, user_id, shop_id, ip_address, user_agent, created_at, last_seen_at, expires_at
+		FROM sessions
+		WHERE token_hash = $1
+	`
+
+	foundSession := Session{}
+	scanError := querier.QueryRowContext(ctx, query, tokenHash).Scan(
+		&foundSession.Id,
+		&foundSession.TokenHash,
+		&foundSession.CompanyId,
+		&foundSession.UserId,
+		&foundSession.ShopId,
+		&foundSession.IpAddress,
+		&foundSession.UserAgent,
+		&foundSession.CreatedAt,
+		&foundSession.LastSeenAt,
+		&foundSession.ExpiresAt,
+	)
+	if scanError != nil {
+		if errors.Is(scanError, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find session: %w", scanError)
+	}
+
+	return &foundSession, nil
+}
+
+func (repository *Repository) TouchSession(ctx context.Context, querier database.Querier, companyId uuid.UUID, sessionId uuid.UUID, seenAt time.Time) error {
+	query := `UPDATE sessions SET last_seen_at = $3 WHERE company_id = $1 AND id = $2`
+
+	_, updateError := querier.ExecContext(ctx, query, companyId, sessionId, seenAt)
+	if updateError != nil {
+		return fmt.Errorf("failed to touch session: %w", updateError)
+	}
+
+	return nil
+}
+
+func (repository *Repository) UpdateSessionShop(ctx context.Context, querier database.Querier, companyId uuid.UUID, sessionId uuid.UUID, shopId uuid.UUID) error {
+	query := `UPDATE sessions SET shop_id = $3 WHERE company_id = $1 AND id = $2`
+
+	_, updateError := querier.ExecContext(ctx, query, companyId, sessionId, shopId)
+	if updateError != nil {
+		return fmt.Errorf("failed to switch session shop: %w", updateError)
+	}
+
+	return nil
+}
+
+func (repository *Repository) DeleteSession(ctx context.Context, querier database.Querier, companyId uuid.UUID, sessionId uuid.UUID) error {
+	query := `DELETE FROM sessions WHERE company_id = $1 AND id = $2`
+
+	_, deleteError := querier.ExecContext(ctx, query, companyId, sessionId)
+	if deleteError != nil {
+		return fmt.Errorf("failed to delete session: %w", deleteError)
+	}
+
+	return nil
+}
