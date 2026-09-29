@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: proxy-caddy
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - /etc/ssl:/etc/caddy/host-ssl:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 96m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
