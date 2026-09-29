@@ -19,6 +19,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
+	"github.com/chrisostomemataba/balceinv-api/internal/transfers"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -51,6 +52,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	catalogHandler := catalog.NewHandler(catalog.NewService(catalog.NewRepository()))
 	shopsHandler := shops.NewHandler(shops.NewService(shops.NewRepository()))
 	stockHandler := stock.NewHandler(stockService)
+	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
@@ -130,6 +132,10 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
 	application.Get("/api/stock-movements", permitted("stock_movements:view", stockHandler.Movements)...)
 	application.Post("/api/stock-movements", permitted("stock_movements:create", stockHandler.Adjust)...)
+
+	application.Get("/api/stock-transfers", permitted("stock_movements:view", transfersHandler.List)...)
+	application.Get("/api/stock-transfers/:id", permitted("stock_movements:view", transfersHandler.Get)...)
+	application.Post("/api/stock-transfers", permitted("stock_movements:create", transfersHandler.Create)...)
 
 	application.Get("/api/notifications", permitted("notifications:view", notificationsHandler.List)...)
 	application.Get("/api/notifications/unread-count", permitted("notifications:view", notificationsHandler.UnreadCount)...)
