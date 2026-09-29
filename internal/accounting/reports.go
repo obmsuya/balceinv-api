@@ -435,7 +435,7 @@ func (service *Service) Integrity(ctx context.Context, querier database.Querier,
 	}
 	integrity.UnpostedCount = unpostedCount
 
-	liveStockValue, stockError := service.repository.LiveStockValue(ctx, querier, principal.CompanyId, nil)
+	liveStockValue, stockError := service.repository.LiveStockValue(ctx, querier, principal.CompanyId)
 	if stockError != nil {
 		return IntegrityView{}, stockError
 	}

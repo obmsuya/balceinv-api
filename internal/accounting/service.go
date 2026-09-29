@@ -143,6 +143,17 @@ func (service *Service) postOpening(ctx context.Context, querier database.Querie
 	if stockError != nil {
 		return stockError
 	}
+	reservedValues, reservedError := service.repository.ReservedStockValueByShopAt(ctx, querier, principal.CompanyId, books.StartedAt)
+	if reservedError != nil {
+		return reservedError
+	}
+	for shopIndex := range stockValues {
+		stockValues[shopIndex].Value += reservedValues[stockValues[shopIndex].ShopId]
+		delete(reservedValues, stockValues[shopIndex].ShopId)
+	}
+	for shopId, reservedValue := range reservedValues {
+		stockValues = append(stockValues, shopValue{ShopId: shopId, Value: reservedValue})
+	}
 
 	openingLines := []keyedLine{}
 	openingTotal := int64(0)

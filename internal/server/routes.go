@@ -83,7 +83,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	discountsService := discounts.NewService(discounts.NewRepository())
 	discountsHandler := discounts.NewHandler(discountsService)
 	salesRepository := sales.NewRepository()
-	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository)
+	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository, ledger)
 	customersHandler := customers.NewHandler(customersService)
 	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService, customersService, ledger)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
@@ -94,7 +94,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService, ledger))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
 	accountingHandler := accounting.NewHandler(accounting.NewService(accountingRepository, ledger, objectStore))
-	suppliersHandler := suppliers.NewHandler(suppliers.NewService(suppliers.NewRepository(), featuresRepository, settingsRepository, stockService, objectStore))
+	suppliersHandler := suppliers.NewHandler(suppliers.NewService(suppliers.NewRepository(), featuresRepository, settingsRepository, stockService, objectStore, ledger))
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -227,7 +227,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/customers/:id/payments/:paymentId/void", permitted("customers:edit", customersOn(customersHandler.VoidPayment))...)
 
 	ordersOn := customers.FeatureGate(featuresRepository, customers.OrdersOn)
-	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService))
+	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService, ledger))
 	application.Get("/api/orders", permitted("orders:view", ordersOn(ordersHandler.List))...)
 	application.Post("/api/orders", permitted("orders:create", ordersOn(ordersHandler.Create))...)
 	application.Get("/api/orders/:id", permitted("orders:view", ordersOn(ordersHandler.Get))...)

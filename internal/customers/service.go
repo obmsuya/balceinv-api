@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
@@ -43,13 +44,15 @@ type Service struct {
 	repository         *Repository
 	featuresRepository *features.Repository
 	settingsRepository *settings.Repository
+	ledger             *accounting.Ledger
 }
 
-func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository) *Service {
+func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:         repository,
 		featuresRepository: featuresRepository,
 		settingsRepository: settingsRepository,
+		ledger:             ledger,
 	}
 }
 
@@ -108,6 +111,10 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	if insertError != nil {
 		return CustomerView{}, insertError
 	}
+	openingError := service.ledger.SyncCustomerOpening(ctx, querier, principal.CompanyId, newCustomer.Id)
+	if openingError != nil {
+		return CustomerView{}, openingError
+	}
 
 	return service.Get(ctx, querier, principal.CompanyId, newCustomer.Id)
 }
@@ -147,6 +154,10 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 	}
 	if updateError != nil {
 		return CustomerView{}, updateError
+	}
+	openingError := service.ledger.SyncCustomerOpening(ctx, querier, principal.CompanyId, customerId)
+	if openingError != nil {
+		return CustomerView{}, openingError
 	}
 
 	return service.Get(ctx, querier, principal.CompanyId, customerId)
@@ -267,6 +278,10 @@ func (service *Service) RecordPayment(ctx context.Context, querier database.Quer
 	if insertError != nil {
 		return PaymentView{}, insertError
 	}
+	postError := service.ledger.PostCustomerPaymentById(ctx, querier, principal.CompanyId, newPayment.Id)
+	if postError != nil {
+		return PaymentView{}, postError
+	}
 
 	return service.findPayment(ctx, querier, principal.CompanyId, customerId, newPayment.Id)
 }
@@ -290,6 +305,10 @@ func (service *Service) VoidPayment(ctx context.Context, querier database.Querie
 	}
 	if !wasVoided {
 		return PaymentView{}, ErrAlreadyVoided
+	}
+	voidPostError := service.ledger.PostCustomerPaymentVoidById(ctx, querier, principal.CompanyId, paymentId)
+	if voidPostError != nil {
+		return PaymentView{}, voidPostError
 	}
 
 	return service.findPayment(ctx, querier, principal.CompanyId, customerId, paymentId)

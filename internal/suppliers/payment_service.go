@@ -119,6 +119,10 @@ func (service *Service) VoidPayment(ctx context.Context, querier database.Querie
 	if voidError != nil {
 		return PaymentView{}, voidError
 	}
+	voidPostError := service.ledger.PostSupplierPaymentVoidById(ctx, querier, principal.CompanyId, paymentId)
+	if voidPostError != nil {
+		return PaymentView{}, voidPostError
+	}
 	return service.paymentView(ctx, querier, principal.CompanyId, paymentId)
 }
 
@@ -215,6 +219,10 @@ func (service *Service) RecordReturn(ctx context.Context, querier database.Queri
 		if movementError != nil {
 			return ReturnView{}, movementError
 		}
+	}
+	postError := service.ledger.PostSupplierReturnById(ctx, querier, principal.CompanyId, newReturn.Id)
+	if postError != nil {
+		return ReturnView{}, postError
 	}
 
 	return service.returnView(ctx, querier, principal.CompanyId, newReturn.Id)

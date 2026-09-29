@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
@@ -33,14 +34,16 @@ type Service struct {
 	salesService     *sales.Service
 	customersService *customers.Service
 	stockService     *stock.Service
+	ledger           *accounting.Ledger
 }
 
-func NewService(repository *Repository, salesService *sales.Service, customersService *customers.Service, stockService *stock.Service) *Service {
+func NewService(repository *Repository, salesService *sales.Service, customersService *customers.Service, stockService *stock.Service, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:       repository,
 		salesService:     salesService,
 		customersService: customersService,
 		stockService:     stockService,
+		ledger:           ledger,
 	}
 }
 
@@ -343,7 +346,11 @@ func (service *Service) recordMoney(ctx context.Context, querier database.Querie
 		CreatedBy: principal.UserId,
 		CreatedAt: time.Now().UTC(),
 	}
-	return service.repository.InsertPayment(ctx, querier, orderPayment)
+	insertError := service.repository.InsertPayment(ctx, querier, orderPayment)
+	if insertError != nil {
+		return insertError
+	}
+	return service.ledger.PostOrderMoneyById(ctx, querier, principal.CompanyId, orderPayment.Id)
 }
 
 func (service *Service) moveStock(ctx context.Context, querier database.Querier, principal *identity.Principal, shopId uuid.UUID, productId uuid.UUID, change int, reason string, orderReference string) error {

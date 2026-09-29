@@ -183,19 +183,19 @@ func (repository *Repository) SalesBetween(ctx context.Context, querier database
 	return saleCount, salesTotal, taxTotal, nil
 }
 
-func (repository *Repository) LiveStockValue(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId *uuid.UUID) (int64, error) {
-	arguments := &queryArguments{}
+func (repository *Repository) LiveStockValue(ctx context.Context, querier database.Querier, companyId uuid.UUID) (int64, error) {
 	query := `
-		SELECT CAST(COALESCE(SUM(ss.quantity * p.cost_price), 0) AS BIGINT)
-		FROM shop_stock ss
-		JOIN products p ON p.company_id = ss.company_id AND p.id = ss.product_id
-		WHERE ss.company_id = ` + arguments.add(companyId)
-	if shopId != nil {
-		query += ` AND ss.shop_id = ` + arguments.add(*shopId)
-	}
+		SELECT CAST(COALESCE((SELECT SUM(ss.quantity * p.cost_price) FROM shop_stock ss
+		                      JOIN products p ON p.company_id = ss.company_id AND p.id = ss.product_id
+		                      WHERE ss.company_id = $1), 0) AS BIGINT)
+		     + CAST(COALESCE((SELECT SUM(ol.quantity * p.cost_price) FROM customer_orders o
+		                      JOIN customer_order_lines ol ON ol.company_id = o.company_id AND ol.order_id = o.id
+		                      JOIN products p ON p.company_id = ol.company_id AND p.id = ol.product_id
+		                      WHERE o.company_id = $1 AND o.status IN ('open', 'ready')), 0) AS BIGINT)
+	`
 
 	stockValue := int64(0)
-	scanError := querier.QueryRowContext(ctx, query, arguments.values...).Scan(&stockValue)
+	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(&stockValue)
 	if scanError != nil {
 		return 0, fmt.Errorf("failed to value the stock: %w", scanError)
 	}

@@ -269,7 +269,7 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 	}
 
 	if !saleDraft.takesStock {
-		return service.Get(ctx, querier, principal.CompanyId, newSale.Id)
+		return service.postToBooksAndGet(ctx, querier, principal.CompanyId, newSale.Id)
 	}
 	for _, pricedLine := range pricedSale.Lines {
 		saleMovement := stock.MovementRequest{
@@ -287,12 +287,15 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 		}
 	}
 
-	postError := service.ledger.PostSaleById(ctx, querier, principal.CompanyId, newSale.Id)
+	return service.postToBooksAndGet(ctx, querier, principal.CompanyId, newSale.Id)
+}
+
+func (service *Service) postToBooksAndGet(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) (SaleView, error) {
+	postError := service.ledger.PostSaleById(ctx, querier, companyId, saleId)
 	if postError != nil {
 		return SaleView{}, postError
 	}
-
-	return service.Get(ctx, querier, principal.CompanyId, newSale.Id)
+	return service.Get(ctx, querier, companyId, saleId)
 }
 
 func (service *Service) Get(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) (SaleView, error) {

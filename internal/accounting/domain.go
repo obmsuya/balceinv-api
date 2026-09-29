@@ -15,7 +15,8 @@ const (
 	StartToday   = "today"
 	StartHistory = "history"
 
-	dateLayout = "2006-01-02"
+	dateLayout       = "2006-01-02"
+	openingPartyMemo = "Balance from before the books"
 )
 
 const (

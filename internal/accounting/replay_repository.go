@@ -22,7 +22,7 @@ func (repository *Repository) UnpostedSales(ctx context.Context, querier databas
 	}
 
 	saleQuery := `
-		SELECT s.id, s.shop_id, s.user_id, s.receipt_number, s.total, s.tax_total, s.change_given, s.created_at,
+		SELECT s.id, s.shop_id, s.user_id, s.customer_id, s.receipt_number, s.total, s.tax_total, s.change_given, s.created_at,
 		       CAST(COALESCE((SELECT SUM(i.unit_cost * i.quantity) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id), 0) AS BIGINT)
 		FROM sales s
 		WHERE ` + where + `
@@ -39,7 +39,7 @@ func (repository *Repository) UnpostedSales(ctx context.Context, querier databas
 	for saleRows.Next() {
 		userId := uuid.UUID{}
 		salePosting := SalePosting{CompanyId: companyId, PaidByMethod: map[string]int64{}}
-		scanError := saleRows.Scan(&salePosting.SaleId, &salePosting.ShopId, &userId, &salePosting.Reference, &salePosting.Total,
+		scanError := saleRows.Scan(&salePosting.SaleId, &salePosting.ShopId, &userId, &salePosting.CustomerId, &salePosting.Reference, &salePosting.Total,
 			&salePosting.TaxTotal, &salePosting.ChangeGiven, &salePosting.SoldAt, &salePosting.CostTotal)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a sale for the books: %w", scanError)
@@ -73,13 +73,52 @@ func (repository *Repository) UnpostedSales(ctx context.Context, querier databas
 		}
 		salePostings[postingIndexBySale[saleId]].PaidByMethod[method] = amount
 	}
-	return salePostings, paymentRows.Err()
+	paymentRowsError := paymentRows.Err()
+	if paymentRowsError != nil {
+		return nil, paymentRowsError
+	}
+
+	depositQuery := `
+		SELECT o.sale_id, p.method, CAST(SUM(CASE WHEN p.kind = 'deposit' THEN p.amount ELSE -p.amount END) AS BIGINT)
+		FROM customer_order_payments p
+		JOIN customer_orders o ON o.company_id = p.company_id AND o.id = p.order_id
+		JOIN sales s ON s.company_id = o.company_id AND s.id = o.sale_id
+		WHERE ` + where + `
+		GROUP BY o.sale_id, p.method
+	`
+	depositRows, depositQueryError := querier.QueryContext(ctx, depositQuery, arguments.values...)
+	if depositQueryError != nil {
+		return nil, fmt.Errorf("failed to list order deposits for the books: %w", depositQueryError)
+	}
+	defer depositRows.Close()
+
+	for depositRows.Next() {
+		saleId := uuid.UUID{}
+		method := ""
+		depositAmount := int64(0)
+		scanError := depositRows.Scan(&saleId, &method, &depositAmount)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan an order deposit for the books: %w", scanError)
+		}
+		if depositAmount <= 0 {
+			continue
+		}
+		paidByMethod := salePostings[postingIndexBySale[saleId]].PaidByMethod
+		paidByMethod[method] -= depositAmount
+		if paidByMethod[method] == 0 {
+			delete(paidByMethod, method)
+		}
+		paidByMethod[depositMethod] += depositAmount
+	}
+	return salePostings, depositRows.Err()
 }
 
 func (repository *Repository) UnpostedMovements(ctx context.Context, querier database.Querier, companyId uuid.UUID, since time.Time, onlyMovementId *uuid.UUID) ([]StockMovementPosting, error) {
 	arguments := &queryArguments{}
 	where := `m.company_id = ` + arguments.add(companyId) + ` AND m.created_at >= ` + arguments.add(since) +
 		` AND m.reason IN ` + bookedMovementReasons +
+		` AND NOT (m.reason = 'purchase' AND EXISTS (SELECT 1 FROM purchases pu WHERE pu.company_id = m.company_id AND pu.purchase_number = m.reference))` +
+		` AND NOT (m.reason = 'return' AND m.change < 0)` +
 		` AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.company_id = m.company_id AND e.source_type = 'stock_adjustment' AND e.source_id = m.id)`
 	if onlyMovementId != nil {
 		where += ` AND m.id = ` + arguments.add(*onlyMovementId)

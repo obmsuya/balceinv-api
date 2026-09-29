@@ -226,7 +226,10 @@ func (ledger *Ledger) PostPurchase(ctx context.Context, querier database.Querier
 	if !books.IsPosting() {
 		return nil, nil
 	}
+	return ledger.postPurchase(ctx, querier, books, posting)
+}
 
+func (ledger *Ledger) postPurchase(ctx context.Context, querier database.Querier, books Books, posting PurchasePosting) (*PostedEntry, error) {
 	shopId := posting.ShopId
 	stockCost, vatReclaimable := splitVat(books, posting.NetCost, posting.Vat)
 	paymentLines, methodError := methodLines(posting.PaidByMethod, false, &shopId)
@@ -260,7 +263,10 @@ func (ledger *Ledger) PostSupplierReturn(ctx context.Context, querier database.Q
 	if !books.IsPosting() {
 		return nil, nil
 	}
+	return ledger.postSupplierReturn(ctx, querier, books, posting)
+}
 
+func (ledger *Ledger) postSupplierReturn(ctx context.Context, querier database.Querier, books Books, posting SupplierReturnPosting) (*PostedEntry, error) {
 	shopId := posting.ShopId
 	stockCost, vatReclaimable := splitVat(books, posting.NetCost, posting.Vat)
 	refundLines, methodError := methodLines(posting.RefundByMethod, true, &shopId)
@@ -287,39 +293,64 @@ func (ledger *Ledger) PostSupplierReturn(ctx context.Context, querier database.Q
 }
 
 func (ledger *Ledger) PostSupplierPayment(ctx context.Context, querier database.Querier, posting PaymentPosting) (*PostedEntry, error) {
-	return ledger.postPayment(ctx, querier, posting, SourceSupplierPayment, PartySupplier, KeyPayable, false)
+	return ledger.postPayment(ctx, querier, posting, SourceSupplierPayment)
 }
 
 func (ledger *Ledger) PostCustomerPayment(ctx context.Context, querier database.Querier, posting PaymentPosting) (*PostedEntry, error) {
-	return ledger.postPayment(ctx, querier, posting, SourceCustomerPayment, PartyCustomer, KeyReceivable, true)
+	return ledger.postPayment(ctx, querier, posting, SourceCustomerPayment)
 }
 
 func (ledger *Ledger) PostOrderDeposit(ctx context.Context, querier database.Querier, posting PaymentPosting) (*PostedEntry, error) {
-	return ledger.postPayment(ctx, querier, posting, SourceOrderDeposit, PartyCustomer, KeyCustomerDeposits, true)
+	return ledger.postPayment(ctx, querier, posting, SourceOrderDeposit)
 }
 
 func (ledger *Ledger) PostOrderRefund(ctx context.Context, querier database.Querier, posting PaymentPosting) (*PostedEntry, error) {
-	return ledger.postPayment(ctx, querier, posting, SourceOrderRefund, PartyCustomer, KeyCustomerDeposits, false)
+	return ledger.postPayment(ctx, querier, posting, SourceOrderRefund)
 }
 
-func (ledger *Ledger) postPayment(ctx context.Context, querier database.Querier, posting PaymentPosting, sourceType string, partyKind string, counterKey string, isMoneyIn bool) (*PostedEntry, error) {
+type paymentShape struct {
+	partyType  string
+	counterKey string
+	isMoneyIn  bool
+}
+
+var paymentShapes = map[string]paymentShape{
+	SourceSupplierPayment: {PartySupplier, KeyPayable, false},
+	SourceCustomerPayment: {PartyCustomer, KeyReceivable, true},
+	SourceOrderDeposit:    {PartyCustomer, KeyCustomerDeposits, true},
+	SourceOrderRefund:     {PartyCustomer, KeyCustomerDeposits, false},
+}
+
+func (ledger *Ledger) postPayment(ctx context.Context, querier database.Querier, posting PaymentPosting, sourceType string) (*PostedEntry, error) {
+	books, booksError := ledger.repository.FindBooks(ctx, querier, posting.CompanyId)
+	if booksError != nil {
+		return nil, booksError
+	}
+	if !books.IsPosting() {
+		return nil, nil
+	}
+	return ledger.postPaymentWithBooks(ctx, querier, books, posting, sourceType)
+}
+
+func (ledger *Ledger) postPaymentWithBooks(ctx context.Context, querier database.Querier, books Books, posting PaymentPosting, sourceType string) (*PostedEntry, error) {
+	shape := paymentShapes[sourceType]
 	moneyKey, keyError := moneyKeyFor(posting.Method)
 	if keyError != nil {
 		return nil, keyError
 	}
 
 	paymentLines := []keyedLine{
-		{Key: counterKey, Debit: posting.Amount, ShopId: posting.ShopId},
+		{Key: shape.counterKey, Debit: posting.Amount, ShopId: posting.ShopId},
 		{Key: moneyKey, Credit: posting.Amount, ShopId: posting.ShopId},
 	}
-	if isMoneyIn {
+	if shape.isMoneyIn {
 		paymentLines = []keyedLine{
 			{Key: moneyKey, Debit: posting.Amount, ShopId: posting.ShopId},
-			{Key: counterKey, Credit: posting.Amount, ShopId: posting.ShopId},
+			{Key: shape.counterKey, Credit: posting.Amount, ShopId: posting.ShopId},
 		}
 	}
 
-	partyType, partyId := partyOf(partyKind, posting.PartyId)
+	partyType, partyId := partyOf(shape.partyType, posting.PartyId)
 	header := Entry{
 		SourceType: sourceType,
 		SourceId:   &posting.SourceId,
@@ -329,7 +360,7 @@ func (ledger *Ledger) postPayment(ctx context.Context, querier database.Querier,
 		PartyId:    partyId,
 		CreatedBy:  posting.UserId,
 	}
-	return ledger.postEvent(ctx, querier, posting.CompanyId, posting.PaidAt, header, paymentLines)
+	return ledger.postEventWithBooks(ctx, querier, books, posting.PaidAt, header, paymentLines)
 }
 
 func (ledger *Ledger) ReverseSource(ctx context.Context, querier database.Querier, reversal ReversalPosting) (*PostedEntry, error) {
@@ -340,7 +371,10 @@ func (ledger *Ledger) ReverseSource(ctx context.Context, querier database.Querie
 	if !books.IsPosting() {
 		return nil, nil
 	}
+	return ledger.reverseSourceWithBooks(ctx, querier, books, reversal)
+}
 
+func (ledger *Ledger) reverseSourceWithBooks(ctx context.Context, querier database.Querier, books Books, reversal ReversalPosting) (*PostedEntry, error) {
 	originalEntry, findError := ledger.repository.FindBySource(ctx, querier, reversal.CompanyId, reversal.OriginalSourceType, reversal.OriginalSourceId)
 	if findError != nil {
 		return nil, findError
@@ -363,6 +397,34 @@ func (ledger *Ledger) ReverseSource(ctx context.Context, querier database.Querie
 		Lines:           swapSides(originalLines),
 	}
 	return ledger.post(ctx, querier, books, reversedEntry)
+}
+
+func (ledger *Ledger) postPartyOpening(ctx context.Context, querier database.Querier, books Books, opening partyOpening, happenedAt time.Time) (*PostedEntry, error) {
+	difference := opening.OpeningBalance - opening.PostedBalance
+	controlKey := KeyReceivable
+	if opening.PartyType == PartySupplier {
+		controlKey = KeyPayable
+		difference = -difference
+	}
+	openingLines := []keyedLine{
+		{Key: controlKey, Debit: difference},
+		{Key: KeyOwnerCapital, Credit: difference},
+	}
+	if difference < 0 {
+		openingLines = []keyedLine{
+			{Key: KeyOwnerCapital, Debit: -difference},
+			{Key: controlKey, Credit: -difference},
+		}
+	}
+	partyId := opening.PartyId
+	memo := openingPartyMemo
+	header := Entry{
+		SourceType: SourceOpening,
+		Memo:       &memo,
+		PartyType:  &opening.PartyType,
+		PartyId:    &partyId,
+	}
+	return ledger.postEventWithBooks(ctx, querier, books, happenedAt, header, openingLines)
 }
 
 func swapSides(originalLines []Line) []Line {
