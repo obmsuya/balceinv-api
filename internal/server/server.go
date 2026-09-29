@@ -8,6 +8,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/lan"
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -17,6 +18,7 @@ import (
 
 type Desktop struct {
 	Backups *backup.Store
+	Network *lan.Controller
 }
 
 func New(loadedConfig *config.Config, openDatabase *database.Database, objectStore storage.Store, writeLogSeparator func(), desktop Desktop) *fiber.App {

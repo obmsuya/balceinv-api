@@ -15,6 +15,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/logging"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/lan"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
 	"github.com/chrisostomemataba/balceinv-api/license"
 )
@@ -93,27 +94,48 @@ func main() {
 		go license.SyncWithDjango()
 	}
 
-	application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator, desktop)
-
 	shutdownSignals := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignals, syscall.SIGINT, syscall.SIGTERM)
+	restartRequests := make(chan struct{}, 1)
 
-	listenErrors := make(chan error, 1)
-	go func() {
-		slog.Info("listening", "address", loadedConfig.ListenAddress)
-		listenErrors <- application.Listen(loadedConfig.ListenAddress)
-	}()
+	for {
+		listenAddress := loadedConfig.ListenAddress
+		if loadedConfig.IsDesktop() {
+			listenAddress = lan.ListenAddress(loadedConfig.ListenAddress, loadedConfig.ListenAddressIsExplicit, lan.LoadSettings(loadedConfig.DataDirectory))
+			desktop.Network = lan.NewController(loadedConfig.DataDirectory, listenAddress, loadedConfig.ListenAddressIsExplicit, restartRequests)
+		}
+		application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator, desktop)
 
-	select {
-	case listenError := <-listenErrors:
-		slog.Error("server stopped unexpectedly", "error", listenError)
-	case receivedSignal := <-shutdownSignals:
-		slog.Info("shutting down", "signal", receivedSignal.String())
-	}
+		listenErrors := make(chan error, 1)
+		go func() {
+			slog.Info("listening", "address", listenAddress)
+			listenErrors <- application.Listen(listenAddress)
+		}()
 
-	shutdownError := application.ShutdownWithTimeout(15 * time.Second)
-	if shutdownError != nil {
-		slog.Error("graceful shutdown incomplete", "error", shutdownError)
+		shouldRestart := false
+		select {
+		case listenError := <-listenErrors:
+			slog.Error("server stopped unexpectedly", "error", listenError, "address", listenAddress)
+			isLanListener := loadedConfig.IsDesktop() && lan.LoadSettings(loadedConfig.DataDirectory).LanEnabled && !loadedConfig.ListenAddressIsExplicit
+			if isLanListener {
+				slog.Warn("turning the network setting off so this computer can still use Balce")
+				saveError := lan.SaveSettings(loadedConfig.DataDirectory, lan.Settings{LanEnabled: false})
+				shouldRestart = saveError == nil
+			}
+		case receivedSignal := <-shutdownSignals:
+			slog.Info("shutting down", "signal", receivedSignal.String())
+		case <-restartRequests:
+			slog.Info("restarting the listener for the new network setting")
+			shouldRestart = true
+		}
+
+		shutdownError := application.ShutdownWithTimeout(15 * time.Second)
+		if shutdownError != nil {
+			slog.Error("graceful shutdown incomplete", "error", shutdownError)
+		}
+		if !shouldRestart {
+			return
+		}
 	}
 }
 

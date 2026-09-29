@@ -25,6 +25,8 @@ type Config struct {
 	DatabaseUrl     string
 	SqlitePath      string
 	ListenAddress   string
+
+	ListenAddressIsExplicit bool
 	AllowedOrigins  []string
 	LogDirectory    string
 	StaticDirectory string
@@ -95,6 +97,7 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 	}
 
 	listenAddress := readTrimmed(lookup, "LISTEN_ADDR")
+	isListenAddressExplicit := listenAddress != ""
 	if listenAddress == "" {
 		listenAddress = "127.0.0.1:8080"
 	}
@@ -155,6 +158,8 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		DatabaseUrl:     databaseUrl,
 		SqlitePath:      sqlitePath,
 		ListenAddress:   listenAddress,
+
+		ListenAddressIsExplicit: isListenAddressExplicit,
 		AllowedOrigins:  allowedOrigins,
 		LogDirectory:    logDirectory,
 		StaticDirectory: readTrimmed(lookup, "BALCE_STATIC_DIR"),

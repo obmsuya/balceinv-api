@@ -19,6 +19,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/lan"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
@@ -91,6 +92,7 @@ func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforces
 		testConfig.DataDirectory = filepath.Dir(engineCase.SqlitePath)
 		testConfig.EnforceLicense = enforcesLicense
 		desktop.Backups = backup.NewStore(openDatabase, testConfig.SqlitePath, testConfig.DataDirectory)
+		desktop.Network = lan.NewController(testConfig.DataDirectory, "127.0.0.1:8080", false, nil)
 	}
 
 	objectStore, storeError := storage.NewLocalStore(t.TempDir())
