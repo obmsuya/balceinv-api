@@ -170,6 +170,10 @@ func (service *Service) Overview(ctx context.Context, querier database.Querier, 
 			overview.Balances.Bank = cumulativeBalance
 		case hasKey(account, KeyCardClearing):
 			overview.Balances.CardClearing = cumulativeBalance
+		case hasKey(account, KeyReceivable):
+			overview.CustomersOwe = cumulativeBalance
+		case hasKey(account, KeyPayable):
+			overview.OwedToSuppliers = cumulativeBalance
 		case hasKey(account, KeyVatOutput):
 			vatSummary.Charged = periodBalance
 		case hasKey(account, KeyVatInput):

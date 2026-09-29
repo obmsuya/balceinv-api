@@ -151,17 +151,19 @@ type VatSummaryView struct {
 }
 
 type OverviewView struct {
-	FromDate string            `json:"from"`
-	ToDate   string            `json:"to"`
-	MoneyIn  int64             `json:"money_in"`
-	MoneyOut int64             `json:"money_out"`
-	Income   int64             `json:"income"`
-	Costs    int64             `json:"costs"`
-	Profit   int64             `json:"profit"`
-	Balances MoneyBalancesView `json:"balances"`
-	WhatIOwn int64             `json:"what_i_own"`
-	WhatIOwe int64             `json:"what_i_owe"`
-	Vat      *VatSummaryView   `json:"vat"`
+	FromDate        string            `json:"from"`
+	ToDate          string            `json:"to"`
+	MoneyIn         int64             `json:"money_in"`
+	MoneyOut        int64             `json:"money_out"`
+	Income          int64             `json:"income"`
+	Costs           int64             `json:"costs"`
+	Profit          int64             `json:"profit"`
+	Balances        MoneyBalancesView `json:"balances"`
+	WhatIOwn        int64             `json:"what_i_own"`
+	WhatIOwe        int64             `json:"what_i_owe"`
+	CustomersOwe    int64             `json:"customers_owe"`
+	OwedToSuppliers int64             `json:"owed_to_suppliers"`
+	Vat             *VatSummaryView   `json:"vat"`
 }
 
 type ProfitAndLossView struct {

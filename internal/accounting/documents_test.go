@@ -143,6 +143,9 @@ func TestSuppliersCustomersAndOrdersPostToTheBooks(t *testing.T) {
 		}
 
 		integrity := mustCall(t, harness, http.MethodGet, "/api/accounting/overview", liveCompany.OwnerToken, nil, http.StatusOK)
+		if number(t, integrity, "owed_to_suppliers") != 81600 || number(t, integrity, "customers_owe") != 6360 {
+			t.Fatalf("the overview shows customers owe %v and suppliers are owed %v", integrity["customers_owe"], integrity["owed_to_suppliers"])
+		}
 		if number(t, integrity, "what_i_owe") != 81600+accountBalance(harness, companyId, "vat_output")*-1 {
 			t.Fatalf("what I owe was %v", integrity["what_i_owe"])
 		}
