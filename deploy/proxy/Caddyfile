@@ -1,0 +1,7 @@
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+import /etc/caddy/sites/*.caddy
