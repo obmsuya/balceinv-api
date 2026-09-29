@@ -35,6 +35,12 @@ type CloudBackup struct {
 	DownloadURL string `json:"download_url"`
 }
 
+type CloudBackupView struct {
+	Date string `json:"date"`
+	Key  string `json:"key"`
+	Size int64  `json:"size"`
+}
+
 type cloudStatus struct {
 	mutex         sync.Mutex
 	lastAttemptAt *time.Time

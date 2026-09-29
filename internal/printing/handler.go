@@ -64,6 +64,10 @@ func (handler *Handler) Receipt(c *fiber.Ctx) error {
 	if !isValid {
 		return bindResponseError
 	}
+	isOpeningDrawerWithoutSelling := request.OpenDrawer && !httpx.CurrentPrincipal(c).Can("sales:create")
+	if isOpeningDrawerWithoutSelling {
+		return response.Error(c, fiber.StatusForbidden, "forbidden", "Only people who make sales can open the cash drawer")
+	}
 	saleId := uuid.MustParse(request.SaleId)
 	printError := handler.service.PrintReceipt(c.UserContext(), httpx.CurrentPrincipal(c).CompanyId, saleId, request.OpenDrawer)
 	if printError != nil {
