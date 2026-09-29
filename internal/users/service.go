@@ -24,6 +24,8 @@ var (
 	ErrCannotDeactivateSelf     = errors.New("you cannot deactivate your own account")
 	ErrPasswordTooLong          = errors.New("password must be at most 72 bytes")
 	ErrForbidden                = errors.New("you do not have permission to do this")
+	ErrRoleAboveYours           = errors.New("you can only give a role whose permissions you have yourself")
+	ErrUserAboveYou             = errors.New("you can only manage people whose permissions you have yourself")
 )
 
 type Service struct {
@@ -104,6 +106,10 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	}
 	if chosenRole.IsOwner && !principal.IsOwner {
 		return UserView{}, ErrOnlyOwnerCanManageOwners
+	}
+	reachError := service.checkRoleWithinReach(ctx, querier, principal, chosenRole.Id)
+	if reachError != nil {
+		return UserView{}, reachError
 	}
 
 	passwordHash, hashError := hashAllowedPassword(request.Password)
@@ -230,6 +236,12 @@ func (service *Service) ChangePassword(ctx context.Context, querier database.Que
 	if !isOwnPassword && targetUser.RoleIsOwner && !principal.IsOwner {
 		return ErrOnlyOwnerCanManageOwners
 	}
+	if !isOwnPassword {
+		reachError := service.checkUserWithinReach(ctx, querier, principal, *targetUser)
+		if reachError != nil {
+			return reachError
+		}
+	}
 
 	passwordHash, hashError := hashAllowedPassword(newPassword)
 	if hashError != nil {
@@ -261,6 +273,21 @@ func (service *Service) saveGuardedChange(ctx context.Context, querier database.
 	touchesOwnerRole := existingUser.RoleIsOwner || newRole.IsOwner
 	if touchesOwnerRole && !principal.IsOwner {
 		return ErrOnlyOwnerCanManageOwners
+	}
+
+	isOtherUser := existingUser.Id != principal.UserId
+	if isOtherUser {
+		userReachError := service.checkUserWithinReach(ctx, querier, principal, existingUser)
+		if userReachError != nil {
+			return userReachError
+		}
+	}
+	roleIsChanging := existingUser.RoleId != changedUser.RoleId
+	if roleIsChanging {
+		roleReachError := service.checkRoleWithinReach(ctx, querier, principal, newRole.Id)
+		if roleReachError != nil {
+			return roleReachError
+		}
 	}
 
 	isDeactivatingSelf := existingUser.Id == principal.UserId && existingUser.IsActive && !changedUser.IsActive
@@ -296,6 +323,38 @@ func (service *Service) saveGuardedChange(ctx context.Context, querier database.
 		return service.repository.RevokeSessions(ctx, querier, principal.CompanyId, changedUser.Id, uuid.Nil)
 	}
 
+	return nil
+}
+
+func (service *Service) checkRoleWithinReach(ctx context.Context, querier database.Querier, principal *identity.Principal, roleId uuid.UUID) error {
+	if principal.IsOwner {
+		return nil
+	}
+	rolePermissions, listError := service.accessRepository.ListRolePermissions(ctx, querier, principal.CompanyId, roleId)
+	if listError != nil {
+		return listError
+	}
+	for _, rolePermission := range rolePermissions {
+		if !principal.Can(rolePermission.Id) {
+			return ErrRoleAboveYours
+		}
+	}
+	return nil
+}
+
+func (service *Service) checkUserWithinReach(ctx context.Context, querier database.Querier, principal *identity.Principal, targetUser User) error {
+	if principal.IsOwner {
+		return nil
+	}
+	targetPermissions, listError := service.accessRepository.ListEffectivePermissions(ctx, querier, principal.CompanyId, targetUser.Id, targetUser.RoleIsOwner)
+	if listError != nil {
+		return listError
+	}
+	for _, targetPermission := range targetPermissions {
+		if !principal.Can(targetPermission.Id) {
+			return ErrUserAboveYou
+		}
+	}
 	return nil
 }
 

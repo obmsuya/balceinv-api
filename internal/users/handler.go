@@ -131,6 +131,10 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "last_owner", serviceError.Error())
 	case errors.Is(serviceError, ErrCannotDeactivateSelf):
 		return response.Error(c, fiber.StatusConflict, "cannot_deactivate_self", serviceError.Error())
+	case errors.Is(serviceError, ErrRoleAboveYours):
+		return response.Error(c, fiber.StatusForbidden, "cannot_grant_unheld_permission", serviceError.Error())
+	case errors.Is(serviceError, ErrUserAboveYou):
+		return response.Error(c, fiber.StatusForbidden, "user_above_you", serviceError.Error())
 	case errors.Is(serviceError, ErrOnlyOwnerCanManageOwners), errors.Is(serviceError, ErrForbidden):
 		return response.Error(c, fiber.StatusForbidden, "forbidden", serviceError.Error())
 	case errors.Is(serviceError, ErrPasswordTooLong):
