@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/documents"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -87,16 +88,35 @@ func (handler *Handler) Dashboard(c *fiber.Ctx) error {
 	return response.Success(c, "Dashboard", dashboardView)
 }
 
+func (handler *Handler) Export(c *fiber.Ctx) error {
+	exportRequest := ExportRequest{
+		Report:   c.Params("report"),
+		Format:   c.Query("format"),
+		Language: c.Query("lang"),
+		Sort:     c.Query("sort"),
+		Range:    rangeRequestFrom(c),
+	}
+	exportedFile, exportError := handler.service.Export(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), exportRequest)
+	if exportError != nil {
+		return respondWithServiceError(c, exportError)
+	}
+	c.Set(fiber.HeaderContentType, exportedFile.ContentType)
+	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+exportedFile.Name+`"`)
+	return c.Send(exportedFile.Bytes)
+}
+
 func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrNoActiveShop):
 		return response.Error(c, fiber.StatusBadRequest, "no_active_shop", serviceError.Error())
 	case errors.Is(serviceError, ErrShopNotAssigned):
 		return response.Error(c, fiber.StatusForbidden, "shop_not_assigned", serviceError.Error())
-	case errors.Is(serviceError, ErrShopNotFound):
+	case errors.Is(serviceError, ErrShopNotFound), errors.Is(serviceError, ErrUnknownReport):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidRange), errors.Is(serviceError, ErrRangeTooLong), errors.Is(serviceError, ErrInvalidSort):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_filter", serviceError.Error())
+	case errors.Is(serviceError, documents.ErrUnknownFormat):
+		return response.Error(c, fiber.StatusBadRequest, "invalid_format", serviceError.Error())
 	default:
 		return serviceError
 	}

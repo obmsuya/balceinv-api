@@ -467,6 +467,28 @@ func (repository *Repository) ShopExists(ctx context.Context, querier database.Q
 	return shopCount == 1, nil
 }
 
+func (repository *Repository) ShopNames(ctx context.Context, querier database.Querier, scope Scope) ([]string, error) {
+	arguments := &queryArguments{}
+	query := `SELECT name FROM shops WHERE company_id = ` + arguments.add(scope.CompanyId) + shopCondition("id", scope, arguments) + ` ORDER BY name`
+
+	nameRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list shop names: %w", queryError)
+	}
+	defer nameRows.Close()
+
+	shopNames := []string{}
+	for nameRows.Next() {
+		shopName := ""
+		scanError := nameRows.Scan(&shopName)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a shop name: %w", scanError)
+		}
+		shopNames = append(shopNames, shopName)
+	}
+	return shopNames, nameRows.Err()
+}
+
 var storedTimeLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05"}
 
 func parseStoredTime(storedText sql.NullString) *time.Time {
