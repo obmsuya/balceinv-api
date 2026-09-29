@@ -50,7 +50,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	productsService := products.NewService(products.NewRepository(), stockService, objectStore)
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
 
-	platformHandler := platform.NewHandler(openDatabase)
+	platformHandler := platform.NewHandler(openDatabase, desktop.Network)
 	tenancyHandler := tenancy.NewHandler(tenancyService, isPostgres)
 	authHandler := auth.NewHandler(authService, isPostgres)
 	usersHandler := users.NewHandler(usersService)
@@ -181,6 +181,10 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Post("/api/print/receipt", authenticate, httpx.RequirePermission("sales:create", "sales:view"), printingHandler.Receipt)
 	}
 
+	if desktop.Network != nil {
+		application.Put("/api/platform/network", authenticate, platformHandler.SetNetwork)
+	}
+
 	if desktop.Backups != nil {
 		backupHandler := backup.NewHandler(desktop.Backups)
 		withoutTransaction := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
@@ -226,6 +230,10 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/permissions/user/:id", signedIn(accessHandler.ListUserPermissions)...)
 	application.Post("/api/permissions/assign-role", permitted("roles:edit", accessHandler.AssignRolePermissions)...)
 	application.Post("/api/permissions/assign-user", permitted("users:edit", accessHandler.AssignUserPermissions)...)
+
+	if loadedConfig.StaticDirectory != "" {
+		application.Get("/*", staticApp(loadedConfig.StaticDirectory))
+	}
 }
 
 func newLoginLimiter() fiber.Handler {
@@ -245,4 +253,5 @@ func newLoginLimiter() fiber.Handler {
 			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many sign-in attempts. Try again in a minute")
 		},
 	})
+
 }
