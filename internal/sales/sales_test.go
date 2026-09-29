@@ -229,3 +229,32 @@ func TestConcurrentSalesGetUniqueGapFreeReceiptNumbers(t *testing.T) {
 		}
 	})
 }
+
+func TestCurrencyLocksAfterTheFirstSale(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Currency Shop", "owner@currency.test")
+		teaId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "TEA", "name": "Tea", "price": 500, "opening_quantity": 3})
+
+		beforeSale := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"currency_code": "KES", "currency_decimals": 2})
+		if beforeSale.Status != http.StatusOK {
+			t.Fatalf("changing currency before any sale returned %d", beforeSale.Status)
+		}
+		badFormat := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"receipt_number_format": "{SHOP}-{DATE}"})
+		if badFormat.Status != http.StatusBadRequest {
+			t.Fatalf("a receipt format without {COUNTER} returned %d", badFormat.Status)
+		}
+
+		firstSale := sell(harness, company.OwnerToken, "currency-sale-1", []map[string]any{line(teaId, 1)}, cash(500))
+		if firstSale.Status != http.StatusCreated || firstSale.Data()["currency_code"] != "KES" || firstSale.Data()["currency_decimals"] != float64(2) {
+			t.Fatalf("first sale returned %d %v", firstSale.Status, firstSale.Body)
+		}
+
+		afterSale := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"currency_code": "TZS", "currency_decimals": 0})
+		decimalsOnly := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"currency_decimals": 0})
+		sameCurrency := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"currency_code": "KES", "tax_rate": 16})
+		if afterSale.Status != http.StatusConflict || afterSale.Code() != "currency_locked" || decimalsOnly.Status != http.StatusConflict || sameCurrency.Status != http.StatusOK {
+			t.Fatalf("after the first sale: switch %d, decimals %d, same currency %d", afterSale.Status, decimalsOnly.Status, sameCurrency.Status)
+		}
+	})
+}

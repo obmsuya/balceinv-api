@@ -21,6 +21,8 @@ var (
 	ErrSettingsNotFound   = errors.New("settings not found")
 	ErrInvalidEfdEndpoint = errors.New("EFD endpoint must be an https:// address")
 	ErrInvalidEmail       = errors.New("notification email is not a valid address")
+	ErrCurrencyLocked     = errors.New("the currency can't change after the first sale; totals already recorded would stop making sense")
+	ErrReceiptFormat      = errors.New("the receipt number format must contain {COUNTER} so every receipt number is different")
 )
 
 type Service struct {
@@ -71,6 +73,17 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 	changedSettings, applyError := applySettingsChanges(*companySettings, request)
 	if applyError != nil {
 		return SettingsView{}, applyError
+	}
+
+	isCurrencyChanging := changedProfile.CurrencyCode != companyProfile.CurrencyCode || changedProfile.CurrencyDecimals != companyProfile.CurrencyDecimals
+	if isCurrencyChanging {
+		hasSales, salesError := service.repository.HasSales(ctx, querier, principal.CompanyId)
+		if salesError != nil {
+			return SettingsView{}, salesError
+		}
+		if hasSales {
+			return SettingsView{}, ErrCurrencyLocked
+		}
 	}
 	changedSettings.UpdatedBy = &principal.UserId
 
@@ -148,7 +161,11 @@ func applySettingsChanges(companySettings Settings, request UpdateSettingsReques
 		companySettings.DateFormat = *request.DateFormat
 	}
 	if request.ReceiptNumberFormat != nil {
-		companySettings.ReceiptNumberFormat = strings.TrimSpace(*request.ReceiptNumberFormat)
+		receiptFormat := strings.TrimSpace(*request.ReceiptNumberFormat)
+		if !strings.Contains(receiptFormat, "{COUNTER}") {
+			return companySettings, ErrReceiptFormat
+		}
+		companySettings.ReceiptNumberFormat = receiptFormat
 	}
 	if request.ReceiptLanguage != nil {
 		companySettings.ReceiptLanguage = *request.ReceiptLanguage

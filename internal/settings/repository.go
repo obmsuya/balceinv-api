@@ -212,3 +212,15 @@ func (repository *Repository) UpdateLogoKey(ctx context.Context, querier databas
 
 	return nil
 }
+
+func (repository *Repository) HasSales(ctx context.Context, querier database.Querier, companyId uuid.UUID) (bool, error) {
+	query := `SELECT COUNT(*) FROM (SELECT 1 FROM sales WHERE company_id = $1 LIMIT 1) first_sale`
+
+	saleCount := 0
+	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(&saleCount)
+	if scanError != nil {
+		return false, fmt.Errorf("failed to check for sales: %w", scanError)
+	}
+
+	return saleCount > 0, nil
+}
