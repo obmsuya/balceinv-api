@@ -49,6 +49,16 @@ func Error(c *fiber.Ctx, status int, code string, message string) error {
 	})
 }
 
+func ErrorWithDetails(c *fiber.Ctx, status int, code string, message string, details any) error {
+	return c.Status(status).JSON(fiber.Map{
+		"success":   false,
+		"code":      code,
+		"message":   message,
+		"data":      details,
+		"requestId": requestIdOf(c),
+	})
+}
+
 func ValidationError(c *fiber.Ctx, fieldErrors []FieldError) error {
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 		"success":   false,
