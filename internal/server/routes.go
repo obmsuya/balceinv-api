@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
+	"github.com/chrisostomemataba/balceinv-api/internal/legacyimport"
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
@@ -105,6 +106,9 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
 	if loadedConfig.IsDesktop() {
 		application.Post("/api/setup", licensing.IssueTrialAfterSetup(), requestTransaction, tenancyHandler.RunFirstSetup)
+		legacyImportHandler := legacyimport.NewHandler(legacyimport.NewService(tenancyService, stockService), oldDatabasePath)
+		application.Get("/api/setup/import-old/preview", requestTransaction, legacyImportHandler.Preview)
+		application.Post("/api/setup/import-old", licensing.IssueTrialAfterSetup(), requestTransaction, legacyImportHandler.Import)
 		application.Get("/api/license/status", authenticate, licensing.Status)
 		application.Post("/api/license/refresh", authenticate, licensing.Refresh)
 		application.Get("/api/license/hardware-id", authenticate, licensing.HardwareId)
