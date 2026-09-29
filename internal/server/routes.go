@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/chrisostomemataba/balceinv-api/internal/features"
 	"path/filepath"
 	"strings"
 	"time"
@@ -50,7 +51,9 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	settingsService := settings.NewService(settingsRepository, objectStore)
 	stockService := stock.NewService(stock.NewRepository(), notifications.NewRepository())
 	productsService := products.NewService(products.NewRepository(), stockService, objectStore)
-	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
+	featuresRepository := features.NewRepository()
+	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository, featuresRepository)
+	featuresHandler := features.NewHandler(features.NewService(featuresRepository))
 
 	platformHandler := platform.NewHandler(openDatabase, desktop.Network)
 	oldDatabasePath := ""
@@ -131,6 +134,8 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Put("/api/roles/:id", permitted("roles:edit", accessHandler.RenameRole)...)
 	application.Delete("/api/roles/:id", permitted("roles:delete", accessHandler.DeleteRole)...)
 
+	application.Get("/api/features", signedIn(featuresHandler.Get)...)
+	application.Put("/api/features", permitted("settings:edit", featuresHandler.Update)...)
 	application.Get("/api/settings", permitted("settings:view", settingsHandler.Get)...)
 	application.Put("/api/settings", permitted("settings:edit", settingsHandler.Update)...)
 	application.Post("/api/settings/upload-logo", permitted("settings:edit", settingsHandler.UploadLogo)...)

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
+	"github.com/chrisostomemataba/balceinv-api/internal/features"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/google/uuid"
 )
@@ -34,6 +35,7 @@ type CurrentUserView struct {
 	Permissions        []access.PermissionView `json:"permissions"`
 	Locale             *string                 `json:"locale"`
 	MustChangePassword bool                    `json:"must_change_password"`
+	Features           features.FeaturesView   `json:"features"`
 }
 
 type BrandingView struct {
