@@ -30,6 +30,8 @@ type Config struct {
 	StaticDirectory string
 	MediaDirectory  string
 	DataDirectory   string
+	EnforceLicense  bool
+	LicenseSecret   string
 	S3Endpoint      string
 	S3Bucket        string
 	S3Region        string
@@ -158,6 +160,8 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		StaticDirectory: readTrimmed(lookup, "BALCE_STATIC_DIR"),
 		MediaDirectory:  mediaDirectory,
 		DataDirectory:   dataDirectory,
+		EnforceLicense:  dataDirectory != "" && readTrimmed(lookup, "BALCE_LICENSE_CHECK") != "off",
+		LicenseSecret:   readTrimmed(lookup, "BALCE_LICENSE_SECRET"),
 		S3Endpoint:      s3Endpoint,
 		S3Bucket:        s3Bucket,
 		S3Region:        s3Region,
