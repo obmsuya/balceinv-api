@@ -16,7 +16,7 @@ import (
 
 var receiptLabels = map[string]map[string]string{
 	"en": {"receipt": "Receipt", "date": "Date", "cashier": "Served by", "item": "Item", "amount": "Amount", "subtotal": "Subtotal", "discounts": "Discounts", "total": "TOTAL", "tax": "Includes VAT", "paid": "Paid", "change": "Change", "tin": "TIN", "tel": "Tel", "note": "Note", "efd": "EFD verification", "efdPending": "EFD receipt to follow", "thanks": "Thank you for shopping with us", "cash": "Cash", "card": "Card", "mobile": "Mobile money", "test": "Test print OK"},
-	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "test": "Kipimo cha printa kimefaulu"},
+	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "test": "Jaribio la printa limefaulu"},
 }
 
 func labelsFor(language string) map[string]string {

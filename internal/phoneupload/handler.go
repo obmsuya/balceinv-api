@@ -186,7 +186,7 @@ const uploadPageHtml = `<!DOCTYPE html>
       .then(function (answer) { return answer.json().then(function (body) { return { ok: answer.ok, body: body }; }); })
       .then(function (result) {
         if (!result.ok) throw new Error(result.body.message || 'Upload failed');
-        statusText.textContent = 'Done! Check the computer. · Imekamilika!';
+        statusText.textContent = 'Done! Check the computer. · Imekamilika! Angalia kompyuta.';
       })
       .catch(function (problem) {
         statusText.textContent = problem.message;
