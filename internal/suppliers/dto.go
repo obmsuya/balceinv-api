@@ -34,6 +34,7 @@ type PurchaseRequest struct {
 	SupplierInvoiceNumber *string               `json:"supplier_invoice_number" validate:"omitnil,max=60"`
 	InvoiceDate           *string               `json:"invoice_date" validate:"omitnil,max=10"`
 	ReceivedAt            *time.Time            `json:"received_at"`
+	InvoiceHasVat         bool                  `json:"invoice_has_vat"`
 	PricesIncludeVat      bool                  `json:"prices_include_vat"`
 	AmountPaid            int64                 `json:"amount_paid" validate:"gte=0"`
 	PaymentMethod         string                `json:"payment_method" validate:"omitempty,oneof=cash bank mobile"`

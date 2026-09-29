@@ -71,7 +71,8 @@ func (service *Service) RecordPurchase(ctx context.Context, querier database.Que
 		return PurchaseView{}, ErrMissingSettings
 	}
 
-	pricesIncludeVat := companyFeatures.VatRegistered && request.PricesIncludeVat
+	chargesVat := companyFeatures.VatRegistered && request.InvoiceHasVat
+	pricesIncludeVat := chargesVat && request.PricesIncludeVat
 	pricedLines := make([]PricedLine, 0, len(request.Lines))
 	newPurchase := Purchase{
 		Id:                    uuid.Must(uuid.NewV7()),
@@ -89,7 +90,7 @@ func (service *Service) RecordPurchase(ctx context.Context, querier database.Que
 		CreatedAt:             createdAt,
 	}
 	for lineIndex, lineRequest := range request.Lines {
-		pricedLine := PriceLine(productIds[lineIndex], lineRequest.Quantity, lineRequest.UnitCost, companyFeatures.VatRegistered, pricesIncludeVat, companySettings.TaxRateBasisPoints)
+		pricedLine := PriceLine(productIds[lineIndex], lineRequest.Quantity, lineRequest.UnitCost, chargesVat, pricesIncludeVat, companySettings.TaxRateBasisPoints)
 		pricedLines = append(pricedLines, pricedLine)
 		newPurchase.Subtotal += pricedLine.LineTotal - pricedLine.VatAmount
 		newPurchase.VatTotal += pricedLine.VatAmount
