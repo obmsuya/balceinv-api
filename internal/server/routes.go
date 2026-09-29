@@ -21,6 +21,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
+	"github.com/chrisostomemataba/balceinv-api/internal/orders"
 	"github.com/chrisostomemataba/balceinv-api/internal/phoneupload"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/printing"
@@ -210,6 +211,16 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/customers/:id/payments", permitted("customers:view", customersOn(customersHandler.Payments))...)
 	application.Post("/api/customers/:id/payments", permitted("customers:edit", customersOn(customersHandler.RecordPayment))...)
 	application.Post("/api/customers/:id/payments/:paymentId/void", permitted("customers:edit", customersOn(customersHandler.VoidPayment))...)
+
+	ordersOn := customers.FeatureGate(featuresRepository, customers.OrdersOn)
+	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService))
+	application.Get("/api/orders", permitted("orders:view", ordersOn(ordersHandler.List))...)
+	application.Post("/api/orders", permitted("orders:create", ordersOn(ordersHandler.Create))...)
+	application.Get("/api/orders/:id", permitted("orders:view", ordersOn(ordersHandler.Get))...)
+	application.Post("/api/orders/:id/deposits", permitted("orders:edit", ordersOn(ordersHandler.AddDeposit))...)
+	application.Post("/api/orders/:id/ready", permitted("orders:edit", ordersOn(ordersHandler.MarkReady))...)
+	application.Post("/api/orders/:id/collect", permitted("orders:edit", ordersOn(ordersHandler.Collect))...)
+	application.Post("/api/orders/:id/cancel", permitted("orders:delete", ordersOn(ordersHandler.Cancel))...)
 	application.Get("/api/exchange-rates", signedIn(ratesHandler.Latest)...)
 
 	if loadedConfig.IsDesktop() {
