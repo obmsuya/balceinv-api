@@ -247,6 +247,10 @@ func (service *Service) Collect(ctx context.Context, querier database.Querier, p
 	if collectedError != nil {
 		return OrderView{}, collectedError
 	}
+	postError := service.ledger.PostSaleById(ctx, querier, principal.CompanyId, saleView.Id)
+	if postError != nil {
+		return OrderView{}, postError
+	}
 	return service.Get(ctx, querier, principal, orderId)
 }
 
