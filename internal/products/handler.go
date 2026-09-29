@@ -120,6 +120,19 @@ func (handler *Handler) Archive(c *fiber.Ctx) error {
 	return response.Success(c, "Product archived", nil)
 }
 
+func (handler *Handler) Restore(c *fiber.Ctx) error {
+	productId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrProductNotFound)
+	}
+
+	productView, restoreError := handler.service.Restore(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), productId)
+	if restoreError != nil {
+		return respondWithServiceError(c, restoreError)
+	}
+	return response.Success(c, "Product restored", productView)
+}
+
 func (handler *Handler) UploadImage(c *fiber.Ctx) error {
 	productId, isValidId := httpx.UuidParam(c, "id")
 	if !isValidId {

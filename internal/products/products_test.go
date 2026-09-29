@@ -152,6 +152,15 @@ func TestProductRulesVariantsAndPriceHistory(t *testing.T) {
 		if archivedVariant.Data()["is_active"] != false {
 			t.Fatal("archiving a product must archive its variants")
 		}
+
+		restore := harness.Call(http.MethodPost, "/api/products/"+sodaId+"/restore", company.OwnerToken, nil)
+		if restore.Status != http.StatusOK || restore.Data()["is_active"] != true {
+			t.Fatalf("restore returned %d %v", restore.Status, restore.Body)
+		}
+		restoredVariant := harness.Call(http.MethodGet, "/api/products/"+largeVariant["id"].(string), company.OwnerToken, nil)
+		if restoredVariant.Data()["is_active"] != true {
+			t.Fatal("restoring a product must restore its variants")
+		}
 	})
 }
 
@@ -216,6 +225,7 @@ func TestProductListSearchIsolationAndPermissions(t *testing.T) {
 			{http.MethodGet, "/api/products/" + productId, nil},
 			{http.MethodPut, "/api/products/" + productId, productBody("HIJACK", 1, nil)},
 			{http.MethodDelete, "/api/products/" + productId, nil},
+			{http.MethodPost, "/api/products/" + productId + "/restore", nil},
 			{http.MethodGet, "/api/products/" + productId + "/variants", nil},
 			{http.MethodGet, "/api/products/" + productId + "/addons", nil},
 			{http.MethodPost, "/api/products/" + productId + "/addons", map[string]any{"name": "Ice", "price": 100}},
