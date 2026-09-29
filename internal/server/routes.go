@@ -234,7 +234,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
 
-	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
+	application.Get("/api/stock", permittedAny([]string{"stock_movements:view", "purchases:create", "purchases:edit"}, stockHandler.Levels)...)
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
 	application.Get("/api/stock-movements", permitted("stock_movements:view", stockHandler.Movements)...)
 	application.Post("/api/stock-movements", permitted("stock_movements:create", stockHandler.Adjust)...)
