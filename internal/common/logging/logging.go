@@ -27,7 +27,7 @@ func Setup(logDirectory string) (*DatedFileWriter, error) {
 		directory: logDirectory,
 	}
 
-	combinedWriter := io.MultiWriter(os.Stdout, fileWriter)
+	combinedWriter := io.MultiWriter(fileWriter, os.Stdout)
 
 	handlerOptions := &slog.HandlerOptions{
 		Level:       slog.LevelInfo,
