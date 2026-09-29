@@ -25,6 +25,7 @@ var (
 	ErrPrinterNotSet   = errors.New("choose the printer port in settings first")
 	ErrPrinterNotFound = errors.New("the printer did not answer; check that it is plugged in and switched on")
 	ErrMissingSettings = errors.New("company settings are missing")
+	ErrInvalidPort     = errors.New("the printer port must be a COM port, a serial or USB printer device, or a printer shared on this computer")
 )
 
 type StatusView struct {
@@ -211,8 +212,15 @@ func ListDevices() ([]DetectedPrinter, error) {
 	return detectedPrinters, nil
 }
 
+var devicePathFor = func(portPath string) string {
+	return portPath
+}
+
 func writeToPort(portPath string, printBytes []byte) error {
-	portFile, openError := os.OpenFile(portPath, os.O_WRONLY, 0)
+	if !settings.IsPrinterPort(portPath) {
+		return ErrInvalidPort
+	}
+	portFile, openError := os.OpenFile(devicePathFor(portPath), os.O_WRONLY, 0)
 	if openError != nil {
 		slog.Warn("printer port could not be opened", "port", portPath, "error", openError)
 		return fmt.Errorf("%w (%s)", ErrPrinterNotFound, portPath)

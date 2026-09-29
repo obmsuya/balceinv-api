@@ -78,6 +78,8 @@ func respondWithPrintError(c *fiber.Ctx, printError error) error {
 		return response.Error(c, fiber.StatusConflict, "printer_off", printError.Error())
 	case errors.Is(printError, ErrPrinterNotSet):
 		return response.Error(c, fiber.StatusConflict, "printer_not_set", printError.Error())
+	case errors.Is(printError, ErrInvalidPort):
+		return response.Error(c, fiber.StatusBadRequest, "invalid_printer_port", printError.Error())
 	case errors.Is(printError, ErrPrinterNotFound):
 		return response.Error(c, fiber.StatusBadGateway, "printer_unreachable", printError.Error())
 	case errors.Is(printError, sales.ErrSaleNotFound):
