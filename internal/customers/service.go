@@ -382,7 +382,7 @@ func (service *Service) CheckSaleCustomer(ctx context.Context, querier database.
 	if findError != nil {
 		return findError
 	}
-	if !foundCustomer.IsActive {
+	if hasCredit && !foundCustomer.IsActive {
 		return ErrCustomerInactive
 	}
 
@@ -396,6 +396,17 @@ func (service *Service) CheckSaleCustomer(ctx context.Context, querier database.
 	}
 	if currentBalance+creditAmount > *foundCustomer.CreditLimit {
 		return ErrCreditLimitExceeded
+	}
+	return nil
+}
+
+func (service *Service) RequireActive(ctx context.Context, querier database.Querier, companyId uuid.UUID, customerId uuid.UUID) error {
+	foundCustomer, findError := service.findCustomer(ctx, querier, companyId, customerId)
+	if findError != nil {
+		return findError
+	}
+	if !foundCustomer.IsActive {
+		return ErrCustomerInactive
 	}
 	return nil
 }
