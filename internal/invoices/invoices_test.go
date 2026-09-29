@@ -113,3 +113,32 @@ func checkSaleDocument(t *testing.T, harness *apptest.Harness) {
 		t.Fatalf("staff without sales permissions got %d", refused.Status)
 	}
 }
+
+func TestInvoiceShowsTheCustomerAndWhatIsOwed(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Credit Invoice Shop", "owner@creditinvoice.test")
+		harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"customers_enabled": true, "credit_sales_enabled": true})
+		customerId := harness.Call(http.MethodPost, "/api/customers", company.OwnerToken, map[string]any{"name": "Mama Rehema", "phone": "0713222333"}).Data()["id"]
+		productId := harness.Call(http.MethodPost, "/api/products", company.OwnerToken, map[string]any{"sku": "UNGA", "name": "Unga", "price": 4500, "opening_quantity": 10}).Data()["id"]
+		createdSale := harness.Call(http.MethodPost, "/api/sales", company.OwnerToken, map[string]any{
+			"client_ref":  "credit-invoice-1",
+			"customer_id": customerId,
+			"items":       []map[string]any{{"product_id": productId, "quantity": 2}},
+			"payments":    []map[string]any{{"method": "cash", "amount": 3000}, {"method": "credit", "amount": 6000}},
+		})
+		if createdSale.Status != http.StatusCreated {
+			t.Fatalf("credit sale returned %d %v", createdSale.Status, createdSale.Body)
+		}
+
+		invoice := harness.Call(http.MethodGet, "/api/sales/"+createdSale.Data()["id"].(string)+"/document?format=pdf&lang=en", company.OwnerToken, nil)
+		for _, wantedText := range []string{"Balance owed (pay later)"} {
+			if !containsUtf16(invoice.Raw, wantedText) {
+				t.Fatalf("the invoice is missing %q", wantedText)
+			}
+		}
+		if containsUtf16(invoice.Raw, "Paid (credit)") {
+			t.Fatal("the amount on credit is shown as paid")
+		}
+	})
+}
