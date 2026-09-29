@@ -21,7 +21,7 @@ func TestHealthReflectsDatabaseReachability(t *testing.T) {
 		if storeError != nil {
 			t.Fatalf("object store: %v", storeError)
 		}
-		application := server.New(testConfig, openDatabase, objectStore, func() {})
+		application := server.New(testConfig, openDatabase, objectStore, func() {}, server.Desktop{})
 
 		healthyResponse, healthyError := application.Test(httptest.NewRequest("GET", "/health", nil), 5000)
 		if healthyError != nil {

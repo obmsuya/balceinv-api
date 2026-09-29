@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/logging"
@@ -33,6 +34,16 @@ func main() {
 
 	startupContext, cancelStartup := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelStartup()
+
+	if loadedConfig.IsDesktop() {
+		isRestored, restoreError := backup.ApplyPendingRestore(loadedConfig.SqlitePath)
+		if restoreError != nil {
+			slog.Error("the staged restore was not applied", "error", restoreError)
+		}
+		if isRestored {
+			slog.Info("a backup was restored before start")
+		}
+	}
 
 	migrationResult, migrateError := database.MigrateUp(startupContext, loadedConfig.Engine, loadedConfig.DatabaseUrl, loadedConfig.SqlitePath)
 	if migrateError != nil {
@@ -66,7 +77,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator)
+	desktop := server.Desktop{}
+	backgroundContext, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	if loadedConfig.IsDesktop() {
+		desktop.Backups = backup.NewStore(openDatabase, loadedConfig.SqlitePath, loadedConfig.DataDirectory)
+		desktop.Backups.StartAutomaticBackups(backgroundContext)
+	}
+
+	application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator, desktop)
 
 	shutdownSignals := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignals, syscall.SIGINT, syscall.SIGTERM)
