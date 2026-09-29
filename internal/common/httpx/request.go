@@ -25,14 +25,17 @@ func CurrentPrincipal(c *fiber.Ctx) *identity.Principal {
 	return principal
 }
 
-func RequirePermission(permissionId string) fiber.Handler {
+func RequirePermission(permissionIds ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		principal := CurrentPrincipal(c)
 		if principal == nil {
 			return response.Error(c, fiber.StatusUnauthorized, "unauthenticated", "Please sign in")
 		}
 
-		isAllowed := principal.Can(permissionId)
+		isAllowed := false
+		for _, permissionId := range permissionIds {
+			isAllowed = isAllowed || principal.Can(permissionId)
+		}
 		if !isAllowed {
 			return response.Error(c, fiber.StatusForbidden, "forbidden", "You do not have permission to do this")
 		}

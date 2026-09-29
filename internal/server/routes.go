@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
+	"github.com/chrisostomemataba/balceinv-api/internal/sales"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
@@ -54,6 +55,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	shopsHandler := shops.NewHandler(shops.NewService(shops.NewRepository()))
 	discountsService := discounts.NewService(discounts.NewRepository())
 	discountsHandler := discounts.NewHandler(discountsService)
+	salesHandler := sales.NewHandler(sales.NewService(sales.NewRepository(), discountsService, settingsRepository, stockService))
 	stockHandler := stock.NewHandler(stockService)
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
@@ -67,6 +69,9 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	}
 	permitted := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), routeHandler}
+	}
+	permittedAny := func(permissionIds []string, routeHandler fiber.Handler) []fiber.Handler {
+		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionIds...), routeHandler}
 	}
 	supportTeam := func(routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, supportPasscode, requestTransaction, routeHandler}
@@ -136,6 +141,14 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Post("/api/discounts", permitted("discounts:create", discountsHandler.Create)...)
 	application.Put("/api/discounts/:id", permitted("discounts:edit", discountsHandler.Update)...)
 	application.Delete("/api/discounts/:id", permitted("discounts:delete", discountsHandler.Stop)...)
+
+	sellingOrViewing := []string{"sales:create", "sales:view"}
+	application.Post("/api/sales/quote", permitted("sales:create", salesHandler.Quote)...)
+	application.Post("/api/sales", permitted("sales:create", salesHandler.Create)...)
+	application.Get("/api/sales", permitted("sales:view", salesHandler.List)...)
+	application.Get("/api/sales/totals", permitted("sales:view", salesHandler.Totals)...)
+	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
+	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
 
 	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
