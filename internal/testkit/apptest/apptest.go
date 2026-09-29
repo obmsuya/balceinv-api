@@ -227,7 +227,12 @@ func (harness *Harness) Send(method string, path string, sessionToken string, re
 	if sessionToken != "" {
 		testRequest.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
+	testRequest.Host = "localhost:8080"
 	for headerName, headerValue := range extraHeaders {
+		if headerName == "Host" {
+			testRequest.Host = headerValue
+			continue
+		}
 		testRequest.Header.Set(headerName, headerValue)
 	}
 
@@ -278,7 +283,12 @@ func (harness *Harness) UploadForm(path string, sessionToken string, fieldName s
 	testRequest := httptest.NewRequest(http.MethodPost, path, formBody)
 	testRequest.Header.Set("Content-Type", formWriter.FormDataContentType())
 	testRequest.Header.Set("Authorization", "Bearer "+sessionToken)
+	testRequest.Host = "localhost:8080"
 	for headerName, headerValue := range extraHeaders {
+		if headerName == "Host" {
+			testRequest.Host = headerValue
+			continue
+		}
 		testRequest.Header.Set(headerName, headerValue)
 	}
 

@@ -27,6 +27,8 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 		ErrorHandler:          httpx.ErrorHandler,
 		DisableStartupMessage: true,
 		BodyLimit:             8 * 1024 * 1024,
+
+		EnableTrustedProxyCheck: true,
 	})
 
 	application.Use(httpx.RequestLogging(writeLogSeparator))
@@ -40,6 +42,9 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 		ExposeHeaders:    "X-Request-Id",
 	}))
 
+	if loadedConfig.IsDesktop() {
+		application.Use(httpx.DesktopHostGuard())
+	}
 	application.Use(httpx.OriginGuard(loadedConfig.AllowedOrigins))
 	if loadedConfig.EnforceLicense {
 		application.Use(licensing.Enforce())
