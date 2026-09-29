@@ -40,6 +40,7 @@ type Harness struct {
 	App          *fiber.App
 	Config       *config.Config
 	QueryCounter *atomic.Int64
+	ObjectStore  storage.Store
 }
 
 type Company struct {
@@ -106,6 +107,7 @@ func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforces
 		App:          server.New(testConfig, openDatabase, objectStore, func() {}, desktop),
 		Config:       testConfig,
 		QueryCounter: queryCounter,
+		ObjectStore:  objectStore,
 	}
 
 	return harness
