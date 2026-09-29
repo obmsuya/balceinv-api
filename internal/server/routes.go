@@ -11,6 +11,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
+	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
@@ -51,6 +52,8 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	productsHandler := products.NewHandler(productsService)
 	catalogHandler := catalog.NewHandler(catalog.NewService(catalog.NewRepository()))
 	shopsHandler := shops.NewHandler(shops.NewService(shops.NewRepository()))
+	discountsService := discounts.NewService(discounts.NewRepository())
+	discountsHandler := discounts.NewHandler(discountsService)
 	stockHandler := stock.NewHandler(stockService)
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
@@ -127,6 +130,12 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/catalog/team/template", supportTeam(catalogHandler.TeamTemplate)...)
 	application.Post("/api/catalog/team/import", supportTeam(catalogHandler.TeamImport)...)
 	application.Delete("/api/catalog/team", supportTeam(catalogHandler.TeamClear)...)
+
+	application.Get("/api/discounts", permitted("discounts:view", discountsHandler.List)...)
+	application.Get("/api/discounts/:id", permitted("discounts:view", discountsHandler.Get)...)
+	application.Post("/api/discounts", permitted("discounts:create", discountsHandler.Create)...)
+	application.Put("/api/discounts/:id", permitted("discounts:edit", discountsHandler.Update)...)
+	application.Delete("/api/discounts/:id", permitted("discounts:delete", discountsHandler.Stop)...)
 
 	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
