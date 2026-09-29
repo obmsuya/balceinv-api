@@ -188,7 +188,7 @@ func TestLogoUploadAndPublicServing(t *testing.T) {
 			t.Fatalf("valid png returned %d: %v", accepted.Status, accepted.Body)
 		}
 		logoUrl, hasLogoUrl := accepted.Data()["company"].(map[string]any)["logo_url"].(string)
-		if !hasLogoUrl || !strings.HasPrefix(logoUrl, "/api/branding/logo/"+company.Id.String()+"/") || !strings.HasSuffix(logoUrl, ".png") {
+		if !hasLogoUrl || !strings.HasPrefix(logoUrl, "/api/media/logos/"+company.Id.String()+"/") || !strings.HasSuffix(logoUrl, ".png") {
 			t.Fatalf("unexpected logo url %v", accepted.Data()["company"])
 		}
 
@@ -206,10 +206,11 @@ func TestLogoUploadAndPublicServing(t *testing.T) {
 		}
 
 		unsafePaths := []string{
-			"/api/branding/logo/" + company.Id.String() + "/..%2F..%2Fetc%2Fpasswd",
-			"/api/branding/logo/not-a-uuid/0190f7a2-0000-7000-8000-000000000000.png",
-			"/api/branding/logo/" + company.Id.String() + "/0190f7a2-0000-7000-8000-000000000000.png",
-			"/api/branding/logo/" + company.Id.String() + "/logo.svg",
+			"/api/media/logos/" + company.Id.String() + "/..%2F..%2Fetc%2Fpasswd",
+			"/api/media/logos/not-a-uuid/0190f7a2-0000-7000-8000-000000000000.png",
+			"/api/media/logos/" + company.Id.String() + "/0190f7a2-0000-7000-8000-000000000000.png",
+			"/api/media/logos/" + company.Id.String() + "/logo.svg",
+			"/api/media/secrets/" + company.Id.String() + "/0190f7a2-0000-7000-8000-000000000000.png",
 		}
 		for _, unsafePath := range unsafePaths {
 			unsafeResponse := harness.Call(http.MethodGet, unsafePath, "", nil)

@@ -11,7 +11,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/security"
-	"github.com/chrisostomemataba/balceinv-api/internal/settings"
+	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/google/uuid"
@@ -326,7 +326,7 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 		CompanyId:   sessionUser.CompanyId,
 		CompanyName: companyBranding.Name,
 		Branding: BrandingView{
-			LogoUrl:          settings.LogoUrl(companyBranding.LogoKey),
+			LogoUrl:          media.PublicUrl(companyBranding.LogoKey),
 			PrimaryColor:     companyBranding.PrimaryColor,
 			CurrencyCode:     companyBranding.CurrencyCode,
 			CurrencyDecimals: companyBranding.CurrencyDecimals,
