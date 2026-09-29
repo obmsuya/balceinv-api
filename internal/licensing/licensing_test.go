@@ -33,23 +33,16 @@ func TestDesktopNeedsALicenseAndSetupStartsATrial(t *testing.T) {
 
 		harness := apptest.StartDesktopWithLicenseCheck(t, engineCase)
 
-		beforeSetup := harness.Call(http.MethodGet, "/api/license/status", "", nil)
-		if beforeSetup.Status != http.StatusOK || beforeSetup.Data()["licensed"] != false || beforeSetup.Data()["lock_reason"] != license.LockReasonMissing {
-			t.Fatalf("status without a license returned %d %v", beforeSetup.Status, beforeSetup.Body)
+		for _, licensePath := range []string{"/api/license/status", "/api/license/hardware-id", "/api/license/packages"} {
+			if harness.Call(http.MethodGet, licensePath, "", nil).Status != http.StatusUnauthorized {
+				t.Fatalf("%s answered without signing in", licensePath)
+			}
 		}
-		hardware := harness.Call(http.MethodGet, "/api/license/hardware-id", "", nil)
-		hardwareId, _ := hardware.Body["hardware_id"].(string)
-		if hardware.Status != http.StatusOK || len(hardwareId) < 16 {
-			t.Fatalf("hardware id returned %d %v", hardware.Status, hardware.Body)
+		if harness.Call(http.MethodPost, "/api/license/pay", "", map[string]any{"phone": "0712345678", "provider": "Mpesa", "package_id": 1}).Status != http.StatusUnauthorized {
+			t.Fatal("a payment was started without signing in")
 		}
 		if harness.Call(http.MethodGet, "/api/platform", "", nil).Status != http.StatusOK || harness.Call(http.MethodGet, "/health", "", nil).Status != http.StatusOK {
 			t.Fatal("platform or health was locked without a license")
-		}
-		if harness.Call(http.MethodPost, "/api/license/refresh", "", nil).Status != http.StatusServiceUnavailable {
-			t.Fatal("refresh without internet did not say so")
-		}
-		if harness.Call(http.MethodPost, "/api/license/pay", "", map[string]any{"phone": "", "provider": "Mpesa", "package_id": 1}).Status != http.StatusBadRequest {
-			t.Fatal("a payment without a phone number was forwarded")
 		}
 
 		setup := harness.Call(http.MethodPost, "/api/setup", "", map[string]any{
@@ -64,6 +57,22 @@ func TestDesktopNeedsALicenseAndSetupStartsATrial(t *testing.T) {
 		}
 
 		ownerToken := harness.MustLogin("owner@trial.test", "trial-password")
+		trialStatus := harness.Call(http.MethodGet, "/api/license/status", ownerToken, nil)
+		if trialStatus.Status != http.StatusOK || trialStatus.Data()["licensed"] != true {
+			t.Fatalf("status during the trial returned %d %v", trialStatus.Status, trialStatus.Body)
+		}
+		hardware := harness.Call(http.MethodGet, "/api/license/hardware-id", ownerToken, nil)
+		hardwareId, _ := hardware.Body["hardware_id"].(string)
+		if hardware.Status != http.StatusOK || len(hardwareId) < 16 {
+			t.Fatalf("hardware id returned %d %v", hardware.Status, hardware.Body)
+		}
+		if harness.Call(http.MethodPost, "/api/license/refresh", ownerToken, nil).Status != http.StatusServiceUnavailable {
+			t.Fatal("refresh without internet did not say so")
+		}
+		if harness.Call(http.MethodPost, "/api/license/pay", ownerToken, map[string]any{"phone": "", "provider": "Mpesa", "package_id": 1}).Status != http.StatusBadRequest {
+			t.Fatal("a payment without a phone number was forwarded")
+		}
+
 		if products := harness.Call(http.MethodGet, "/api/products", ownerToken, nil); products.Status != http.StatusOK {
 			t.Fatalf("a trial could not list products: %d", products.Status)
 		}

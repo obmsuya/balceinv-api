@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"io"
 	"net/http"
 	"strings"
@@ -108,6 +109,9 @@ func Packages(c *fiber.Ctx) error {
 }
 
 func Pay(c *fiber.Ctx) error {
+	if !httpx.CurrentPrincipal(c).IsOwner {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"success": false, "code": "forbidden", "error": "Only the owner can pay for the subscription."})
+	}
 	paymentPayload := map[string]any{}
 	unmarshalError := json.Unmarshal(c.Body(), &paymentPayload)
 	if unmarshalError != nil {

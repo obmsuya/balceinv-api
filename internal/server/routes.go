@@ -102,11 +102,11 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
 	if loadedConfig.IsDesktop() {
 		application.Post("/api/setup", licensing.IssueTrialAfterSetup(), requestTransaction, tenancyHandler.RunFirstSetup)
-		application.Get("/api/license/status", licensing.Status)
-		application.Post("/api/license/refresh", licensing.Refresh)
-		application.Get("/api/license/hardware-id", licensing.HardwareId)
-		application.Get("/api/license/packages", licensing.Packages)
-		application.Post("/api/license/pay", licensing.Pay)
+		application.Get("/api/license/status", authenticate, licensing.Status)
+		application.Post("/api/license/refresh", authenticate, licensing.Refresh)
+		application.Get("/api/license/hardware-id", authenticate, licensing.HardwareId)
+		application.Get("/api/license/packages", authenticate, licensing.Packages)
+		application.Post("/api/license/pay", authenticate, licensing.Pay)
 	} else {
 		application.Post("/api/setup", requestTransaction, tenancyHandler.RunFirstSetup)
 	}
