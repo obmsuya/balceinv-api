@@ -88,8 +88,11 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 		harness := apptest.StartDesktop(t, engineCase)
 		company := harness.CreateCompany("Print Shop", "owner@print.test")
 		cashierToken := harness.CreateStaff(company, "cashier@print.test", []string{"sales:create"}, []uuid.UUID{company.ShopId})
-		portPath := filepath.Join(t.TempDir(), "fake-printer")
-		os.WriteFile(portPath, nil, 0o600)
+		deviceDirectory := t.TempDir()
+		printing.UseFakeDevices(t, deviceDirectory)
+		portPath := "/dev/ttyFAKE0"
+		deviceFile := filepath.Join(deviceDirectory, "ttyFAKE0")
+		os.WriteFile(deviceFile, nil, 0o600)
 
 		productId := harness.Call(http.MethodPost, "/api/products", company.OwnerToken, map[string]any{"sku": "SODA", "name": "Soda", "price": 1000, "opening_quantity": 5}).Data()["id"].(string)
 		saleId := harness.Call(http.MethodPost, "/api/sales", cashierToken, map[string]any{
@@ -105,7 +108,23 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 			t.Fatal("printing without a port was not refused")
 		}
 
-		harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"printer_port": filepath.Join(t.TempDir(), "unplugged")})
+		for _, notAPrinter := range []string{filepath.Join(deviceDirectory, "balce.sqlite"), "/etc/passwd", `\\attacker.example\share`, `C:\Users\Public\run.bat`} {
+			refused := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"printer_port": notAPrinter})
+			if refused.Status != http.StatusBadRequest || refused.Code() != "invalid_setting" {
+				t.Fatalf("the printer port %q was accepted: %d %v", notAPrinter, refused.Status, refused.Body)
+			}
+			testPrint := harness.Call(http.MethodPost, "/api/print/test", company.OwnerToken, map[string]any{"port": notAPrinter})
+			if testPrint.Status != http.StatusBadRequest || testPrint.Code() != "invalid_printer_port" {
+				t.Fatalf("a test print to %q returned %d %v", notAPrinter, testPrint.Status, testPrint.Body)
+			}
+		}
+		for _, realPort := range []string{"COM3", `\\.\COM12`, "/dev/cu.usbserial-1420", "/dev/usb/lp0", `\\localhost\POS58`} {
+			if harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"printer_port": realPort}).Status != http.StatusOK {
+				t.Fatalf("the printer port %q was refused", realPort)
+			}
+		}
+
+		harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"printer_port": "/dev/ttyFAKE9"})
 		unplugged := harness.Call(http.MethodPost, "/api/print/receipt", cashierToken, map[string]any{"sale_id": saleId})
 		if unplugged.Status != http.StatusBadGateway || unplugged.Code() != "printer_unreachable" {
 			t.Fatalf("an unplugged printer returned %d %v", unplugged.Status, unplugged.Body)
@@ -117,7 +136,7 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 			t.Fatalf("printer status was %v", status)
 		}
 		printed := harness.Call(http.MethodPost, "/api/print/receipt", cashierToken, map[string]any{"sale_id": saleId})
-		portBytes, _ := os.ReadFile(portPath)
+		portBytes, _ := os.ReadFile(deviceFile)
 		if printed.Status != http.StatusOK || !bytes.Contains(portBytes, []byte("Print Shop")) || !bytes.Contains(portBytes, []byte("TZS 3,000")) {
 			t.Fatalf("printing returned %d %v, port got %q", printed.Status, printed.Body, portBytes)
 		}
@@ -128,9 +147,9 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 		if harness.Call(http.MethodPost, "/api/print/test", cashierToken, map[string]any{}).Status != http.StatusForbidden {
 			t.Fatal("a cashier ran a test print")
 		}
-		os.WriteFile(portPath, nil, 0o600)
+		os.WriteFile(deviceFile, nil, 0o600)
 		tested := harness.Call(http.MethodPost, "/api/print/test", company.OwnerToken, map[string]any{"port": portPath})
-		testBytes, _ := os.ReadFile(portPath)
+		testBytes, _ := os.ReadFile(deviceFile)
 		if tested.Status != http.StatusOK || !bytes.Contains(testBytes, []byte("Test print OK")) || !bytes.Contains(testBytes, []byte("58 mm, 32 columns")) {
 			t.Fatalf("the test print returned %d, port got %q", tested.Status, testBytes)
 		}

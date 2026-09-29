@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/mail"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
@@ -24,6 +25,7 @@ var (
 	ErrCurrencyLocked     = errors.New("the currency can't change after the first sale; totals already recorded would stop making sense")
 	ErrReceiptFormat      = errors.New("the receipt number format must contain {COUNTER} so every receipt number is different")
 	ErrEfdIncomplete      = errors.New("add the EFD address and key before turning EFD on")
+	ErrInvalidPrinterPort = errors.New("the printer port must be a COM port, a serial or USB printer device, or a printer shared on this computer")
 )
 
 type Service struct {
@@ -229,7 +231,12 @@ func applySettingsChanges(companySettings Settings, request UpdateSettingsReques
 		companySettings.PrinterEnabled = *request.PrinterEnabled
 	}
 	if request.PrinterPort != nil {
-		companySettings.PrinterPort = strings.TrimSpace(*request.PrinterPort)
+		requestedPort := strings.TrimSpace(*request.PrinterPort)
+		isAllowedPort := requestedPort == "" || IsPrinterPort(requestedPort)
+		if !isAllowedPort {
+			return Settings{}, ErrInvalidPrinterPort
+		}
+		companySettings.PrinterPort = requestedPort
 	}
 	if request.PrinterModel != nil {
 		companySettings.PrinterModel = strings.TrimSpace(*request.PrinterModel)
@@ -322,4 +329,22 @@ func toSettingsView(companySettings Settings, companyProfile CompanyProfile) Set
 		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
 		UpdatedAt:                 companySettings.UpdatedAt,
 	}
+}
+
+var printerPortPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`^(?i)COM\d{1,3}$`),
+	regexp.MustCompile(`^(?i)\\\\\.\\COM\d{1,3}$`),
+	regexp.MustCompile(`^/dev/(tty|cu)[A-Za-z0-9._-]+$`),
+	regexp.MustCompile(`^/dev/(usb/)?lp\d+$`),
+	regexp.MustCompile(`^/dev/rfcomm\d+$`),
+	regexp.MustCompile(`^(?i)\\\\(localhost|127\.0\.0\.1)\\[^\\/:*?"<>|]+$`),
+}
+
+func IsPrinterPort(portPath string) bool {
+	for _, printerPortPattern := range printerPortPatterns {
+		if printerPortPattern.MatchString(portPath) {
+			return true
+		}
+	}
+	return false
 }
