@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
@@ -48,8 +50,54 @@ func NewFiscalService(openDatabase *database.Database, salesService *Service, re
 		salesService:       salesService,
 		repository:         repository,
 		settingsRepository: settingsRepository,
-		httpClient:         &http.Client{Timeout: fiscalRequestTimeout, Transport: fiscalTransport},
+		httpClient:         newFiscalClient(openDatabase.IsPostgres()),
 	}
+}
+
+func newFiscalClient(isCloud bool) *http.Client {
+	chosenTransport := fiscalTransport
+	isRealTransport := fiscalTransport == http.DefaultTransport
+	if isCloud && isRealTransport {
+		publicDialer := &net.Dialer{
+			Timeout: fiscalRequestTimeout,
+			Control: refusePrivateAddresses,
+		}
+		chosenTransport = &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			DialContext:         publicDialer.DialContext,
+			TLSHandshakeTimeout: 10 * time.Second,
+		}
+	}
+	return &http.Client{
+		Timeout:   fiscalRequestTimeout,
+		Transport: chosenTransport,
+		CheckRedirect: func(redirectedRequest *http.Request, previousRequests []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+var sharedAddressSpace = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
+
+func refusePrivateAddresses(network string, address string, rawConnection syscall.RawConn) error {
+	hostText, _, splitError := net.SplitHostPort(address)
+	if splitError != nil {
+		return splitError
+	}
+	dialedIp := net.ParseIP(hostText)
+	if !IsPublicAddress(dialedIp) {
+		return fmt.Errorf("the EFD address %s is not on the public internet", hostText)
+	}
+	return nil
+}
+
+func IsPublicAddress(dialedIp net.IP) bool {
+	if dialedIp == nil {
+		return false
+	}
+	isReserved := dialedIp.IsLoopback() || dialedIp.IsPrivate() || dialedIp.IsLinkLocalUnicast() || dialedIp.IsLinkLocalMulticast() ||
+		dialedIp.IsUnspecified() || dialedIp.IsMulticast() || dialedIp.IsInterfaceLocalMulticast() || sharedAddressSpace.Contains(dialedIp)
+	return !isReserved
 }
 
 type fiscalTarget struct {
