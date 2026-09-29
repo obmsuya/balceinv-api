@@ -78,7 +78,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
 	stockHandler := stock.NewHandler(stockService)
 	ratesHandler := rates.NewHandler(rates.NewService(openDatabase, rates.NewRepository()), settingsRepository)
-	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository))
+	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository, objectStore))
 	transfersHandler := transfers.NewHandler(transfers.NewService(transfers.NewRepository(), stockService))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(notifications.NewRepository()))
 
@@ -227,6 +227,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/reports/cashiers", permitted("reports:view", reportsHandler.Cashiers)...)
 	application.Get("/api/reports/shops", permitted("reports:view", reportsHandler.Shops)...)
 	application.Get("/api/reports/inventory", permitted("reports:view", reportsHandler.Inventory)...)
+	application.Get("/api/reports/:report/export", permitted("reports:view", reportsHandler.Export)...)
 
 	application.Post("/api/sales/fiscal/send-waiting", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendWaitingToEfd)
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
