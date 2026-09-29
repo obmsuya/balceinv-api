@@ -259,6 +259,23 @@ func (service *Service) Archive(ctx context.Context, querier database.Querier, p
 	return service.repository.SetActive(ctx, querier, principal.CompanyId, productId, false)
 }
 
+func (service *Service) Restore(ctx context.Context, querier database.Querier, principal *identity.Principal, productId uuid.UUID) (ProductView, error) {
+	existingProduct, findError := service.repository.Find(ctx, querier, principal.CompanyId, nil, productId)
+	if findError != nil {
+		return ProductView{}, findError
+	}
+	if existingProduct == nil {
+		return ProductView{}, ErrProductNotFound
+	}
+
+	restoreError := service.repository.SetActive(ctx, querier, principal.CompanyId, productId, true)
+	if restoreError != nil {
+		return ProductView{}, restoreError
+	}
+
+	return service.Get(ctx, querier, principal, productId)
+}
+
 func (service *Service) UploadImage(ctx context.Context, querier database.Querier, principal *identity.Principal, productId uuid.UUID, imageBytes []byte) (ProductView, error) {
 	existingProduct, findError := service.repository.Find(ctx, querier, principal.CompanyId, nil, productId)
 	if findError != nil {
