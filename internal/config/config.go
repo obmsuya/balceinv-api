@@ -133,7 +133,7 @@ func defaultSqlitePath() (string, error) {
 	if appDataDirectoryError != nil {
 		return "", appDataDirectoryError
 	}
-	return filepath.Join(appDataDirectory, "balce.db"), nil
+	return filepath.Join(appDataDirectory, "balce.sqlite"), nil
 }
 
 func defaultLogDirectory(engine Engine, sqlitePath string) string {

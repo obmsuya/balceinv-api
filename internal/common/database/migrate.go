@@ -19,6 +19,8 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
+var ErrUnrecognizedDatabase = errors.New("this SQLite file already holds tables but has no migration history; it belongs to another program or an older Balce version, so it was left untouched")
+
 type MigrationResult struct {
 	PreviousVersion  uint
 	CurrentVersion   uint
@@ -27,6 +29,13 @@ type MigrationResult struct {
 
 func MigrateUp(ctx context.Context, engine config.Engine, databaseUrl string, sqlitePath string) (MigrationResult, error) {
 	result := MigrationResult{}
+
+	if engine == config.EngineSqlite {
+		recognitionError := refuseUnrecognizedSqlite(ctx, sqlitePath)
+		if recognitionError != nil {
+			return result, recognitionError
+		}
+	}
 
 	migrator, openMigratorError := openMigrator(engine, databaseUrl, sqlitePath)
 	if openMigratorError != nil {
@@ -204,4 +213,43 @@ func copySqliteBeforeMigration(ctx context.Context, sqlitePath string, previousV
 	}
 
 	return copyPath, nil
+}
+
+func refuseUnrecognizedSqlite(ctx context.Context, sqlitePath string) error {
+	_, statError := os.Stat(sqlitePath)
+	fileIsMissing := errors.Is(statError, fs.ErrNotExist)
+	if fileIsMissing {
+		return nil
+	}
+	if statError != nil {
+		return fmt.Errorf("failed to inspect database file: %w", statError)
+	}
+
+	readOnlyConnection, openError := sql.Open("sqlite", "file:"+sqlitePath+"?mode=ro")
+	if openError != nil {
+		return fmt.Errorf("failed to open database file for inspection: %w", openError)
+	}
+	defer readOnlyConnection.Close()
+
+	inspectionQuery := `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN name = 'schema_migrations' THEN 1 ELSE 0 END), 0)
+		FROM sqlite_master
+		WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+	`
+
+	tableCount := 0
+	migrationTableCount := 0
+	scanError := readOnlyConnection.QueryRowContext(ctx, inspectionQuery).Scan(&tableCount, &migrationTableCount)
+	if scanError != nil {
+		return fmt.Errorf("failed to inspect database tables: %w", scanError)
+	}
+
+	holdsForeignTables := tableCount > 0 && migrationTableCount == 0
+	if holdsForeignTables {
+		return fmt.Errorf("%s: %w", sqlitePath, ErrUnrecognizedDatabase)
+	}
+
+	return nil
 }
