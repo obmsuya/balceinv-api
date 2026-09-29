@@ -75,9 +75,13 @@ func TestDesktopDefaults(t *testing.T) {
 
 func TestCloudParsesOriginList(t *testing.T) {
 	loadedConfig, loadError := config.LoadFrom(lookupFrom(map[string]string{
-		"DATABASE_URL":    "postgres://x",
-		"ALLOWED_ORIGINS": " https://app.example.com , ,tauri://localhost ",
-		"LISTEN_ADDR":     "0.0.0.0:8080",
+		"DATABASE_URL":         "postgres://x",
+		"ALLOWED_ORIGINS":      " https://app.example.com , ,tauri://localhost ",
+		"LISTEN_ADDR":          "0.0.0.0:8080",
+		"S3_ENDPOINT":          "http://garage:3900",
+		"S3_BUCKET":            "balce-media",
+		"S3_ACCESS_KEY_ID":     "key",
+		"S3_SECRET_ACCESS_KEY": "secret",
 	}))
 	if loadError != nil {
 		t.Fatalf("cloud config: %v", loadError)
@@ -88,5 +92,35 @@ func TestCloudParsesOriginList(t *testing.T) {
 	}
 	if len(loadedConfig.AllowedOrigins) != 2 || loadedConfig.AllowedOrigins[0] != "https://app.example.com" {
 		t.Fatalf("origins parsed as %v", loadedConfig.AllowedOrigins)
+	}
+}
+
+func TestCloudRequiresCompleteObjectStorage(t *testing.T) {
+	_, missingEndpointError := config.LoadFrom(lookupFrom(map[string]string{
+		"DATABASE_URL":    "postgres://x",
+		"ALLOWED_ORIGINS": "https://app.example.com",
+	}))
+	if missingEndpointError == nil || !strings.Contains(missingEndpointError.Error(), "S3_ENDPOINT") {
+		t.Fatalf("expected S3_ENDPOINT to be required in cloud, got %v", missingEndpointError)
+	}
+
+	_, partialError := config.LoadFrom(lookupFrom(map[string]string{
+		"DB_PATH":     "/tmp/balce/balce.sqlite",
+		"S3_ENDPOINT": "http://garage:3900",
+	}))
+	if partialError == nil || !strings.Contains(partialError.Error(), "S3_BUCKET") || !strings.Contains(partialError.Error(), "S3_SECRET_ACCESS_KEY") {
+		t.Fatalf("expected every missing S3 value to be listed, got %v", partialError)
+	}
+}
+
+func TestDesktopKeepsMediaNextToTheDatabase(t *testing.T) {
+	loadedConfig, loadError := config.LoadFrom(lookupFrom(map[string]string{
+		"DB_PATH": "/tmp/balce-desktop/balce.sqlite",
+	}))
+	if loadError != nil {
+		t.Fatalf("desktop config: %v", loadError)
+	}
+	if loadedConfig.MediaDirectory != "/tmp/balce-desktop/media" {
+		t.Fatalf("media directory %s, want next to the database", loadedConfig.MediaDirectory)
 	}
 }

@@ -27,6 +27,16 @@ type SetupResultView struct {
 	UserId    uuid.UUID `json:"user_id"`
 }
 
+type Branding struct {
+	Name             string
+	LogoKey          *string
+	PrimaryColor     string
+	CurrencyCode     string
+	CurrencyDecimals int
+	Timezone         string
+	DefaultLocale    string
+}
+
 type ShopSummary struct {
 	Id   uuid.UUID `json:"id"`
 	Name string    `json:"name"`

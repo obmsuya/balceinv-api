@@ -11,6 +11,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/logging"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
 )
@@ -51,7 +52,13 @@ func main() {
 	}
 	defer openDatabase.Close()
 
-	application := server.New(loadedConfig, openDatabase, logFileWriter.WriteSeparator)
+	objectStore, storageError := storage.Open(loadedConfig)
+	if storageError != nil {
+		slog.Error("startup aborted: object storage unavailable", "error", storageError)
+		os.Exit(1)
+	}
+
+	application := server.New(loadedConfig, openDatabase, objectStore, logFileWriter.WriteSeparator)
 
 	shutdownSignals := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignals, syscall.SIGINT, syscall.SIGTERM)

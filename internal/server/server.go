@@ -5,6 +5,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -12,7 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
-func New(loadedConfig *config.Config, openDatabase *database.Database, writeLogSeparator func()) *fiber.App {
+func New(loadedConfig *config.Config, openDatabase *database.Database, objectStore storage.Store, writeLogSeparator func()) *fiber.App {
 	application := fiber.New(fiber.Config{
 		AppName:               "Balce API",
 		ErrorHandler:          httpx.ErrorHandler,
@@ -33,7 +34,7 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, writeLogS
 
 	application.Use(httpx.OriginGuard(loadedConfig.AllowedOrigins))
 
-	registerRoutes(application, openDatabase)
+	registerRoutes(application, openDatabase, objectStore)
 
 	return application
 }

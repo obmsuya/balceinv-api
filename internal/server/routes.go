@@ -9,23 +9,27 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
+	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
-func registerRoutes(application *fiber.App, openDatabase *database.Database) {
+func registerRoutes(application *fiber.App, openDatabase *database.Database, objectStore storage.Store) {
 	isPostgres := openDatabase.IsPostgres()
 
 	accessRepository := access.NewRepository()
 	usersRepository := users.NewRepository()
 	tenancyRepository := tenancy.NewRepository()
+	settingsRepository := settings.NewRepository()
 
 	accessService := access.NewService(accessRepository)
 	usersService := users.NewService(usersRepository, accessRepository)
-	tenancyService := tenancy.NewService(tenancyRepository, accessService, usersRepository)
+	tenancyService := tenancy.NewService(tenancyRepository, accessService, usersRepository, settingsRepository)
+	settingsService := settings.NewService(settingsRepository, objectStore)
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
 
 	platformHandler := platform.NewHandler(openDatabase)
@@ -33,6 +37,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database) {
 	authHandler := auth.NewHandler(authService, isPostgres)
 	usersHandler := users.NewHandler(usersService)
 	accessHandler := access.NewHandler(accessService)
+	settingsHandler := settings.NewHandler(settingsService)
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -68,6 +73,11 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database) {
 	application.Post("/api/roles", permitted("roles:create", accessHandler.CreateRole)...)
 	application.Put("/api/roles/:id", permitted("roles:edit", accessHandler.RenameRole)...)
 	application.Delete("/api/roles/:id", permitted("roles:delete", accessHandler.DeleteRole)...)
+
+	application.Get("/api/settings", permitted("settings:view", settingsHandler.Get)...)
+	application.Put("/api/settings", permitted("settings:edit", settingsHandler.Update)...)
+	application.Post("/api/settings/upload-logo", permitted("settings:edit", settingsHandler.UploadLogo)...)
+	application.Get("/api/branding/logo/:companyId/:fileName", settingsHandler.ServeLogo)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)

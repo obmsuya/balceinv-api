@@ -73,16 +73,28 @@ func (repository *Repository) InsertShop(ctx context.Context, querier database.Q
 	return nil
 }
 
-func (repository *Repository) FindCompanyName(ctx context.Context, querier database.Querier, companyId uuid.UUID) (string, error) {
-	query := `SELECT name FROM companies WHERE id = $1`
+func (repository *Repository) FindBranding(ctx context.Context, querier database.Querier, companyId uuid.UUID) (Branding, error) {
+	query := `
+		SELECT name, logo_key, primary_color, currency_code, currency_decimals, timezone, default_locale
+		FROM companies
+		WHERE id = $1
+	`
 
-	companyName := ""
-	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(&companyName)
+	companyBranding := Branding{}
+	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(
+		&companyBranding.Name,
+		&companyBranding.LogoKey,
+		&companyBranding.PrimaryColor,
+		&companyBranding.CurrencyCode,
+		&companyBranding.CurrencyDecimals,
+		&companyBranding.Timezone,
+		&companyBranding.DefaultLocale,
+	)
 	if scanError != nil {
-		return "", fmt.Errorf("failed to read company name: %w", scanError)
+		return Branding{}, fmt.Errorf("failed to read company branding: %w", scanError)
 	}
 
-	return companyName, nil
+	return companyBranding, nil
 }
 
 func (repository *Repository) ListWorkableShops(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID, isOwner bool) ([]ShopSummary, error) {
