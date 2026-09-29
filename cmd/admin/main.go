@@ -13,6 +13,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/validation"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 )
@@ -77,7 +78,7 @@ func main() {
 	defer openDatabase.Close()
 
 	accessRepository := access.NewRepository()
-	tenancyService := tenancy.NewService(tenancy.NewRepository(), access.NewService(accessRepository), users.NewRepository())
+	tenancyService := tenancy.NewService(tenancy.NewRepository(), access.NewService(accessRepository), users.NewRepository(), settings.NewRepository())
 
 	setupTransaction, beginError := openDatabase.Writer.BeginTx(commandContext, nil)
 	if beginError != nil {
