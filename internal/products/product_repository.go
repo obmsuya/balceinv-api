@@ -90,6 +90,29 @@ func (repository *Repository) Find(ctx context.Context, querier database.Querier
 	return &foundProducts[0], nil
 }
 
+func (repository *Repository) FindIdByCode(ctx context.Context, querier database.Querier, companyId uuid.UUID, code string) (*uuid.UUID, int, error) {
+	query := `
+		SELECT p.id, COALESCE(b.pack_size, 1)
+		FROM products p
+		LEFT JOIN barcodes b ON b.company_id = p.company_id AND b.product_id = p.id AND b.code = $2
+		WHERE p.company_id = $1 AND p.is_active AND (b.code IS NOT NULL OR lower(p.sku) = lower($2))
+		ORDER BY b.code IS NULL, p.id
+		LIMIT 1
+	`
+
+	productId := uuid.UUID{}
+	packSize := 0
+	scanError := querier.QueryRowContext(ctx, query, companyId, code).Scan(&productId, &packSize)
+	if errors.Is(scanError, sql.ErrNoRows) {
+		return nil, 0, nil
+	}
+	if scanError != nil {
+		return nil, 0, fmt.Errorf("failed to look up product code: %w", scanError)
+	}
+
+	return &productId, packSize, nil
+}
+
 func (repository *Repository) Insert(ctx context.Context, querier database.Querier, newProduct Product) error {
 	query := `
 		INSERT INTO products (id, company_id, parent_id, sku, name, variant_label, price, cost_price,

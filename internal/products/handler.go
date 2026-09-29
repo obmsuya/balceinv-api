@@ -61,6 +61,14 @@ func (handler *Handler) Get(c *fiber.Ctx) error {
 	return response.Success(c, "Product", productView)
 }
 
+func (handler *Handler) Lookup(c *fiber.Ctx) error {
+	lookupView, lookupError := handler.service.Lookup(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("code"))
+	if lookupError != nil {
+		return respondWithServiceError(c, lookupError)
+	}
+	return response.Success(c, "Product", lookupView)
+}
+
 func (handler *Handler) Variants(c *fiber.Ctx) error {
 	parentId, isValidId := httpx.UuidParam(c, "id")
 	if !isValidId {
