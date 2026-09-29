@@ -33,6 +33,7 @@ type Config struct {
 	MediaDirectory          string
 	DataDirectory           string
 	EnforceLicense          bool
+	ExitWithParent          bool
 	LicenseSecret           string
 	S3Endpoint              string
 	S3Bucket                string
@@ -166,6 +167,7 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		MediaDirectory:          mediaDirectory,
 		DataDirectory:           dataDirectory,
 		EnforceLicense:          dataDirectory != "" && readTrimmed(lookup, "BALCE_LICENSE_CHECK") != "off",
+		ExitWithParent:          readTrimmed(lookup, "BALCE_EXIT_WITH_PARENT") == "1",
 		LicenseSecret:           readTrimmed(lookup, "BALCE_LICENSE_SECRET"),
 		S3Endpoint:              s3Endpoint,
 		S3Bucket:                s3Bucket,

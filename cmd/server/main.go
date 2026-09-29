@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -97,6 +98,7 @@ func main() {
 	shutdownSignals := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignals, syscall.SIGINT, syscall.SIGTERM)
 	restartRequests := make(chan struct{}, 1)
+	desktopAppClosed := watchDesktopApp(loadedConfig.ExitWithParent)
 
 	for {
 		listenAddress := loadedConfig.ListenAddress
@@ -124,6 +126,8 @@ func main() {
 			}
 		case receivedSignal := <-shutdownSignals:
 			slog.Info("shutting down", "signal", receivedSignal.String())
+		case <-desktopAppClosed:
+			slog.Info("shutting down", "reason", "the desktop app closed")
 		case <-restartRequests:
 			slog.Info("restarting the listener for the new network setting")
 			shouldRestart = true
@@ -137,6 +141,18 @@ func main() {
 			return
 		}
 	}
+}
+
+func watchDesktopApp(shouldWatch bool) <-chan struct{} {
+	if !shouldWatch {
+		return nil
+	}
+	appClosed := make(chan struct{})
+	go func() {
+		io.Copy(io.Discard, os.Stdin)
+		close(appClosed)
+	}()
+	return appClosed
 }
 
 func seedCommonProducts(ctx context.Context, openDatabase *database.Database) (int, error) {
