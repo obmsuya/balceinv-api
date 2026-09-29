@@ -166,7 +166,7 @@ func checkReportExports(t *testing.T, harness *apptest.Harness) {
 	summaryHeader := rowStartingWith(t, workbook, "Summary", "Item")
 	takingsLabel, _ := workbook.GetCellValue("Summary", "A"+strconv.Itoa(summaryHeader+1))
 	summaryTakings, _ := workbook.GetCellValue("Summary", "B"+strconv.Itoa(summaryHeader+1), excelize.Options{RawCellValue: true})
-	if takingsLabel != "Takings (incl. tax)" || summaryTakings != "4720" {
+	if takingsLabel != "Takings (incl. tax) (TZS)" || summaryTakings != "4720" {
 		t.Fatalf("the summary started %q = %q", takingsLabel, summaryTakings)
 	}
 	filterHeader := rowStartingWith(t, workbook, "Filters", "Filter")

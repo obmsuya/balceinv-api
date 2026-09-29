@@ -36,7 +36,10 @@ const (
 	pdfMarginTop       = 10.0
 	pdfMarginBottom    = 14.0
 	pdfTableRowHeight  = 6.5
+	pdfTallHeaderRow   = 9.5
 	pdfTableFontSize   = 8.0
+	pdfHeaderFontSize  = 7.5
+	pdfBoldCharEm      = 0.56
 	pdfTextTop         = 1.8
 	pdfCellPadding     = 1.5
 	pdfCardsPerRow     = 4
@@ -293,11 +296,12 @@ func (writer *pdfWriter) addCards() {
 
 func (writer *pdfWriter) addTable(table Table) {
 	columnSizes := columnGridSizes(table.Columns)
-	writer.keepTogether(pdfSectionTitleRow + 3*pdfTableRowHeight)
+	headerHeight := writer.tableHeaderHeight(table.Columns, columnSizes)
+	writer.keepTogether(pdfSectionTitleRow + headerHeight + 2*pdfTableRowHeight)
 	if table.Title != "" {
 		writer.add(text.NewRow(pdfSectionTitleRow, table.Title, props.Text{Size: 11, Style: fontstyle.Bold, Top: 2}))
 	}
-	writer.addTableHeader(table.Columns, columnSizes)
+	writer.addTableHeader(table.Columns, columnSizes, headerHeight)
 
 	if len(table.Rows) == 0 {
 		writer.add(text.NewRow(pdfTableRowHeight, Label(writer.language, "nothingToShow"), props.Text{Size: pdfTableFontSize, Color: pdfMutedText, Top: pdfTextTop, Left: pdfCellPadding}))
@@ -307,7 +311,7 @@ func (writer *pdfWriter) addTable(table Table) {
 
 	for rowIndex, rowValues := range table.Rows {
 		if !writer.fits(pdfTableRowHeight) {
-			writer.addTableHeader(table.Columns, columnSizes)
+			writer.addTableHeader(table.Columns, columnSizes, headerHeight)
 		}
 		dataRow := row.New(pdfTableRowHeight)
 		for columnIndex, column := range table.Columns {
@@ -326,21 +330,45 @@ func (writer *pdfWriter) addTable(table Table) {
 	totalsRow := writer.totalsRow(table, columnSizes)
 	if totalsRow != nil {
 		if !writer.fits(pdfTableRowHeight) {
-			writer.addTableHeader(table.Columns, columnSizes)
+			writer.addTableHeader(table.Columns, columnSizes, headerHeight)
 		}
 		writer.add(totalsRow)
 	}
 	writer.add(row.New(5))
 }
 
-func (writer *pdfWriter) addTableHeader(columns []Column, columnSizes []int) {
-	headerRow := row.New(pdfTableRowHeight)
+func (writer *pdfWriter) tableHeaderHeight(columns []Column, columnSizes []int) float64 {
 	for columnIndex, column := range columns {
-		headerRow.Add(text.NewCol(columnSizes[columnIndex], truncateToWidth(column.Title, writer.columnWidth(columnSizes[columnIndex])-2*pdfCellPadding, pdfTableFontSize), props.Text{
-			Size:  pdfTableFontSize,
+		if utf8.RuneCountInString(column.Title) > writer.headerCapacity(columnSizes[columnIndex]) {
+			return pdfTallHeaderRow
+		}
+	}
+	return pdfTableRowHeight
+}
+
+func (writer *pdfWriter) headerCapacity(columnSize int) int {
+	return int((writer.columnWidth(columnSize) - 2*pdfCellPadding) / (pdfHeaderFontSize * pdfPointToMm * pdfBoldCharEm))
+}
+
+func (writer *pdfWriter) addTableHeader(columns []Column, columnSizes []int, headerHeight float64) {
+	headerRow := row.New(headerHeight)
+	for columnIndex, column := range columns {
+		headerTitle := column.Title
+		headerCapacity := writer.headerCapacity(columnSizes[columnIndex])
+		headerTextTop := pdfTextTop + (headerHeight-pdfTableRowHeight)/2
+		if utf8.RuneCountInString(headerTitle) > headerCapacity {
+			headerTextTop = 1.5
+		}
+		if headerHeight == pdfTableRowHeight {
+			headerTitle = truncateRunes(headerTitle, max(headerCapacity, 1))
+		} else if utf8.RuneCountInString(headerTitle) > 2*headerCapacity-2 {
+			headerTitle = truncateRunes(headerTitle, max(2*headerCapacity-3, 1)) + "…"
+		}
+		headerRow.Add(text.NewCol(columnSizes[columnIndex], headerTitle, props.Text{
+			Size:  pdfHeaderFontSize,
 			Style: fontstyle.Bold,
 			Color: pdfWhite,
-			Top:   pdfTextTop,
+			Top:   headerTextTop,
 			Left:  pdfCellPadding,
 			Right: pdfCellPadding,
 			Align: alignmentFor(column.Kind),

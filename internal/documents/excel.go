@@ -105,7 +105,11 @@ func (writer *excelWriter) sheetTables() []excelSheetTable {
 		cardRows := [][]any{}
 		cardKinds := []Kind{}
 		for _, card := range writer.document.Cards {
-			cardRows = append(cardRows, []any{card.Label, card.Value})
+			cardLabel := card.Label
+			if card.Kind == Money && writer.branding.CurrencyCode != "" {
+				cardLabel += " (" + writer.branding.CurrencyCode + ")"
+			}
+			cardRows = append(cardRows, []any{cardLabel, card.Value})
 			cardKinds = append(cardKinds, card.Kind)
 		}
 		sheetTables = append(sheetTables, excelSheetTable{
