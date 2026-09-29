@@ -201,3 +201,48 @@ func TestUserListIsPaginatedWithoutExtraQueries(t *testing.T) {
 		}
 	})
 }
+
+func TestUserEditorsCannotReachAboveTheirOwnPermissions(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Reach Shop", "owner@reach.test")
+		shopIds := []string{company.ShopId.String()}
+
+		supervisorRoleId := createRole(t, harness, company.OwnerToken, "Supervisor", []string{"users:view", "users:create", "users:edit", "sales:create"})
+		managerRoleId := createRole(t, harness, company.OwnerToken, "Manager", []string{"users:view", "users:edit", "sales:create", "reports:view", "settings:edit"})
+		cashierRoleId := createRole(t, harness, company.OwnerToken, "Cashier", []string{"sales:create"})
+
+		supervisorId := createUser(t, harness, company.OwnerToken, "supervisor@reach.test", supervisorRoleId, shopIds).Data()["id"].(string)
+		managerId := createUser(t, harness, company.OwnerToken, "manager@reach.test", managerRoleId, shopIds).Data()["id"].(string)
+		supervisorToken := harness.MustLogin("supervisor@reach.test", "user-password-1")
+
+		if answer := createUser(t, harness, supervisorToken, "new-manager@reach.test", managerRoleId, shopIds); answer.Status != http.StatusForbidden || answer.Code() != "cannot_grant_unheld_permission" {
+			t.Fatalf("a supervisor created a manager: %d %v", answer.Status, answer.Body)
+		}
+		if answer := harness.Call(http.MethodPost, "/api/roles/assign", supervisorToken, map[string]any{"user_id": supervisorId, "role_id": managerRoleId}); answer.Status != http.StatusForbidden {
+			t.Fatalf("a supervisor promoted themselves: %d %v", answer.Status, answer.Body)
+		}
+		if answer := harness.Call(http.MethodPost, "/api/users/update-password", supervisorToken, map[string]any{"user_id": managerId, "new_password": "taken-over-123"}); answer.Status != http.StatusForbidden || answer.Code() != "user_above_you" {
+			t.Fatalf("a supervisor reset a manager's password: %d %v", answer.Status, answer.Body)
+		}
+		if answer := harness.Call(http.MethodDelete, "/api/users/"+managerId, supervisorToken, nil); answer.Status != http.StatusForbidden {
+			t.Fatalf("a supervisor turned off a manager: %d %v", answer.Status, answer.Body)
+		}
+		managerLogin := harness.Call(http.MethodPost, "/api/auth/login", "", map[string]any{"email": "manager@reach.test", "password": "user-password-1"})
+		if managerLogin.Status != http.StatusOK {
+			t.Fatalf("the manager's password changed: %d", managerLogin.Status)
+		}
+
+		cashierAnswer := createUser(t, harness, supervisorToken, "cashier@reach.test", cashierRoleId, shopIds)
+		if cashierAnswer.Status != http.StatusCreated {
+			t.Fatalf("a supervisor could not add a cashier: %d %v", cashierAnswer.Status, cashierAnswer.Body)
+		}
+		cashierId := cashierAnswer.Data()["id"].(string)
+		if answer := harness.Call(http.MethodPost, "/api/users/update-password", supervisorToken, map[string]any{"user_id": cashierId, "new_password": "cashier-new-123"}); answer.Status != http.StatusOK {
+			t.Fatalf("a supervisor could not reset a cashier's password: %d %v", answer.Status, answer.Body)
+		}
+		if answer := harness.Call(http.MethodPost, "/api/roles/assign", company.OwnerToken, map[string]any{"user_id": cashierId, "role_id": managerRoleId}); answer.Status != http.StatusOK {
+			t.Fatalf("the owner could not promote a cashier: %d %v", answer.Status, answer.Body)
+		}
+	})
+}
