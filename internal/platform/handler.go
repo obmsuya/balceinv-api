@@ -32,3 +32,16 @@ func (handler *Handler) Health(c *fiber.Ctx) error {
 		"engine": handler.openDatabase.Engine,
 	})
 }
+
+func (handler *Handler) Describe(c *fiber.Ctx) error {
+	platformMode := "desktop"
+	if handler.openDatabase.IsPostgres() {
+		platformMode = "cloud"
+	}
+
+	return response.Success(c, "Platform", fiber.Map{
+		"mode":        platformMode,
+		"lan_enabled": false,
+		"lan_urls":    []string{},
+	})
+}

@@ -19,12 +19,12 @@ const (
 )
 
 type Config struct {
-	Engine         Engine
-	DatabaseUrl    string
-	SqlitePath     string
-	ListenAddress  string
-	AllowedOrigins []string
-	LogDirectory   string
+	Engine          Engine
+	DatabaseUrl     string
+	SqlitePath      string
+	ListenAddress   string
+	AllowedOrigins  []string
+	LogDirectory    string
 	StaticDirectory string
 }
 
