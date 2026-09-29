@@ -111,7 +111,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Post("/api/setup", requestTransaction, tenancyHandler.RunFirstSetup)
 	}
 
-	application.Post("/api/auth/login", newLoginLimiter(), authHandler.Login)
+	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)
 	application.Post("/api/auth/logout", signedIn(authHandler.Logout)...)
 	application.Get("/api/auth/me", signedIn(authHandler.Me)...)
 	application.Post("/api/auth/switch-shop", signedIn(authHandler.SwitchShop)...)
@@ -257,6 +257,20 @@ func newPhoneUploadLimiter() fiber.Handler {
 		Expiration: time.Minute,
 		LimitReached: func(c *fiber.Ctx) error {
 			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many photos. Try again in a minute")
+		},
+	})
+}
+
+func newLoginAddressLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:                    30,
+		Expiration:             time.Minute,
+		SkipSuccessfulRequests: true,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many sign-in attempts. Try again in a minute")
 		},
 	})
 }

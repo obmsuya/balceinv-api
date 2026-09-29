@@ -3,6 +3,7 @@ package auth_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -100,6 +101,18 @@ func TestLoginFailuresLookIdenticalAndAreRateLimited(t *testing.T) {
 		sixthAttempt := harness.Call(http.MethodPost, "/api/auth/login", "", map[string]any{"email": company.OwnerEmail, "password": "still-wrong"})
 		if sixthAttempt.Status != http.StatusTooManyRequests {
 			t.Fatalf("sixth failed attempt returned %d, want 429", sixthAttempt.Status)
+		}
+
+		sprayLimited := false
+		for sprayNumber := 1; sprayNumber <= 30; sprayNumber++ {
+			sprayAttempt := harness.Call(http.MethodPost, "/api/auth/login", "", map[string]any{"email": fmt.Sprintf("spray%d@rate.test", sprayNumber), "password": "guess-1234"})
+			if sprayAttempt.Status == http.StatusTooManyRequests {
+				sprayLimited = true
+				break
+			}
+		}
+		if !sprayLimited {
+			t.Fatal("changing the email on every try got around the sign-in limit")
 		}
 
 		failedAttempts := harness.QueryIntForCompany(company.Id, `SELECT COUNT(*) FROM login_attempts WHERE email = $1 AND NOT succeeded`, company.OwnerEmail)

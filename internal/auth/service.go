@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -57,25 +58,9 @@ func (service *Service) Login(ctx context.Context, rawEmail string, password str
 	normalizedEmail := users.NormalizeEmail(rawEmail)
 	attemptedAt := time.Now().UTC()
 
-	loginTransaction, beginError := service.openDatabase.Writer.BeginTx(ctx, nil)
-	if beginError != nil {
-		return LoginOutcome{}, fmt.Errorf("failed to begin login transaction: %w", beginError)
-	}
-	defer loginTransaction.Rollback()
-
-	enableLookupError := database.SetAuthLookup(ctx, loginTransaction, isPostgres, true)
-	if enableLookupError != nil {
-		return LoginOutcome{}, enableLookupError
-	}
-
-	loginCandidate, findCandidateError := service.repository.FindLoginCandidate(ctx, loginTransaction, normalizedEmail)
+	loginCandidate, findCandidateError := service.findLoginCandidate(ctx, normalizedEmail)
 	if findCandidateError != nil {
 		return LoginOutcome{}, findCandidateError
-	}
-
-	disableLookupError := database.SetAuthLookup(ctx, loginTransaction, isPostgres, false)
-	if disableLookupError != nil {
-		return LoginOutcome{}, disableLookupError
 	}
 
 	isKnownEmail := loginCandidate != nil
@@ -86,6 +71,12 @@ func (service *Service) Login(ctx context.Context, rawEmail string, password str
 		security.SpendComparisonTime(password)
 	}
 	isAccepted := isKnownEmail && passwordMatches && loginCandidate.IsActive
+
+	loginTransaction, beginError := service.openDatabase.Writer.BeginTx(ctx, nil)
+	if beginError != nil {
+		return LoginOutcome{}, fmt.Errorf("failed to begin login transaction: %w", beginError)
+	}
+	defer loginTransaction.Rollback()
 
 	loginAttempt := LoginAttempt{
 		Id:        uuid.Must(uuid.NewV7()),
@@ -166,6 +157,22 @@ func (service *Service) Login(ctx context.Context, rawEmail string, password str
 	}
 
 	return loginOutcome, nil
+}
+
+func (service *Service) findLoginCandidate(ctx context.Context, normalizedEmail string) (*LoginCandidate, error) {
+	isPostgres := service.openDatabase.IsPostgres()
+	lookupTransaction, beginError := service.openDatabase.Reader.BeginTx(ctx, &sql.TxOptions{ReadOnly: isPostgres})
+	if beginError != nil {
+		return nil, fmt.Errorf("failed to begin login lookup: %w", beginError)
+	}
+	defer lookupTransaction.Rollback()
+
+	enableLookupError := database.SetAuthLookup(ctx, lookupTransaction, isPostgres, true)
+	if enableLookupError != nil {
+		return nil, enableLookupError
+	}
+
+	return service.repository.FindLoginCandidate(ctx, lookupTransaction, normalizedEmail)
 }
 
 func (service *Service) Authenticate(ctx context.Context, sessionToken string) (*identity.Principal, error) {
