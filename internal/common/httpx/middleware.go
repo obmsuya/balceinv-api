@@ -74,6 +74,15 @@ func RequestTransaction(openDatabase *database.Database) fiber.Handler {
 		}
 		defer requestTransaction.Rollback()
 
+		principal := CurrentPrincipal(c)
+		isAuthenticated := principal != nil
+		if isAuthenticated {
+			setTenantError := database.SetTenant(c.UserContext(), requestTransaction, openDatabase.IsPostgres(), principal.CompanyId)
+			if setTenantError != nil {
+				return setTenantError
+			}
+		}
+
 		var requestQuerier database.Querier = requestTransaction
 		isCountingQueries := openDatabase.QueryCounter != nil
 		if isCountingQueries {
