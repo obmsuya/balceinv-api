@@ -16,6 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
+	"github.com/chrisostomemataba/balceinv-api/internal/invoices"
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
@@ -76,6 +77,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	salesRepository := sales.NewRepository()
 	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
+	invoicesHandler := invoices.NewHandler(invoices.NewService(salesService, objectStore))
 	stockHandler := stock.NewHandler(stockService)
 	ratesHandler := rates.NewHandler(rates.NewService(openDatabase, rates.NewRepository()), settingsRepository)
 	reportsHandler := reports.NewHandler(reports.NewService(reports.NewRepository(isPostgres), settingsRepository, objectStore))
@@ -232,6 +234,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/sales/fiscal/send-waiting", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendWaitingToEfd)
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
+	application.Get("/api/sales/:id/document", permittedAny(sellingOrViewing, invoicesHandler.SaleDocument)...)
 
 	application.Get("/api/stock", permitted("stock_movements:view", stockHandler.Levels)...)
 	application.Get("/api/stock/summary", permitted("stock_movements:view", stockHandler.Summary)...)
