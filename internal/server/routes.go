@@ -6,11 +6,13 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
 	"github.com/chrisostomemataba/balceinv-api/internal/auth"
+	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
+	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
@@ -29,7 +31,8 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
-func registerRoutes(application *fiber.App, openDatabase *database.Database, objectStore storage.Store, supportPasscodeHash string) {
+func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDatabase *database.Database, objectStore storage.Store, desktop Desktop) {
+	supportPasscodeHash := loadedConfig.SupportPasscodeHash
 	isPostgres := openDatabase.IsPostgres()
 
 	accessRepository := access.NewRepository()
@@ -158,6 +161,21 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
 	application.Get("/api/dashboard", permitted("reports:view", reportsHandler.Dashboard)...)
 	application.Get("/api/exchange-rates", signedIn(ratesHandler.Latest)...)
+
+	if desktop.Backups != nil {
+		backupHandler := backup.NewHandler(desktop.Backups)
+		withoutTransaction := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
+			return []fiber.Handler{authenticate, httpx.RequirePermission(permissionId), routeHandler}
+		}
+		application.Get("/api/backup/status", withoutTransaction("settings:view", backupHandler.Status)...)
+		application.Post("/api/backup/local", withoutTransaction("settings:edit", backupHandler.BackupOnThisComputer)...)
+		application.Post("/api/backup/local/restore", withoutTransaction("settings:edit", backupHandler.RestoreFromThisComputer)...)
+		application.Post("/api/backup/export", withoutTransaction("settings:edit", backupHandler.ExportToFile)...)
+		application.Post("/api/backup/import", withoutTransaction("settings:edit", backupHandler.RestoreFromFile)...)
+		application.Get("/api/backup/cloud", withoutTransaction("settings:view", backupHandler.ListCloud)...)
+		application.Post("/api/backup/cloud", withoutTransaction("settings:edit", backupHandler.BackupToCloud)...)
+		application.Post("/api/backup/cloud/restore", withoutTransaction("settings:edit", backupHandler.RestoreFromCloud)...)
+	}
 	application.Get("/api/reports/summary", permitted("reports:view", reportsHandler.Summary)...)
 	application.Get("/api/reports/daily", permitted("reports:view", reportsHandler.Daily)...)
 	application.Get("/api/reports/products", permitted("reports:view", reportsHandler.Products)...)
