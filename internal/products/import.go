@@ -8,6 +8,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/spreadsheet"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -72,9 +73,12 @@ func (service *Service) ImportProducts(ctx context.Context, querier database.Que
 		Problems: []ImportProblem{},
 	}
 
-	fileRows, readError := readSpreadsheetRows(fileName, fileReader)
+	fileRows, readError := spreadsheet.ReadRows(fileName, fileReader)
+	if errors.Is(readError, spreadsheet.ErrUnsupportedFileType) {
+		return emptyResult, ErrImportFileType
+	}
 	if readError != nil {
-		return emptyResult, readError
+		return emptyResult, ErrImportUnreadable
 	}
 
 	currencyDecimals, decimalsError := service.repository.FindCurrencyDecimals(ctx, querier, principal.CompanyId)

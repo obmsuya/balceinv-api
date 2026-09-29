@@ -1,66 +1,18 @@
 package products
 
 import (
-	"bytes"
-	"encoding/csv"
 	"fmt"
-	"io"
 	"math"
-	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/xuri/excelize/v2"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/spreadsheet"
 )
-
-func readSpreadsheetRows(fileName string, fileReader io.Reader) ([][]string, error) {
-	switch strings.ToLower(filepath.Ext(fileName)) {
-	case ".xlsx":
-		spreadsheet, openError := excelize.OpenReader(fileReader)
-		if openError != nil {
-			return nil, ErrImportUnreadable
-		}
-		defer spreadsheet.Close()
-
-		sheetRows, sheetReadError := spreadsheet.GetRows(spreadsheet.GetSheetName(0))
-		if sheetReadError != nil {
-			return nil, ErrImportUnreadable
-		}
-		return sheetRows, nil
-	case ".csv":
-		csvBytes, csvReadError := io.ReadAll(fileReader)
-		if csvReadError != nil {
-			return nil, ErrImportUnreadable
-		}
-		return parseCsvRows(csvBytes)
-	default:
-		return nil, ErrImportFileType
-	}
-}
-
-func parseCsvRows(csvBytes []byte) ([][]string, error) {
-	withoutByteOrderMark := bytes.TrimPrefix(csvBytes, []byte("\xef\xbb\xbf"))
-	csvReader := csv.NewReader(bytes.NewReader(withoutByteOrderMark))
-	csvReader.FieldsPerRecord = -1
-	csvReader.LazyQuotes = true
-
-	firstLine, _, _ := bytes.Cut(withoutByteOrderMark, []byte("\n"))
-	usesSemicolons := bytes.Count(firstLine, []byte(";")) > bytes.Count(firstLine, []byte(","))
-	if usesSemicolons {
-		csvReader.Comma = ';'
-	}
-
-	csvRows, parseError := csvReader.ReadAll()
-	if parseError != nil {
-		return nil, ErrImportUnreadable
-	}
-	return csvRows, nil
-}
 
 func parseImportRows(fileRows [][]string, currencyDecimals int, hasActiveShop bool) ([]importRow, []ImportProblem, error) {
 	headerRowIndex := -1
 	for rowIndex, fileRow := range fileRows {
-		if !isBlankRow(fileRow) {
+		if !spreadsheet.IsBlankRow(fileRow) {
 			headerRowIndex = rowIndex
 			break
 		}
@@ -93,7 +45,7 @@ func parseImportRows(fileRows [][]string, currencyDecimals int, hasActiveShop bo
 	firstRowByBarcode := map[string]int{}
 
 	for dataRowIndex, dataRow := range dataRows {
-		if isBlankRow(dataRow) {
+		if spreadsheet.IsBlankRow(dataRow) {
 			continue
 		}
 		spreadsheetRowNumber := headerRowIndex + dataRowIndex + 2
@@ -294,15 +246,6 @@ func hasField(fieldByColumn map[int]string, fieldName string) bool {
 		}
 	}
 	return false
-}
-
-func isBlankRow(fileRow []string) bool {
-	for _, cellValue := range fileRow {
-		if strings.TrimSpace(cellValue) != "" {
-			return false
-		}
-	}
-	return true
 }
 
 func countRowsWithProblems(rowProblems []ImportProblem, parsedRows []importRow) int {
