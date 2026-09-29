@@ -69,6 +69,68 @@ func OpenMigrated(t *testing.T, engineCase EngineCase) *database.Database {
 	return openDatabase
 }
 
+func OpenMigratedAsApp(t *testing.T, engineCase EngineCase) *database.Database {
+	t.Helper()
+
+	isSqlite := engineCase.Engine == config.EngineSqlite
+	if isSqlite {
+		return OpenMigrated(t, engineCase)
+	}
+
+	migratedAsAdmin := OpenMigrated(t, engineCase)
+	grantAppRole(t, migratedAsAdmin)
+
+	parsedUrl, parseError := url.Parse(engineCase.DatabaseUrl)
+	if parseError != nil {
+		t.Fatalf("parse scratch url: %v", parseError)
+	}
+	parsedUrl.User = url.UserPassword(testAppRoleName, testAppRoleName)
+
+	testContext, cancelTest := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelTest()
+
+	appDatabase, openError := database.Open(testContext, config.EnginePostgres, parsedUrl.String(), "")
+	if openError != nil {
+		t.Fatalf("open as app role: %v", openError)
+	}
+	t.Cleanup(func() {
+		appDatabase.Close()
+	})
+
+	return appDatabase
+}
+
+const testAppRoleName = "balce_test_app"
+
+func grantAppRole(t *testing.T, adminDatabase *database.Database) {
+	t.Helper()
+
+	createRoleStatement := `
+		DO $$
+		BEGIN
+			CREATE ROLE balce_test_app LOGIN PASSWORD 'balce_test_app' NOSUPERUSER NOBYPASSRLS;
+		EXCEPTION WHEN duplicate_object OR unique_violation THEN
+			NULL;
+		END
+		$$
+	`
+	_, createRoleError := adminDatabase.Writer.Exec(createRoleStatement)
+	if createRoleError != nil {
+		t.Fatalf("create app role: %v", createRoleError)
+	}
+
+	grantStatements := []string{
+		`GRANT USAGE ON SCHEMA public TO balce_test_app`,
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO balce_test_app`,
+	}
+	for _, grantStatement := range grantStatements {
+		_, grantError := adminDatabase.Writer.Exec(grantStatement)
+		if grantError != nil {
+			t.Fatalf("grant app role: %v", grantError)
+		}
+	}
+}
+
 func createScratchPostgresDatabase(t *testing.T, adminDatabaseUrl string) string {
 	t.Helper()
 
