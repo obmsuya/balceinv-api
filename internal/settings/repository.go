@@ -38,7 +38,8 @@ func (repository *Repository) FindSettings(ctx context.Context, querier database
 		       notification_email, alert_sound_enabled, alert_on_low_stock, alert_on_out_of_stock,
 		       alert_on_dead_stock, dead_stock_days, print_receipt_automatically, show_tax_on_receipt,
 		       show_barcodes_on_receipt, printer_enabled, printer_port, printer_model, printer_baud_rate,
-		       printer_paper_width, open_cash_drawer, updated_by, created_at, updated_at
+		       printer_paper_width, open_cash_drawer, till_numpad_enabled, customer_display_enabled,
+		       updated_by, created_at, updated_at
 		FROM settings
 		WHERE company_id = $1
 	`
@@ -70,6 +71,8 @@ func (repository *Repository) FindSettings(ctx context.Context, querier database
 		&foundSettings.PrinterBaudRate,
 		&foundSettings.PrinterPaperWidth,
 		&foundSettings.OpenCashDrawer,
+		&foundSettings.TillNumpadEnabled,
+		&foundSettings.CustomerDisplayEnabled,
 		&foundSettings.UpdatedBy,
 		&foundSettings.CreatedAt,
 		&foundSettings.UpdatedAt,
@@ -93,8 +96,8 @@ func (repository *Repository) SaveSettings(ctx context.Context, querier database
 		    alert_on_low_stock = $13, alert_on_out_of_stock = $14, alert_on_dead_stock = $15,
 		    dead_stock_days = $16, print_receipt_automatically = $17, show_tax_on_receipt = $18,
 		    show_barcodes_on_receipt = $19, printer_enabled = $20, printer_port = $21, printer_model = $22,
-		    printer_baud_rate = $23, printer_paper_width = $24, open_cash_drawer = $25, updated_by = $26,
-		    updated_at = $27
+		    printer_baud_rate = $23, printer_paper_width = $24, open_cash_drawer = $25, till_numpad_enabled = $26,
+		    customer_display_enabled = $27, updated_by = $28, updated_at = $29
 		WHERE company_id = $1
 	`
 
@@ -124,6 +127,8 @@ func (repository *Repository) SaveSettings(ctx context.Context, querier database
 		changedSettings.PrinterBaudRate,
 		changedSettings.PrinterPaperWidth,
 		changedSettings.OpenCashDrawer,
+		changedSettings.TillNumpadEnabled,
+		changedSettings.CustomerDisplayEnabled,
 		changedSettings.UpdatedBy,
 		time.Now().UTC(),
 	)

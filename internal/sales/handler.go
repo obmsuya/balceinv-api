@@ -36,6 +36,15 @@ func (handler *Handler) Quote(c *fiber.Ctx) error {
 	return response.Success(c, "Quote", quoteView)
 }
 
+func (handler *Handler) TillOptions(c *fiber.Ctx) error {
+	principal := httpx.CurrentPrincipal(c)
+	tillOptions, optionsError := handler.service.TillOptions(c.UserContext(), httpx.RequestQuerier(c), principal.CompanyId)
+	if optionsError != nil {
+		return respondWithServiceError(c, optionsError)
+	}
+	return response.Success(c, "Till options", tillOptions)
+}
+
 func (handler *Handler) Create(c *fiber.Ctx) error {
 	request := SaleRequest{}
 	isValid, bindResponseError := httpx.BindAndValidate(c, &request)

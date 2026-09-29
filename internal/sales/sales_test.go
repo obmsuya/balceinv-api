@@ -258,3 +258,35 @@ func TestCurrencyLocksAfterTheFirstSale(t *testing.T) {
 		}
 	})
 }
+
+func TestTillOptionsFollowSettingsAndReachCashiers(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Options Shop", "owner@options.test")
+		cashierToken := harness.CreateStaff(company, "cashier@options.test", []string{"sales:create"}, []uuid.UUID{company.ShopId})
+		viewerToken := harness.CreateStaff(company, "viewer@options.test", []string{"sales:view"}, []uuid.UUID{company.ShopId})
+
+		defaults := harness.Call(http.MethodGet, "/api/sales/till", cashierToken, nil)
+		if defaults.Status != http.StatusOK || defaults.Data()["numpad_enabled"] != false || defaults.Data()["customer_display_enabled"] != false || defaults.Data()["efd_enabled"] != false {
+			t.Fatalf("default till options returned %d %v", defaults.Status, defaults.Body)
+		}
+
+		turnOn := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"till_numpad_enabled": true, "customer_display_enabled": true})
+		if turnOn.Status != http.StatusOK || turnOn.Data()["till_numpad_enabled"] != true || turnOn.Data()["customer_display_enabled"] != true {
+			t.Fatalf("turning the till options on returned %d %v", turnOn.Status, turnOn.Body)
+		}
+
+		cashierView := harness.Call(http.MethodGet, "/api/sales/till", cashierToken, nil)
+		if cashierView.Data()["numpad_enabled"] != true || cashierView.Data()["customer_display_enabled"] != true {
+			t.Fatalf("the cashier saw %v", cashierView.Body)
+		}
+		if harness.Call(http.MethodGet, "/api/sales/till", viewerToken, nil).Status != http.StatusForbidden {
+			t.Fatal("someone who cannot sell read the till options")
+		}
+
+		turnOff := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"customer_display_enabled": false})
+		if turnOff.Data()["customer_display_enabled"] != false || turnOff.Data()["till_numpad_enabled"] != true {
+			t.Fatalf("turning one option off changed the other: %v", turnOff.Body)
+		}
+	})
+}

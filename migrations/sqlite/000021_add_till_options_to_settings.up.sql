@@ -1,0 +1,2 @@
+ALTER TABLE settings ADD COLUMN till_numpad_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE settings ADD COLUMN customer_display_enabled BOOLEAN NOT NULL DEFAULT FALSE;

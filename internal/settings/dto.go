@@ -49,6 +49,8 @@ type SettingsView struct {
 	PrinterBaudRate           int         `json:"printer_baud_rate"`
 	PrinterPaperWidth         int         `json:"printer_paper_width"`
 	OpenCashDrawer            bool        `json:"open_cash_drawer"`
+	TillNumpadEnabled         bool        `json:"till_numpad_enabled"`
+	CustomerDisplayEnabled    bool        `json:"customer_display_enabled"`
 	UpdatedAt                 time.Time   `json:"updated_at"`
 }
 
@@ -89,4 +91,6 @@ type UpdateSettingsRequest struct {
 	PrinterBaudRate           *int     `json:"printer_baud_rate" validate:"omitnil,oneof=9600 19200 38400 57600 115200"`
 	PrinterPaperWidth         *int     `json:"printer_paper_width" validate:"omitnil,oneof=58 80"`
 	OpenCashDrawer            *bool    `json:"open_cash_drawer"`
+	TillNumpadEnabled         *bool    `json:"till_numpad_enabled"`
+	CustomerDisplayEnabled    *bool    `json:"customer_display_enabled"`
 }
