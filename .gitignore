@@ -23,3 +23,5 @@ STEPS.md
 # Revamp server
 logs/
 *.pre-migration-v*
+
+deploy/build/
