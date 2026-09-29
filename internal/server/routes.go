@@ -29,6 +29,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
+	"github.com/chrisostomemataba/balceinv-api/internal/support"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/transfers"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
@@ -246,6 +247,11 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Post("/api/notifications/read-all", permitted("notifications:view", notificationsHandler.MarkAllRead)...)
 	application.Post("/api/notifications/:id/read", permitted("notifications:view", notificationsHandler.MarkRead)...)
 	application.Delete("/api/notifications/read", permitted("notifications:view", notificationsHandler.ClearRead)...)
+
+	supportHandler := support.NewHandler(support.NewService(openDatabase, loadedConfig, objectStore))
+	application.Post("/api/support", authenticate, supportHandler.Submit)
+	application.Get("/api/support/messages", signedIn(supportHandler.Messages)...)
+	application.Get("/api/support/status", signedIn(supportHandler.Status)...)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)
