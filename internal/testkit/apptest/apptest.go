@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -12,8 +13,10 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/server"
+	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
@@ -43,6 +46,7 @@ type Response struct {
 	Status  int
 	Body    map[string]any
 	Headers http.Header
+	Raw     []byte
 }
 
 func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
@@ -57,10 +61,15 @@ func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 		AllowedOrigins: []string{AllowedOrigin},
 	}
 
+	objectStore, storeError := storage.NewLocalStore(t.TempDir())
+	if storeError != nil {
+		t.Fatalf("object store: %v", storeError)
+	}
+
 	harness := &Harness{
 		t:            t,
 		Database:     openDatabase,
-		App:          server.New(testConfig, openDatabase, func() {}),
+		App:          server.New(testConfig, openDatabase, objectStore, func() {}),
 		QueryCounter: queryCounter,
 	}
 
@@ -80,7 +89,7 @@ func (harness *Harness) CreateCompany(businessName string, ownerEmail string) Co
 
 	accessRepository := access.NewRepository()
 	usersRepository := users.NewRepository()
-	tenancyService := tenancy.NewService(tenancy.NewRepository(), access.NewService(accessRepository), usersRepository)
+	tenancyService := tenancy.NewService(tenancy.NewRepository(), access.NewService(accessRepository), usersRepository, settings.NewRepository())
 
 	setupTransaction, beginError := harness.Database.Writer.BeginTx(context.Background(), nil)
 	if beginError != nil {
@@ -175,6 +184,47 @@ func (harness *Harness) Send(method string, path string, sessionToken string, re
 		Status:  testResponse.StatusCode,
 		Body:    decodedBody,
 		Headers: testResponse.Header,
+		Raw:     responseBytes,
+	}
+}
+
+func (harness *Harness) Upload(path string, sessionToken string, fieldName string, fileName string, fileBytes []byte) Response {
+	harness.t.Helper()
+
+	formBody := &bytes.Buffer{}
+	formWriter := multipart.NewWriter(formBody)
+	if fieldName != "" {
+		filePart, partError := formWriter.CreateFormFile(fieldName, fileName)
+		if partError != nil {
+			harness.t.Fatalf("create form file: %v", partError)
+		}
+		filePart.Write(fileBytes)
+	}
+	formWriter.Close()
+
+	testRequest := httptest.NewRequest(http.MethodPost, path, formBody)
+	testRequest.Header.Set("Content-Type", formWriter.FormDataContentType())
+	testRequest.Header.Set("Authorization", "Bearer "+sessionToken)
+
+	testResponse, requestError := harness.App.Test(testRequest, 10000)
+	if requestError != nil {
+		harness.t.Fatalf("upload %s: %v", path, requestError)
+	}
+	defer testResponse.Body.Close()
+
+	responseBytes, readError := io.ReadAll(testResponse.Body)
+	if readError != nil {
+		harness.t.Fatalf("read body: %v", readError)
+	}
+
+	decodedBody := map[string]any{}
+	json.Unmarshal(responseBytes, &decodedBody)
+
+	return Response{
+		Status:  testResponse.StatusCode,
+		Body:    decodedBody,
+		Headers: testResponse.Header,
+		Raw:     responseBytes,
 	}
 }
 
