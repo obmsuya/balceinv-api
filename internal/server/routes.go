@@ -15,12 +15,14 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
 	"github.com/chrisostomemataba/balceinv-api/internal/invoices"
 	"github.com/chrisostomemataba/balceinv-api/internal/legacyimport"
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
+	"github.com/chrisostomemataba/balceinv-api/internal/orders"
 	"github.com/chrisostomemataba/balceinv-api/internal/phoneupload"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/printing"
@@ -78,7 +80,9 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	discountsService := discounts.NewService(discounts.NewRepository())
 	discountsHandler := discounts.NewHandler(discountsService)
 	salesRepository := sales.NewRepository()
-	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService)
+	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository)
+	customersHandler := customers.NewHandler(customersService)
+	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService, customersService)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
 	invoicesHandler := invoices.NewHandler(invoices.NewService(salesService, objectStore))
 	stockHandler := stock.NewHandler(stockService)
@@ -196,6 +200,31 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/sales/totals", permitted("sales:view", salesHandler.Totals)...)
 	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
 	application.Get("/api/dashboard", permitted("reports:view", reportsHandler.Dashboard)...)
+
+	customersOn := customers.FeatureGate(featuresRepository, customers.CustomersOn)
+	viewingOrSelling := []string{"customers:view", "sales:create"}
+	application.Get("/api/customers", permittedAny(viewingOrSelling, customersOn(customersHandler.List))...)
+	application.Post("/api/customers", permitted("customers:create", customersOn(customersHandler.Create))...)
+	application.Get("/api/customers/debtors", permitted("customers:view", customersOn(customersHandler.Debtors))...)
+	application.Get("/api/customers/:id", permittedAny(viewingOrSelling, customersOn(customersHandler.Get))...)
+	application.Put("/api/customers/:id", permitted("customers:edit", customersOn(customersHandler.Update))...)
+	application.Delete("/api/customers/:id", permitted("customers:delete", customersOn(customersHandler.Deactivate))...)
+	application.Post("/api/customers/:id/restore", permitted("customers:edit", customersOn(customersHandler.Restore))...)
+	application.Get("/api/customers/:id/sales", permitted("customers:view", customersOn(customersHandler.Sales))...)
+	application.Get("/api/customers/:id/statement", permitted("customers:view", customersOn(customersHandler.Statement))...)
+	application.Get("/api/customers/:id/payments", permitted("customers:view", customersOn(customersHandler.Payments))...)
+	application.Post("/api/customers/:id/payments", permitted("customers:edit", customersOn(customersHandler.RecordPayment))...)
+	application.Post("/api/customers/:id/payments/:paymentId/void", permitted("customers:edit", customersOn(customersHandler.VoidPayment))...)
+
+	ordersOn := customers.FeatureGate(featuresRepository, customers.OrdersOn)
+	ordersHandler := orders.NewHandler(orders.NewService(orders.NewRepository(), salesService, customersService, stockService))
+	application.Get("/api/orders", permitted("orders:view", ordersOn(ordersHandler.List))...)
+	application.Post("/api/orders", permitted("orders:create", ordersOn(ordersHandler.Create))...)
+	application.Get("/api/orders/:id", permitted("orders:view", ordersOn(ordersHandler.Get))...)
+	application.Post("/api/orders/:id/deposits", permitted("orders:edit", ordersOn(ordersHandler.AddDeposit))...)
+	application.Post("/api/orders/:id/ready", permitted("orders:edit", ordersOn(ordersHandler.MarkReady))...)
+	application.Post("/api/orders/:id/collect", permitted("orders:edit", ordersOn(ordersHandler.Collect))...)
+	application.Post("/api/orders/:id/cancel", permitted("orders:delete", ordersOn(ordersHandler.Cancel))...)
 	application.Get("/api/exchange-rates", signedIn(ratesHandler.Latest)...)
 
 	if loadedConfig.IsDesktop() {

@@ -15,8 +15,8 @@ import (
 )
 
 var receiptLabels = map[string]map[string]string{
-	"en": {"receipt": "Receipt", "date": "Date", "cashier": "Served by", "item": "Item", "amount": "Amount", "subtotal": "Subtotal", "discounts": "Discounts", "total": "TOTAL", "tax": "Includes VAT", "paid": "Paid", "change": "Change", "tin": "TIN", "tel": "Tel", "note": "Note", "efd": "EFD verification", "efdPending": "EFD receipt to follow", "thanks": "Thank you for shopping with us", "cash": "Cash", "card": "Card", "mobile": "Mobile money", "test": "Test print OK"},
-	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "test": "Jaribio la printa limefaulu"},
+	"en": {"receipt": "Receipt", "date": "Date", "cashier": "Served by", "item": "Item", "amount": "Amount", "subtotal": "Subtotal", "discounts": "Discounts", "total": "TOTAL", "tax": "Includes VAT", "paid": "Paid", "change": "Change", "tin": "TIN", "tel": "Tel", "note": "Note", "efd": "EFD verification", "efdPending": "EFD receipt to follow", "thanks": "Thank you for shopping with us", "cash": "Cash", "card": "Card", "mobile": "Mobile money", "customer": "Customer", "credit": "Balance owed", "order": "Order", "test": "Test print OK"},
+	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "customer": "Mteja", "credit": "Deni", "order": "Oda", "test": "Jaribio la printa limefaulu"},
 }
 
 func labelsFor(language string) map[string]string {
@@ -78,6 +78,12 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 	printer.Write(labels["receipt"] + ": " + saleView.ReceiptNumber + "\n")
 	printer.Write(labels["date"] + ": " + saleView.CreatedAt.In(companyLocation).Format("02/01/2006 15:04") + "\n")
 	printer.Write(labels["cashier"] + ": " + saleView.CashierName + "\n")
+	if saleView.CustomerName != nil {
+		printer.Write(fitText(labels["customer"]+": "+*saleView.CustomerName, columns) + "\n")
+	}
+	if saleView.OrderNumber != nil {
+		printer.Write(labels["order"] + ": " + *saleView.OrderNumber + "\n")
+	}
 	printer.Write(strings.Repeat("-", columns) + "\n")
 	printer.SetEmphasize(1)
 	printer.Write(leftRightText(labels["item"], labels["amount"], columns) + "\n")
@@ -123,8 +129,16 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 
 	printer.Write(strings.Repeat("-", columns) + "\n")
 	for _, paymentView := range saleView.Payments {
+		if paymentView.Method == sales.PaymentCredit {
+			continue
+		}
 		methodLabel := labels[paymentView.Method]
 		printer.Write(leftRightText(labels["paid"]+" ("+methodLabel+")", money(paymentView.Amount), columns) + "\n")
+	}
+	if saleView.CreditAmount > 0 {
+		printer.SetEmphasize(1)
+		printer.Write(leftRightText(labels["credit"], money(saleView.CreditAmount), columns) + "\n")
+		printer.SetEmphasize(0)
 	}
 	if saleView.ChangeGiven > 0 {
 		printer.SetEmphasize(1)

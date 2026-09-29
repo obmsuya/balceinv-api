@@ -123,6 +123,8 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 			summary.Payments.Card = amount
 		case "mobile":
 			summary.Payments.Mobile = amount
+		case "credit":
+			summary.Payments.Credit = amount
 		}
 	}
 	return summary, paymentRows.Err()
