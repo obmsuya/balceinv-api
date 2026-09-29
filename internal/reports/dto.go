@@ -23,6 +23,7 @@ type PaymentTotalsView struct {
 	Cash   int64 `json:"cash"`
 	Card   int64 `json:"card"`
 	Mobile int64 `json:"mobile"`
+	Credit int64 `json:"credit"`
 }
 
 type SummaryView struct {
