@@ -147,6 +147,7 @@ func watchDesktopApp(shouldWatch bool) <-chan struct{} {
 	if !shouldWatch {
 		return nil
 	}
+	signal.Ignore(syscall.SIGPIPE)
 	appClosed := make(chan struct{})
 	go func() {
 		io.Copy(io.Discard, os.Stdin)
