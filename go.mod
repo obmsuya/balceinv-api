@@ -11,6 +11,7 @@ require (
 	github.com/johnfercher/maroto/v2 v2.4.2
 	github.com/joho/godotenv v1.5.1
 	github.com/kenshaw/escpos v0.0.0-20221114190919-df06b682a8fc
+	github.com/wneessen/go-mail v0.8.1
 	github.com/xuri/excelize/v2 v2.10.1
 	go.bug.st/serial v1.7.1
 	golang.org/x/crypto v0.57.0
