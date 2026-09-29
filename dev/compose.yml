@@ -15,5 +15,14 @@ services:
       timeout: 3s
       retries: 20
 
+  garage:
+    image: dxflrs/garage:v2.4.1
+    ports:
+      - "127.0.0.1:53900:3900"
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - balce_dev_garage:/var/lib/garage
+
 volumes:
   balce_dev_postgres:
+  balce_dev_garage:
