@@ -12,7 +12,9 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
+	"github.com/chrisostomemataba/balceinv-api/internal/products"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
+	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 	"github.com/gofiber/fiber/v2"
@@ -31,6 +33,8 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	usersService := users.NewService(usersRepository, accessRepository)
 	tenancyService := tenancy.NewService(tenancyRepository, accessService, usersRepository, settingsRepository)
 	settingsService := settings.NewService(settingsRepository, objectStore)
+	stockService := stock.NewService(stock.NewRepository())
+	productsService := products.NewService(products.NewRepository(), stockService, objectStore)
 	authService := auth.NewService(openDatabase, auth.NewRepository(), usersRepository, accessRepository, tenancyRepository)
 
 	platformHandler := platform.NewHandler(openDatabase)
@@ -40,6 +44,7 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	accessHandler := access.NewHandler(accessService)
 	settingsHandler := settings.NewHandler(settingsService)
 	mediaHandler := media.NewHandler(objectStore)
+	productsHandler := products.NewHandler(productsService)
 
 	requestTransaction := httpx.RequestTransaction(openDatabase)
 	authenticate := authHandler.Authenticate()
@@ -80,6 +85,21 @@ func registerRoutes(application *fiber.App, openDatabase *database.Database, obj
 	application.Put("/api/settings", permitted("settings:edit", settingsHandler.Update)...)
 	application.Post("/api/settings/upload-logo", permitted("settings:edit", settingsHandler.UploadLogo)...)
 	application.Get("/api/media/:folder/:companyId/:fileName", mediaHandler.Serve)
+
+	application.Get("/api/products", permitted("products:view", productsHandler.List)...)
+	application.Get("/api/products/categories", permitted("products:view", productsHandler.Categories)...)
+	application.Get("/api/products/template", permitted("products:create", productsHandler.ImportTemplate)...)
+	application.Post("/api/products/upload", permitted("products:create", productsHandler.Import)...)
+	application.Get("/api/products/:id", permitted("products:view", productsHandler.Get)...)
+	application.Get("/api/products/:id/variants", permitted("products:view", productsHandler.Variants)...)
+	application.Post("/api/products", permitted("products:create", productsHandler.Create)...)
+	application.Put("/api/products/:id", permitted("products:edit", productsHandler.Update)...)
+	application.Delete("/api/products/:id", permitted("products:delete", productsHandler.Archive)...)
+	application.Post("/api/products/:id/image", permitted("products:edit", productsHandler.UploadImage)...)
+	application.Get("/api/products/:id/addons", permitted("products:view", productsHandler.ListAddons)...)
+	application.Post("/api/products/:id/addons", permitted("products:edit", productsHandler.CreateAddon)...)
+	application.Put("/api/addons/:id", permitted("products:edit", productsHandler.UpdateAddon)...)
+	application.Delete("/api/addons/:id", permitted("products:edit", productsHandler.DeleteAddon)...)
 
 	application.Get("/api/permissions", signedIn(accessHandler.ListPermissions)...)
 	application.Get("/api/permissions/role/:id", permitted("roles:view", accessHandler.ListRolePermissions)...)
