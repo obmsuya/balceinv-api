@@ -47,24 +47,25 @@ func (repository *Repository) SetMinimumStock(ctx context.Context, querier datab
 	return nil
 }
 
-func (repository *Repository) ChangeQuantity(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productId uuid.UUID, change int) (int, bool, error) {
+func (repository *Repository) ChangeQuantity(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productId uuid.UUID, change int) (int, int, bool, error) {
 	query := `
 		UPDATE shop_stock
 		SET quantity = quantity + $4, updated_at = $5
 		WHERE company_id = $1 AND shop_id = $2 AND product_id = $3 AND quantity + $4 >= 0
-		RETURNING quantity
+		RETURNING quantity, min_stock
 	`
 
 	quantityAfter := 0
-	scanError := querier.QueryRowContext(ctx, query, companyId, shopId, productId, change, time.Now().UTC()).Scan(&quantityAfter)
+	minimumStock := 0
+	scanError := querier.QueryRowContext(ctx, query, companyId, shopId, productId, change, time.Now().UTC()).Scan(&quantityAfter, &minimumStock)
 	if errors.Is(scanError, sql.ErrNoRows) {
-		return 0, false, nil
+		return 0, 0, false, nil
 	}
 	if scanError != nil {
-		return 0, false, fmt.Errorf("failed to change stock quantity: %w", scanError)
+		return 0, 0, false, fmt.Errorf("failed to change stock quantity: %w", scanError)
 	}
 
-	return quantityAfter, true, nil
+	return quantityAfter, minimumStock, true, nil
 }
 
 func (repository *Repository) InsertMovement(ctx context.Context, querier database.Querier, movement Movement) error {
