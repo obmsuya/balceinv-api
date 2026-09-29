@@ -83,7 +83,7 @@ func assertRowLevelSecurityWithoutFilters(t *testing.T, harness *apptest.Harness
 	t.Helper()
 	testContext := context.Background()
 
-	unfilteredTables := []string{"companies", "shops", "roles", "users", "user_shops", "role_permissions", "sessions", "settings", "products", "barcodes", "price_history", "product_addons", "shop_stock", "stock_movements", "stock_transfers", "stock_transfer_items", "notifications", "discounts", "sales", "sale_items", "sale_item_addons", "sale_payments"}
+	unfilteredTables := []string{"companies", "shops", "roles", "users", "user_shops", "role_permissions", "sessions", "settings", "products", "barcodes", "price_history", "product_addons", "shop_stock", "stock_movements", "stock_transfers", "stock_transfer_items", "notifications", "discounts", "sales", "sale_items", "sale_item_addons", "sale_payments", "fiscal_receipts"}
 	for _, tableName := range unfilteredTables {
 		noTenantCount := countWithTenant(t, harness, nil, "SELECT COUNT(*) FROM "+tableName)
 		if noTenantCount != 0 {
