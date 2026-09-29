@@ -15,6 +15,10 @@ type SwitchShopRequest struct {
 	ShopId string `json:"shop_id" validate:"required,uuid"`
 }
 
+type LanguageRequest struct {
+	Locale *string `json:"locale" validate:"omitnil,oneof=en sw"`
+}
+
 type CurrentUserView struct {
 	Id                 uuid.UUID               `json:"id"`
 	Name               string                  `json:"name"`

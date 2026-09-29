@@ -138,6 +138,17 @@ func (repository *Repository) UpdateSessionShop(ctx context.Context, querier dat
 	return nil
 }
 
+func (repository *Repository) UpdateUserLocale(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID, locale *string) error {
+	query := `UPDATE users SET locale = $3, updated_at = $4 WHERE company_id = $1 AND id = $2`
+
+	_, updateError := querier.ExecContext(ctx, query, companyId, userId, locale, time.Now().UTC())
+	if updateError != nil {
+		return fmt.Errorf("failed to save user language: %w", updateError)
+	}
+
+	return nil
+}
+
 func (repository *Repository) DeleteSession(ctx context.Context, querier database.Querier, companyId uuid.UUID, sessionId uuid.UUID) error {
 	query := `DELETE FROM sessions WHERE company_id = $1 AND id = $2`
 

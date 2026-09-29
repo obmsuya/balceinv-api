@@ -295,6 +295,15 @@ func (service *Service) SwitchShop(ctx context.Context, querier database.Querier
 	return service.CurrentUser(ctx, querier, &switchedPrincipal)
 }
 
+func (service *Service) SetLanguage(ctx context.Context, querier database.Querier, principal *identity.Principal, locale *string) (CurrentUserView, error) {
+	updateError := service.repository.UpdateUserLocale(ctx, querier, principal.CompanyId, principal.UserId, locale)
+	if updateError != nil {
+		return CurrentUserView{}, updateError
+	}
+
+	return service.CurrentUser(ctx, querier, principal)
+}
+
 func (service *Service) buildCurrentUserView(ctx context.Context, querier database.Querier, sessionUser users.User, workableShops []tenancy.ShopSummary, sessionShopId *uuid.UUID) (CurrentUserView, error) {
 	companyBranding, brandingError := service.tenancyRepository.FindBranding(ctx, querier, sessionUser.CompanyId)
 	if brandingError != nil {
