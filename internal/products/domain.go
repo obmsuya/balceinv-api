@@ -7,27 +7,28 @@ import (
 )
 
 type Product struct {
-	Id             uuid.UUID
-	CompanyId      uuid.UUID
-	ParentId       *uuid.UUID
-	Sku            string
-	Name           string
-	VariantLabel   string
-	Price          int64
-	CostPrice      int64
-	WholesalePrice *int64
-	WholesaleMin   int
-	Category       *string
-	Unit           string
-	PiecesPerUnit  int
-	ImageKey       *string
-	Metadata       []byte
-	IsActive       bool
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Quantity       *int
-	MinimumStock   *int
-	VariantCount   int
+	Id                  uuid.UUID
+	CompanyId           uuid.UUID
+	ParentId            *uuid.UUID
+	Sku                 string
+	Name                string
+	VariantLabel        string
+	Price               int64
+	CostPrice           int64
+	WholesalePrice      *int64
+	WholesaleMin        int
+	Category            *string
+	Unit                string
+	PiecesPerUnit       int
+	ImageKey            *string
+	Metadata            []byte
+	PreferredSupplierId *uuid.UUID
+	IsActive            bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Quantity            *int
+	MinimumStock        *int
+	VariantCount        int
 }
 
 type Barcode struct {

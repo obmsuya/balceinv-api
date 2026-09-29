@@ -288,6 +288,8 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrProductNotFound), errors.Is(serviceError, ErrParentNotFound), errors.Is(serviceError, ErrAddonNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
+	case errors.Is(serviceError, ErrSupplierNotFound):
+		return response.Error(c, fiber.StatusBadRequest, "supplier_not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrSkuTaken):
 		return response.Error(c, fiber.StatusConflict, "sku_taken", serviceError.Error())
 	case errors.Is(serviceError, ErrBarcodeTaken):

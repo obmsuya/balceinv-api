@@ -165,3 +165,28 @@ func TestReceiptsPrintToTheConfiguredPort(t *testing.T) {
 		}
 	})
 }
+
+func TestCreditReceiptsShowTheCustomerAndWhatIsOwed(t *testing.T) {
+	customerName := "Juma Hassan"
+	receiptView := sales.ReceiptView{
+		Sale: sales.SaleView{
+			ReceiptNumber: "KKO-20260929-0008", CashierName: "Asha", Total: 10000, AmountPaid: 10000, CurrencyCode: "TZS",
+			CreatedAt: time.Date(2026, 9, 29, 20, 30, 0, 0, time.UTC), CustomerName: &customerName, CreditAmount: 6000,
+			Items:    []sales.LineView{{ProductName: "Rice 5kg", Quantity: 1, UnitPrice: 10000, LineTotal: 10000}},
+			Payments: []sales.PaymentView{{Method: "cash", Amount: 4000}, {Method: "credit", Amount: 6000}},
+		},
+		Company:          sales.ReceiptCompanyView{Name: "Duka la Mama"},
+		Shop:             sales.ReceiptShopView{Name: "Kariakoo"},
+		ReceiptLanguage:  "sw",
+		PaperWidthMillis: 80,
+	}
+	receiptBytes := printing.BuildReceipt(receiptView, nil, false, time.Now(), time.UTC)
+	for _, expected := range []string{"Mteja: Juma Hassan", "Umelipa (Taslimu)", "TZS 4,000", "Deni", "TZS 6,000"} {
+		if !bytes.Contains(receiptBytes, []byte(expected)) {
+			t.Fatalf("the credit receipt is missing %q", expected)
+		}
+	}
+	if bytes.Contains(receiptBytes, []byte("Umelipa ()")) {
+		t.Fatal("the pay-later part was printed as money paid")
+	}
+}

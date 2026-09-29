@@ -12,13 +12,17 @@ import (
 
 const saleViewColumns = `
 	s.id, s.receipt_number, s.client_ref, s.shop_id, sh.name, s.user_id, u.name, s.subtotal, s.discount_total, s.total,
-	s.tax_total, s.tax_rate_basis_points, s.amount_paid, s.change_given, s.currency_code, s.currency_decimals, s.note, s.created_at
+	s.tax_total, s.tax_rate_basis_points, s.amount_paid, s.change_given, s.currency_code, s.currency_decimals, s.note, s.created_at,
+	s.customer_id, c.name, c.phone,
+	COALESCE((SELECT p.amount FROM sale_payments p WHERE p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'), 0),
+	(SELECT o.number FROM customer_orders o WHERE o.company_id = s.company_id AND o.sale_id = s.id)
 `
 
 const saleViewJoins = `
 	FROM sales s
 	JOIN shops sh ON sh.company_id = s.company_id AND sh.id = s.shop_id
 	JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
+	LEFT JOIN customers c ON c.company_id = s.company_id AND c.id = s.customer_id
 `
 
 func (repository *Repository) FindHashByClientRef(ctx context.Context, querier database.Querier, companyId uuid.UUID, clientRef string) (*uuid.UUID, string, error) {
@@ -40,8 +44,8 @@ func (repository *Repository) FindHashByClientRef(ctx context.Context, querier d
 func (repository *Repository) InsertSale(ctx context.Context, querier database.Querier, newSale Sale) error {
 	query := `
 		INSERT INTO sales (id, company_id, shop_id, user_id, client_ref, request_hash, receipt_number, subtotal, discount_total, total,
-		                   tax_total, tax_rate_basis_points, amount_paid, change_given, currency_code, currency_decimals, note, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		                   tax_total, tax_rate_basis_points, amount_paid, change_given, currency_code, currency_decimals, note, created_at, customer_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
 	_, insertError := querier.ExecContext(ctx, query,
@@ -63,6 +67,7 @@ func (repository *Repository) InsertSale(ctx context.Context, querier database.Q
 		newSale.CurrencyDecimals,
 		newSale.Note,
 		newSale.CreatedAt,
+		newSale.CustomerId,
 	)
 	if insertError != nil {
 		return fmt.Errorf("failed to insert sale: %w", insertError)
@@ -133,6 +138,7 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 	query := `SELECT ` + saleViewColumns + saleViewJoins + ` WHERE s.company_id = $1 AND s.id = $2`
 
 	saleView := SaleView{}
+	orderNumber := sql.NullInt64{}
 	scanError := querier.QueryRowContext(ctx, query, companyId, saleId).Scan(
 		&saleView.Id,
 		&saleView.ReceiptNumber,
@@ -152,12 +158,21 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 		&saleView.CurrencyDecimals,
 		&saleView.Note,
 		&saleView.CreatedAt,
+		&saleView.CustomerId,
+		&saleView.CustomerName,
+		&saleView.CustomerPhone,
+		&saleView.CreditAmount,
+		&orderNumber,
 	)
 	if errors.Is(scanError, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if scanError != nil {
 		return nil, fmt.Errorf("failed to find sale: %w", scanError)
+	}
+	if orderNumber.Valid {
+		formattedOrderNumber := FormatOrderNumber(orderNumber.Int64)
+		saleView.OrderNumber = &formattedOrderNumber
 	}
 
 	return &saleView, nil

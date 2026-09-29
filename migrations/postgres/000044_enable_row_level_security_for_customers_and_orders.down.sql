@@ -1,0 +1,10 @@
+DROP POLICY tenant_isolation ON customer_order_payments;
+ALTER TABLE customer_order_payments DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON customer_order_lines;
+ALTER TABLE customer_order_lines DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON customer_orders;
+ALTER TABLE customer_orders DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON customer_payments;
+ALTER TABLE customer_payments DISABLE ROW LEVEL SECURITY;
+DROP POLICY tenant_isolation ON customers;
+ALTER TABLE customers DISABLE ROW LEVEL SECURITY;

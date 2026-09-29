@@ -36,6 +36,7 @@ var (
 	ErrNoActiveShop         = errors.New("choose a shop before adding opening stock")
 	ErrAddonNotFound        = errors.New("add-on not found")
 	ErrAddonNameTaken       = errors.New("this product already has an add-on with that name")
+	ErrSupplierNotFound     = errors.New("the usual supplier was not found or is turned off")
 )
 
 type Service struct {
@@ -182,6 +183,11 @@ func (service *Service) createProduct(ctx context.Context, querier database.Quer
 	if buildError != nil {
 		return uuid.Nil, buildError
 	}
+	preferredSupplierId, supplierError := service.resolvePreferredSupplier(ctx, querier, principal.CompanyId, request.PreferredSupplierId, nil)
+	if supplierError != nil {
+		return uuid.Nil, supplierError
+	}
+	newProduct.PreferredSupplierId = preferredSupplierId
 
 	insertError := service.repository.Insert(ctx, querier, newProduct)
 	if insertError != nil {
@@ -228,6 +234,11 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 	if request.IsActive != nil {
 		changedProduct.IsActive = *request.IsActive
 	}
+	preferredSupplierId, supplierError := service.resolvePreferredSupplier(ctx, querier, principal.CompanyId, request.PreferredSupplierId, existingProduct.PreferredSupplierId)
+	if supplierError != nil {
+		return ProductView{}, supplierError
+	}
+	changedProduct.PreferredSupplierId = preferredSupplierId
 
 	updateError := service.repository.Update(ctx, querier, changedProduct)
 	if updateError != nil {
@@ -322,6 +333,33 @@ func (service *Service) UploadImage(ctx context.Context, querier database.Querie
 	}
 
 	return service.Get(ctx, querier, principal, productId)
+}
+
+func (service *Service) resolvePreferredSupplier(ctx context.Context, querier database.Querier, companyId uuid.UUID, requestedSupplierId *string, currentSupplierId *uuid.UUID) (*uuid.UUID, error) {
+	if requestedSupplierId == nil {
+		return currentSupplierId, nil
+	}
+	trimmedSupplierId := strings.TrimSpace(*requestedSupplierId)
+	if trimmedSupplierId == "" {
+		return nil, nil
+	}
+	supplierId, parseError := uuid.Parse(trimmedSupplierId)
+	if parseError != nil {
+		return nil, ErrSupplierNotFound
+	}
+	isUnchanged := currentSupplierId != nil && *currentSupplierId == supplierId
+	if isUnchanged {
+		return currentSupplierId, nil
+	}
+
+	isActiveSupplier, findError := service.repository.IsActiveSupplier(ctx, querier, companyId, supplierId)
+	if findError != nil {
+		return nil, findError
+	}
+	if !isActiveSupplier {
+		return nil, ErrSupplierNotFound
+	}
+	return &supplierId, nil
 }
 
 func (service *Service) checkParent(ctx context.Context, querier database.Querier, principal *identity.Principal, parentId uuid.UUID, variantLabel string) error {

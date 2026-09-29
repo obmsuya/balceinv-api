@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	FolderLogos    = "logos"
-	FolderProducts = "products"
+	FolderLogos     = "logos"
+	FolderProducts  = "products"
+	FolderPurchases = "purchases"
 )
 
 var (
@@ -25,8 +26,9 @@ var (
 )
 
 var publicFolders = map[string]bool{
-	FolderLogos:    true,
-	FolderProducts: true,
+	FolderLogos:     true,
+	FolderProducts:  true,
+	FolderPurchases: true,
 }
 
 var mediaFileNamePattern = regexp.MustCompile(`^[0-9a-f-]{36}\.(png|jpg|webp)$`)

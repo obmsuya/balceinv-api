@@ -13,6 +13,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
+	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
@@ -29,7 +30,8 @@ var (
 	ErrClientRefInFlight = errors.New("this checkout is already being saved; try again in a moment")
 	ErrDuplicatePayment  = errors.New("each payment method can appear only once")
 	ErrPaymentTooLow     = errors.New("the payments do not cover the total")
-	ErrChangeWithoutCash = errors.New("change can only be given from cash; card and mobile payments cannot exceed what is owed")
+	ErrChangeWithoutCash = errors.New("change can only be given from cash; card, mobile and pay-later amounts cannot exceed what is owed")
+	ErrInvalidCustomerId = errors.New("the customer is not valid")
 	ErrMissingSettings   = errors.New("company settings are missing")
 )
 
@@ -38,17 +40,30 @@ type Service struct {
 	discountsService   *discounts.Service
 	settingsRepository *settings.Repository
 	stockService       *stock.Service
+	customersService   *customers.Service
 	ledger             *accounting.Ledger
 }
 
-func NewService(repository *Repository, discountsService *discounts.Service, settingsRepository *settings.Repository, stockService *stock.Service, ledger *accounting.Ledger) *Service {
+func NewService(repository *Repository, discountsService *discounts.Service, settingsRepository *settings.Repository, stockService *stock.Service, customersService *customers.Service, ledger *accounting.Ledger) *Service {
 	return &Service{
 		repository:         repository,
 		discountsService:   discountsService,
 		settingsRepository: settingsRepository,
 		stockService:       stockService,
+		customersService:   customersService,
 		ledger:             ledger,
 	}
+}
+
+func (service *Service) PriceForOrder(ctx context.Context, querier database.Querier, principal *identity.Principal, lineRequests []LineRequest) (PricedSale, error) {
+	if principal.ShopId == nil {
+		return PricedSale{}, ErrNoActiveShop
+	}
+	companySettings, settingsError := service.findSettings(ctx, querier, principal.CompanyId)
+	if settingsError != nil {
+		return PricedSale{}, settingsError
+	}
+	return service.price(ctx, querier, principal, lineRequests, companySettings.TaxRateBasisPoints)
 }
 
 func (service *Service) Quote(ctx context.Context, querier database.Querier, principal *identity.Principal, request QuoteRequest) (QuoteView, error) {
@@ -120,12 +135,85 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		return SaleView{}, priceError
 	}
 
-	payments, amountPaid, changeGiven, paymentError := settlePayments(request.Payments, pricedSale.Total)
+	customerId, customerIdError := parseOptionalId(request.CustomerId)
+	if customerIdError != nil {
+		return SaleView{}, customerIdError
+	}
+
+	saleDraft := draft{
+		shopId:          *principal.ShopId,
+		clientRef:       request.ClientRef,
+		requestHash:     requestHash,
+		customerId:      customerId,
+		pricedSale:      pricedSale,
+		paymentRequests: request.Payments,
+		note:            trimmedOrNil(request.Note),
+		takesStock:      true,
+	}
+	return service.record(ctx, querier, principal, companySettings, companyProfile, saleDraft)
+}
+
+func (service *Service) CreateFromOrder(ctx context.Context, querier database.Querier, principal *identity.Principal, request OrderSaleRequest) (SaleView, error) {
+	companySettings, settingsError := service.findSettings(ctx, querier, principal.CompanyId)
+	if settingsError != nil {
+		return SaleView{}, settingsError
+	}
+	companyProfile, profileError := service.settingsRepository.FindCompanyProfile(ctx, querier, principal.CompanyId)
+	if profileError != nil {
+		return SaleView{}, profileError
+	}
+	if companyProfile == nil {
+		return SaleView{}, ErrMissingSettings
+	}
+
+	pricedSale := PricedSale{
+		Lines:              request.Lines,
+		TaxRateBasisPoints: request.TaxRateBasisPoints,
+	}
+	for _, pricedLine := range request.Lines {
+		pricedSale.Subtotal += pricedLine.LineTotal + pricedLine.DiscountAmount
+		pricedSale.DiscountTotal += pricedLine.DiscountAmount
+	}
+	pricedSale.Total = pricedSale.Subtotal - pricedSale.DiscountTotal
+	pricedSale.TaxTotal = IncludedTax(pricedSale.Total, request.TaxRateBasisPoints)
+
+	customerId := request.CustomerId
+	saleDraft := draft{
+		shopId:          request.ShopId,
+		clientRef:       request.ClientRef,
+		requestHash:     request.ClientRef,
+		customerId:      &customerId,
+		pricedSale:      pricedSale,
+		paymentRequests: request.Payments,
+		note:            trimmedOrNil(request.Note),
+		takesStock:      false,
+	}
+	return service.record(ctx, querier, principal, companySettings, companyProfile, saleDraft)
+}
+
+type draft struct {
+	shopId          uuid.UUID
+	clientRef       string
+	requestHash     string
+	customerId      *uuid.UUID
+	pricedSale      PricedSale
+	paymentRequests []PaymentRequest
+	note            *string
+	takesStock      bool
+}
+
+func (service *Service) record(ctx context.Context, querier database.Querier, principal *identity.Principal, companySettings *settings.Settings, companyProfile *settings.CompanyProfile, saleDraft draft) (SaleView, error) {
+	payments, amountPaid, changeGiven, paymentError := settlePayments(saleDraft.paymentRequests, saleDraft.pricedSale.Total)
 	if paymentError != nil {
 		return SaleView{}, paymentError
 	}
 
-	shopCounter, counterError := service.repository.TakeReceiptCounter(ctx, querier, principal.CompanyId, *principal.ShopId)
+	customerError := service.customersService.CheckSaleCustomer(ctx, querier, principal.CompanyId, saleDraft.customerId, creditAmountOf(payments))
+	if customerError != nil {
+		return SaleView{}, customerError
+	}
+
+	shopCounter, counterError := service.repository.TakeReceiptCounter(ctx, querier, principal.CompanyId, saleDraft.shopId)
 	if counterError != nil {
 		return SaleView{}, counterError
 	}
@@ -133,14 +221,16 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		return SaleView{}, ErrShopClosed
 	}
 
+	pricedSale := saleDraft.pricedSale
 	createdAt := time.Now().UTC()
 	newSale := Sale{
 		Id:                 uuid.Must(uuid.NewV7()),
 		CompanyId:          principal.CompanyId,
-		ShopId:             *principal.ShopId,
+		ShopId:             saleDraft.shopId,
 		UserId:             principal.UserId,
-		ClientRef:          request.ClientRef,
-		RequestHash:        requestHash,
+		CustomerId:         saleDraft.customerId,
+		ClientRef:          saleDraft.clientRef,
+		RequestHash:        saleDraft.requestHash,
 		ReceiptNumber:      formatReceiptNumber(companySettings.ReceiptNumberFormat, *shopCounter, createdAt, companyProfile.Timezone),
 		Subtotal:           pricedSale.Subtotal,
 		DiscountTotal:      pricedSale.DiscountTotal,
@@ -151,7 +241,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		ChangeGiven:        changeGiven,
 		CurrencyCode:       companyProfile.CurrencyCode,
 		CurrencyDecimals:   companyProfile.CurrencyDecimals,
-		Note:               trimmedOrNil(request.Note),
+		Note:               saleDraft.note,
 		CreatedAt:          createdAt,
 	}
 
@@ -178,10 +268,13 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		}
 	}
 
+	if !saleDraft.takesStock {
+		return service.Get(ctx, querier, principal.CompanyId, newSale.Id)
+	}
 	for _, pricedLine := range pricedSale.Lines {
 		saleMovement := stock.MovementRequest{
 			CompanyId: principal.CompanyId,
-			ShopId:    *principal.ShopId,
+			ShopId:    saleDraft.shopId,
 			ProductId: pricedLine.Product.Id,
 			Change:    -pricedLine.Quantity,
 			Reason:    "sale",
@@ -334,6 +427,27 @@ func settlePayments(paymentRequests []PaymentRequest, total int64) ([]Payment, i
 	return payments, amountPaid, amountPaid - total, nil
 }
 
+func creditAmountOf(payments []Payment) int64 {
+	creditAmount := int64(0)
+	for _, payment := range payments {
+		if payment.Method == PaymentCredit {
+			creditAmount += payment.Amount
+		}
+	}
+	return creditAmount
+}
+
+func parseOptionalId(rawId *string) (*uuid.UUID, error) {
+	if rawId == nil {
+		return nil, nil
+	}
+	parsedId, parseError := uuid.Parse(*rawId)
+	if parseError != nil {
+		return nil, ErrInvalidCustomerId
+	}
+	return &parsedId, nil
+}
+
 func formatReceiptNumber(receiptFormat string, shopCounter ShopCounter, soldAt time.Time, timezone string) string {
 	companyLocation, locationError := time.LoadLocation(timezone)
 	if locationError != nil {
@@ -348,13 +462,15 @@ func formatReceiptNumber(receiptFormat string, shopCounter ShopCounter, soldAt t
 
 func hashRequest(request SaleRequest) (string, error) {
 	hashedFields := struct {
-		Items    []LineRequest    `json:"items"`
-		Payments []PaymentRequest `json:"payments"`
-		Note     *string          `json:"note"`
+		CustomerId *string          `json:"customer_id,omitempty"`
+		Items      []LineRequest    `json:"items"`
+		Payments   []PaymentRequest `json:"payments"`
+		Note       *string          `json:"note"`
 	}{
-		Items:    request.Items,
-		Payments: request.Payments,
-		Note:     request.Note,
+		CustomerId: request.CustomerId,
+		Items:      request.Items,
+		Payments:   request.Payments,
+		Note:       request.Note,
 	}
 
 	encodedFields, encodeError := json.Marshal(hashedFields)

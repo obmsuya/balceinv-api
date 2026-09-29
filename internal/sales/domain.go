@@ -1,6 +1,7 @@
 package sales
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ const (
 	PaymentCash   = "cash"
 	PaymentCard   = "card"
 	PaymentMobile = "mobile"
+	PaymentCredit = "credit"
 )
 
 type Sale struct {
@@ -17,6 +19,7 @@ type Sale struct {
 	CompanyId          uuid.UUID
 	ShopId             uuid.UUID
 	UserId             uuid.UUID
+	CustomerId         *uuid.UUID
 	ClientRef          string
 	RequestHash        string
 	ReceiptNumber      string
@@ -36,6 +39,10 @@ type Sale struct {
 type Payment struct {
 	Method string
 	Amount int64
+}
+
+func FormatOrderNumber(orderNumber int64) string {
+	return fmt.Sprintf("ORD-%06d", orderNumber)
 }
 
 type ShopCounter struct {

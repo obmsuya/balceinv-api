@@ -13,7 +13,7 @@ type LineRequest struct {
 }
 
 type PaymentRequest struct {
-	Method string `json:"method" validate:"required,oneof=cash card mobile"`
+	Method string `json:"method" validate:"required,oneof=cash card mobile credit"`
 	Amount int64  `json:"amount" validate:"required,gt=0,lte=1000000000000000"`
 }
 
@@ -22,10 +22,21 @@ type QuoteRequest struct {
 }
 
 type SaleRequest struct {
-	ClientRef string           `json:"client_ref" validate:"required,min=8,max=64"`
-	Items     []LineRequest    `json:"items" validate:"required,min=1,max=200,dive"`
-	Payments  []PaymentRequest `json:"payments" validate:"omitempty,max=3,dive"`
-	Note      *string          `json:"note" validate:"omitnil,max=200"`
+	ClientRef  string           `json:"client_ref" validate:"required,min=8,max=64"`
+	CustomerId *string          `json:"customer_id" validate:"omitnil,uuid"`
+	Items      []LineRequest    `json:"items" validate:"required,min=1,max=200,dive"`
+	Payments   []PaymentRequest `json:"payments" validate:"omitempty,max=4,dive"`
+	Note       *string          `json:"note" validate:"omitnil,max=200"`
+}
+
+type OrderSaleRequest struct {
+	ClientRef          string
+	ShopId             uuid.UUID
+	CustomerId         uuid.UUID
+	Lines              []PricedLine
+	TaxRateBasisPoints int
+	Payments           []PaymentRequest
+	Note               *string
 }
 
 type AddonView struct {
@@ -80,6 +91,11 @@ type SaleView struct {
 	ShopName           string        `json:"shop_name"`
 	UserId             uuid.UUID     `json:"user_id"`
 	CashierName        string        `json:"cashier_name"`
+	CustomerId         *uuid.UUID    `json:"customer_id"`
+	CustomerName       *string       `json:"customer_name"`
+	CustomerPhone      *string       `json:"customer_phone"`
+	CreditAmount       int64         `json:"credit_amount"`
+	OrderNumber        *string       `json:"order_number"`
 	Subtotal           int64         `json:"subtotal"`
 	DiscountTotal      int64         `json:"discount_total"`
 	Total              int64         `json:"total"`
