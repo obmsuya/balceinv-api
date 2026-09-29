@@ -18,6 +18,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
+	"github.com/chrisostomemataba/balceinv-api/internal/printing"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
 	"github.com/chrisostomemataba/balceinv-api/internal/rates"
 	"github.com/chrisostomemataba/balceinv-api/internal/reports"
@@ -171,6 +172,14 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/sales/:id", permittedAny(sellingOrViewing, salesHandler.Get)...)
 	application.Get("/api/dashboard", permitted("reports:view", reportsHandler.Dashboard)...)
 	application.Get("/api/exchange-rates", signedIn(ratesHandler.Latest)...)
+
+	if loadedConfig.IsDesktop() {
+		printingHandler := printing.NewHandler(printing.NewService(openDatabase, salesService, settingsRepository, objectStore))
+		application.Get("/api/print/status", authenticate, httpx.RequirePermission("sales:create", "sales:view", "settings:view"), printingHandler.Status)
+		application.Get("/api/print/devices", authenticate, httpx.RequirePermission("settings:edit"), printingHandler.Devices)
+		application.Post("/api/print/test", authenticate, httpx.RequirePermission("settings:edit"), printingHandler.Test)
+		application.Post("/api/print/receipt", authenticate, httpx.RequirePermission("sales:create", "sales:view"), printingHandler.Receipt)
+	}
 
 	if desktop.Backups != nil {
 		backupHandler := backup.NewHandler(desktop.Backups)
