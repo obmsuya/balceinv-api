@@ -12,27 +12,28 @@ type BarcodeView struct {
 }
 
 type ProductView struct {
-	Id             uuid.UUID      `json:"id"`
-	ParentId       *uuid.UUID     `json:"parent_id"`
-	Sku            string         `json:"sku"`
-	Name           string         `json:"name"`
-	VariantLabel   string         `json:"variant_label"`
-	Price          int64          `json:"price"`
-	CostPrice      int64          `json:"cost_price"`
-	WholesalePrice *int64         `json:"wholesale_price"`
-	WholesaleMin   int            `json:"wholesale_min"`
-	Category       *string        `json:"category"`
-	Unit           string         `json:"unit"`
-	PiecesPerUnit  int            `json:"pieces_per_unit"`
-	ImageUrl       *string        `json:"image_url"`
-	Metadata       map[string]any `json:"metadata"`
-	IsActive       bool           `json:"is_active"`
-	Quantity       *int           `json:"quantity"`
-	MinStock       *int           `json:"min_stock"`
-	VariantCount   int            `json:"variant_count"`
-	Barcodes       []BarcodeView  `json:"barcodes"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	Id                  uuid.UUID      `json:"id"`
+	ParentId            *uuid.UUID     `json:"parent_id"`
+	Sku                 string         `json:"sku"`
+	Name                string         `json:"name"`
+	VariantLabel        string         `json:"variant_label"`
+	Price               int64          `json:"price"`
+	CostPrice           int64          `json:"cost_price"`
+	WholesalePrice      *int64         `json:"wholesale_price"`
+	WholesaleMin        int            `json:"wholesale_min"`
+	Category            *string        `json:"category"`
+	Unit                string         `json:"unit"`
+	PiecesPerUnit       int            `json:"pieces_per_unit"`
+	ImageUrl            *string        `json:"image_url"`
+	Metadata            map[string]any `json:"metadata"`
+	PreferredSupplierId *uuid.UUID     `json:"preferred_supplier_id"`
+	IsActive            bool           `json:"is_active"`
+	Quantity            *int           `json:"quantity"`
+	MinStock            *int           `json:"min_stock"`
+	VariantCount        int            `json:"variant_count"`
+	Barcodes            []BarcodeView  `json:"barcodes"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
 }
 
 type AddonView struct {
@@ -51,19 +52,20 @@ type BarcodeInput struct {
 }
 
 type ProductFields struct {
-	Sku            string         `json:"sku" validate:"required,max=64"`
-	Name           string         `json:"name" validate:"required,max=160"`
-	VariantLabel   string         `json:"variant_label" validate:"max=80"`
-	Price          *int64         `json:"price" validate:"required,gte=0"`
-	CostPrice      int64          `json:"cost_price" validate:"gte=0"`
-	WholesalePrice *int64         `json:"wholesale_price" validate:"omitnil,gte=0"`
-	WholesaleMin   int            `json:"wholesale_min" validate:"omitempty,gte=1,lte=1000000"`
-	Category       *string        `json:"category" validate:"omitnil,max=80"`
-	Unit           string         `json:"unit" validate:"max=20"`
-	PiecesPerUnit  int            `json:"pieces_per_unit" validate:"omitempty,gte=1,lte=100000"`
-	Metadata       map[string]any `json:"metadata"`
-	Barcodes       []BarcodeInput `json:"barcodes" validate:"omitempty,max=20,dive"`
-	MinStock       *int           `json:"min_stock" validate:"omitnil,gte=0,lte=1000000000"`
+	Sku                 string         `json:"sku" validate:"required,max=64"`
+	Name                string         `json:"name" validate:"required,max=160"`
+	VariantLabel        string         `json:"variant_label" validate:"max=80"`
+	Price               *int64         `json:"price" validate:"required,gte=0"`
+	CostPrice           int64          `json:"cost_price" validate:"gte=0"`
+	WholesalePrice      *int64         `json:"wholesale_price" validate:"omitnil,gte=0"`
+	WholesaleMin        int            `json:"wholesale_min" validate:"omitempty,gte=1,lte=1000000"`
+	Category            *string        `json:"category" validate:"omitnil,max=80"`
+	Unit                string         `json:"unit" validate:"max=20"`
+	PiecesPerUnit       int            `json:"pieces_per_unit" validate:"omitempty,gte=1,lte=100000"`
+	Metadata            map[string]any `json:"metadata"`
+	Barcodes            []BarcodeInput `json:"barcodes" validate:"omitempty,max=20,dive"`
+	MinStock            *int           `json:"min_stock" validate:"omitnil,gte=0,lte=1000000000"`
+	PreferredSupplierId *string        `json:"preferred_supplier_id" validate:"omitnil,max=36"`
 }
 
 type CreateProductRequest struct {
