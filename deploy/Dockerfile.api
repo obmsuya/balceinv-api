@@ -1,0 +1,4 @@
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY balce-api /balce-api
+USER nonroot:nonroot
+ENTRYPOINT ["/balce-api"]
