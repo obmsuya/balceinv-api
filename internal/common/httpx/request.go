@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"net"
 	"net/url"
 	"strings"
 
@@ -102,4 +103,27 @@ func originHost(rawOrigin string) string {
 		return ""
 	}
 	return parsedOrigin.Host
+}
+
+func DesktopHostGuard() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if IsLocalNetworkHost(c.Hostname()) {
+			return c.Next()
+		}
+		return response.Error(c, fiber.StatusForbidden, "host_not_allowed", "Open Balce by its local address")
+	}
+}
+
+func IsLocalNetworkHost(requestHost string) bool {
+	hostName := requestHost
+	splitHost, _, splitError := net.SplitHostPort(requestHost)
+	if splitError == nil {
+		hostName = splitHost
+	}
+	hostName = strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(hostName, "["), "]"))
+	isLocalName := hostName == "localhost" || hostName == "tauri.localhost" || strings.HasSuffix(hostName, ".local")
+	if isLocalName {
+		return true
+	}
+	return net.ParseIP(hostName) != nil
 }

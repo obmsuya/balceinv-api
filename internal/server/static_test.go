@@ -116,3 +116,33 @@ func TestOwnerSwitchesTheNetworkSetting(t *testing.T) {
 		}
 	})
 }
+
+func TestDesktopOnlyAnswersToLocalAddresses(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		if engineCase.Engine != config.EngineSqlite {
+			cloudHarness := apptest.Start(t, engineCase)
+			if cloudHarness.Send(http.MethodGet, "/api/platform", "", nil, map[string]string{"Host": "app.balce.example"}).Status != http.StatusOK {
+				t.Fatal("the cloud refused its own domain")
+			}
+			return
+		}
+		harness := apptest.StartDesktop(t, engineCase)
+
+		for _, localHost := range []string{"localhost:8080", "127.0.0.1:8080", "[::1]:8080", "tauri.localhost", "192.168.1.7:8080", "shop-pc.local:8080"} {
+			answer := harness.Send(http.MethodGet, "/api/platform", "", nil, map[string]string{"Host": localHost})
+			if answer.Status != http.StatusOK {
+				t.Fatalf("%s was refused with %d %v", localHost, answer.Status, answer.Body)
+			}
+		}
+		for _, rebindingHost := range []string{"evil.example.com", "evil.example.com:8080", "127.0.0.1.nip.io:8080"} {
+			answer := harness.Send(http.MethodGet, "/api/platform", "", nil, map[string]string{"Host": rebindingHost})
+			if answer.Status != http.StatusForbidden || answer.Code() != "host_not_allowed" {
+				t.Fatalf("%s returned %d %v, want 403 host_not_allowed", rebindingHost, answer.Status, answer.Body)
+			}
+		}
+		spoofed := harness.Send(http.MethodGet, "/api/platform", "", nil, map[string]string{"Host": "evil.example.com", "X-Forwarded-Host": "localhost"})
+		if spoofed.Status != http.StatusForbidden {
+			t.Fatalf("X-Forwarded-Host got past the host check: %d", spoofed.Status)
+		}
+	})
+}
