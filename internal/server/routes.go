@@ -17,6 +17,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
+	"github.com/chrisostomemataba/balceinv-api/internal/phoneupload"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/printing"
 	"github.com/chrisostomemataba/balceinv-api/internal/products"
@@ -181,6 +182,12 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Post("/api/print/receipt", authenticate, httpx.RequirePermission("sales:create", "sales:view"), printingHandler.Receipt)
 	}
 
+	phoneUploadHandler := phoneupload.NewHandler(phoneupload.NewService(), desktop.Network, isPostgres)
+	application.Post("/api/phone-uploads", authenticate, httpx.RequirePermission("products:create", "products:edit"), phoneUploadHandler.Create)
+	application.Get("/api/phone-uploads/:token", authenticate, phoneUploadHandler.Collect)
+	application.Get("/upload/:token", phoneUploadHandler.Page)
+	application.Post("/upload/:token", newPhoneUploadLimiter(), phoneUploadHandler.Submit)
+
 	if desktop.Network != nil {
 		application.Put("/api/platform/network", authenticate, platformHandler.SetNetwork)
 	}
@@ -234,6 +241,16 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	if loadedConfig.StaticDirectory != "" {
 		application.Get("/*", staticApp(loadedConfig.StaticDirectory))
 	}
+}
+
+func newPhoneUploadLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        20,
+		Expiration: time.Minute,
+		LimitReached: func(c *fiber.Ctx) error {
+			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many photos. Try again in a minute")
+		},
+	})
 }
 
 func newLoginLimiter() fiber.Handler {
