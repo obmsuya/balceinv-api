@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/documents"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/gofiber/fiber/v2"
@@ -131,6 +132,18 @@ func (handler *Handler) Statement(c *fiber.Ctx) error {
 		return respondWithServiceError(c, ErrSupplierNotFound)
 	}
 
+	if c.Query("format") != "" {
+		statementFile, documentError := handler.service.StatementDocument(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), supplierId, StatementDocumentRequest{
+			Format:   c.Query("format"),
+			Language: c.Query("lang"),
+			From:     c.Query("from"),
+			To:       c.Query("to"),
+		})
+		if documentError != nil {
+			return respondWithServiceError(c, documentError)
+		}
+		return httpx.SendFile(c, statementFile.Name, statementFile.ContentType, statementFile.Bytes)
+	}
 	statementView, statementError := handler.service.Statement(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), supplierId, c.Query("from"), c.Query("to"))
 	if statementError != nil {
 		return respondWithServiceError(c, statementError)
@@ -413,6 +426,7 @@ type errorResponse struct {
 }
 
 var errorResponses = map[error]errorResponse{
+	documents.ErrUnknownFormat: {fiber.StatusBadRequest, "invalid_format"},
 	ErrFeatureOff:              {fiber.StatusForbidden, "feature_off"},
 	ErrNoActiveShop:            {fiber.StatusBadRequest, "no_active_shop"},
 	ErrShopNotFound:            {fiber.StatusNotFound, "shop_not_found"},
