@@ -55,6 +55,10 @@ func TestReportsGiveExactTotalsFromSnapshots(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		harness := apptest.Start(t, engineCase)
 		company := harness.CreateCompany("Report Shop", "owner@reports.test")
+		registeredForVat := harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"vat_registered": true, "vat_number": "40-000111-A"})
+		if registeredForVat.Status != http.StatusOK {
+			t.Fatalf("registering for VAT returned %d %v", registeredForVat.Status, registeredForVat.Body)
+		}
 		sodaId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "SODA", "name": "Soda", "price": 1180, "cost_price": 600, "opening_quantity": 100})
 		coffeeId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "COFFEE", "name": "Coffee", "price": 2360, "cost_price": 900, "opening_quantity": 100})
 		idleId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "IDLE", "name": "Idle", "price": 500, "cost_price": 200, "opening_quantity": 7})

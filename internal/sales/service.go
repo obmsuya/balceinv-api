@@ -15,6 +15,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/discounts"
+	"github.com/chrisostomemataba/balceinv-api/internal/features"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/google/uuid"
@@ -63,7 +64,11 @@ func (service *Service) PriceForOrder(ctx context.Context, querier database.Quer
 	if settingsError != nil {
 		return PricedSale{}, settingsError
 	}
-	return service.price(ctx, querier, principal, lineRequests, companySettings.TaxRateBasisPoints)
+	saleTaxRate, taxRateError := service.saleTaxRate(ctx, querier, principal.CompanyId, companySettings)
+	if taxRateError != nil {
+		return PricedSale{}, taxRateError
+	}
+	return service.price(ctx, querier, principal, lineRequests, saleTaxRate)
 }
 
 func (service *Service) Quote(ctx context.Context, querier database.Querier, principal *identity.Principal, request QuoteRequest) (QuoteView, error) {
@@ -76,7 +81,11 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 		return QuoteView{}, settingsError
 	}
 
-	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, companySettings.TaxRateBasisPoints)
+	saleTaxRate, taxRateError := service.saleTaxRate(ctx, querier, principal.CompanyId, companySettings)
+	if taxRateError != nil {
+		return QuoteView{}, taxRateError
+	}
+	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
 	if priceError != nil {
 		return QuoteView{}, priceError
 	}
@@ -130,7 +139,11 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		return SaleView{}, ErrMissingSettings
 	}
 
-	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, companySettings.TaxRateBasisPoints)
+	saleTaxRate, taxRateError := service.saleTaxRate(ctx, querier, principal.CompanyId, companySettings)
+	if taxRateError != nil {
+		return SaleView{}, taxRateError
+	}
+	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
 	if priceError != nil {
 		return SaleView{}, priceError
 	}
@@ -384,6 +397,17 @@ func (service *Service) TillOptions(ctx context.Context, querier database.Querie
 		PrintReceiptAutomatically: companySettings.PrintReceiptAutomatically,
 	}
 	return tillOptions, nil
+}
+
+func (service *Service) saleTaxRate(ctx context.Context, querier database.Querier, companyId uuid.UUID, companySettings *settings.Settings) (int, error) {
+	companyFeatures, featuresError := features.NewRepository().Find(ctx, querier, companyId)
+	if featuresError != nil {
+		return 0, fmt.Errorf("failed to read the VAT registration: %w", featuresError)
+	}
+	if !companyFeatures.VatRegistered {
+		return 0, nil
+	}
+	return companySettings.TaxRateBasisPoints, nil
 }
 
 func (service *Service) findSettings(ctx context.Context, querier database.Querier, companyId uuid.UUID) (*settings.Settings, error) {

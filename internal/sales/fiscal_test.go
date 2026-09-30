@@ -62,6 +62,10 @@ func TestEfdReceiptsAreQueuedSentOnceAndRetried(t *testing.T) {
 		harness := apptest.Start(t, engineCase)
 		company := harness.CreateCompany("Efd Till", "owner@efdtill.test")
 		otherCompany := harness.CreateCompany("Other Efd", "owner@otherefd.test")
+		registeredForVat := harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"vat_registered": true, "vat_number": "40-000111-A"})
+		if registeredForVat.Status != http.StatusOK {
+			t.Fatalf("registering for VAT returned %d %v", registeredForVat.Status, registeredForVat.Body)
+		}
 		secretKey := "efd-test-key-9d1e"
 		juiceId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "JUICE", "name": "Juice", "price": 2360, "opening_quantity": 50})
 

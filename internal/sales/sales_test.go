@@ -40,6 +40,10 @@ func TestSalesAreIdempotentPricedByTheServerAndAtomic(t *testing.T) {
 		harness := apptest.Start(t, engineCase)
 		company := harness.CreateCompany("Till Shop", "owner@till.test")
 		otherCompany := harness.CreateCompany("Other Till", "owner@othertill.test")
+		registeredForVat := harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"vat_registered": true, "vat_number": "40-000111-A"})
+		if registeredForVat.Status != http.StatusOK {
+			t.Fatalf("registering for VAT returned %d %v", registeredForVat.Status, registeredForVat.Body)
+		}
 		now := time.Now().UTC()
 
 		sodaId := newProduct(t, harness, company.OwnerToken, map[string]any{"sku": "SODA", "name": "Soda", "price": 1000, "cost_price": 600, "wholesale_price": 850, "wholesale_min": 10, "opening_quantity": 40})
@@ -70,6 +74,11 @@ func TestSalesAreIdempotentPricedByTheServerAndAtomic(t *testing.T) {
 		if quote.Status != http.StatusOK || sodaQuote["is_wholesale"] != true || sodaQuote["line_total"] != float64(8500) || sodaQuote["in_stock"] != float64(40) ||
 			coffeeQuote["discount_name"] != "Coffee hour" || coffeeQuote["line_total"] != float64(6400) || quoteData["total"] != float64(14900) || quoteData["tax_total"] != float64(2273) {
 			t.Fatalf("quote returned %d %v", quote.Status, quoteData)
+		}
+
+		unregisteredQuote := harness.Call(http.MethodPost, "/api/sales/quote", otherCompany.OwnerToken, map[string]any{"items": []any{line(foreignId, 1)}})
+		if unregisteredQuote.Status != http.StatusOK || unregisteredQuote.Data()["tax_total"] != float64(0) || unregisteredQuote.Data()["tax_rate_basis_points"] != float64(0) {
+			t.Fatalf("a business that is not VAT registered was charged VAT: %d %v", unregisteredQuote.Status, unregisteredQuote.Body)
 		}
 
 		tamperedBody := map[string]any{
