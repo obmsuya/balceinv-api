@@ -125,3 +125,17 @@ type DashboardView struct {
 	Stock        StockTotalsView  `json:"stock"`
 	RecentSales  []RecentSaleView `json:"recent_sales"`
 }
+
+type StockLineView struct {
+	ProductId    uuid.UUID `json:"product_id"`
+	Name         string    `json:"name"`
+	VariantLabel string    `json:"variant_label"`
+	Sku          string    `json:"sku"`
+	Category     string    `json:"category"`
+	Quantity     int64     `json:"quantity"`
+	MinimumStock int64     `json:"minimum_stock"`
+	CostPrice    int64     `json:"cost_price"`
+	Price        int64     `json:"price"`
+	ValueAtCost  int64     `json:"value_at_cost"`
+	ValueAtPrice int64     `json:"value_at_price"`
+}
