@@ -21,10 +21,10 @@ fi
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw limit 22/tcp >/dev/null
-ufw allow 80/tcp >/dev/null
-ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
-echo "ufw active: 22 (rate limited), 80, 443"
+"$(dirname "$0")/firewall-cloudflare.sh"
+echo '17 4 1 * * root /opt/balce/firewall-cloudflare.sh >> /var/log/balce-firewall.log 2>&1' > /etc/cron.d/balce-cloudflare-firewall
+echo "ufw active: 22 (rate limited); 80 and 443 only from Cloudflare"
 
 install -d -m 700 /opt/balce /opt/balce/backups /opt/balce/backups/daily /opt/balce/backups/weekly
 install -d -m 755 /opt/proxy /opt/proxy/sites
