@@ -307,6 +307,18 @@ func (repository *Repository) ShopExists(ctx context.Context, querier database.Q
 	return shopCount == 1, nil
 }
 
+func (repository *Repository) ShopName(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID) (string, error) {
+	shopName := ""
+	scanError := querier.QueryRowContext(ctx, `SELECT name FROM shops WHERE company_id = $1 AND id = $2`, companyId, shopId).Scan(&shopName)
+	if errors.Is(scanError, sql.ErrNoRows) {
+		return "", ErrShopNotFound
+	}
+	if scanError != nil {
+		return "", fmt.Errorf("failed to read the shop name: %w", scanError)
+	}
+	return shopName, nil
+}
+
 func (repository *Repository) TaxRateBasisPoints(ctx context.Context, querier database.Querier, companyId uuid.UUID) (int, error) {
 	taxRate := 0
 	scanError := querier.QueryRowContext(ctx, `SELECT tax_rate_basis_points FROM settings WHERE company_id = $1`, companyId).Scan(&taxRate)
