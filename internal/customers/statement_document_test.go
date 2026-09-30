@@ -72,5 +72,28 @@ func TestCustomerStatementExportsWhatTheCustomerOwes(t *testing.T) {
 		if missing := harness.Call(http.MethodGet, "/api/customers/"+uuid.NewString()+"/statement?format=pdf", company.OwnerToken, nil); missing.Status != http.StatusNotFound {
 			t.Errorf("a missing customer returned %d", missing.Status)
 		}
+
+		debtors := harness.Call(http.MethodGet, "/api/customers/debtors", company.OwnerToken, nil).Data()
+		debtorsExport := harness.Call(http.MethodGet, "/api/customers/debtors?format=xlsx", company.OwnerToken, nil)
+		debtorsBook, debtorsError := excelize.OpenReader(bytes.NewReader(debtorsExport.Raw))
+		if debtorsExport.Status != http.StatusOK || debtorsError != nil {
+			t.Fatalf("the debtors export returned %d: %v", debtorsExport.Status, debtorsError)
+		}
+		defer debtorsBook.Close()
+		debtorsSheet := debtorsBook.GetSheetName(0)
+		debtorRows, _ := debtorsBook.GetRows(debtorsSheet)
+		totalOwed := ""
+		for rowIndex, sheetRow := range debtorRows {
+			if len(sheetRow) > 0 && sheetRow[0] == "Total" {
+				totalOwed, _ = debtorsBook.CalcCellValue(debtorsSheet, "G"+strconv.Itoa(rowIndex+1), excelize.Options{RawCellValue: true})
+			}
+		}
+		wantOwed := strconv.FormatFloat(debtors["totals"].(map[string]any)["balance"].(float64), 'f', 0, 64)
+		if totalOwed != wantOwed || totalOwed != "10000" {
+			t.Errorf("the debtors workbook totals %q, the API says %s", totalOwed, wantOwed)
+		}
+		if debtorsPdf := harness.Call(http.MethodGet, "/api/customers/debtors?format=pdf&lang=sw", company.OwnerToken, nil); debtorsPdf.Status != http.StatusOK || !bytes.HasPrefix(debtorsPdf.Raw, []byte("%PDF")) {
+			t.Errorf("the Swahili debtors PDF returned %d", debtorsPdf.Status)
+		}
 	})
 }

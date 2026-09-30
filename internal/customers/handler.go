@@ -35,6 +35,17 @@ func (handler *Handler) List(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) Debtors(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		debtorsFile, documentError := handler.service.DebtorsDocument(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), DebtorsDocumentRequest{
+			Format:   c.Query("format"),
+			Language: c.Query("lang"),
+			AsOf:     c.Query("as_of"),
+		})
+		if documentError != nil {
+			return RespondWithServiceError(c, documentError)
+		}
+		return httpx.SendFile(c, debtorsFile.Name, debtorsFile.ContentType, debtorsFile.Bytes)
+	}
 	debtorsView, debtorsError := handler.service.Debtors(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("as_of"))
 	if debtorsError != nil {
 		return RespondWithServiceError(c, debtorsError)
