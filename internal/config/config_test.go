@@ -164,3 +164,48 @@ func TestSupportEmailDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("expected a bad port error, got %v", badPortError)
 	}
 }
+
+func TestProxySettingsComeTogether(t *testing.T) {
+	_, loadError := config.LoadFrom(lookupFrom(map[string]string{
+		"DATABASE_URL":         "postgres://x",
+		"ALLOWED_ORIGINS":      "https://app.example.com",
+		"S3_ENDPOINT":          "http://garage:3900",
+		"S3_BUCKET":            "b",
+		"S3_ACCESS_KEY_ID":     "k",
+		"S3_SECRET_ACCESS_KEY": "s",
+		"PROXY_HEADER":         "CF-Connecting-IP",
+	}))
+	if loadError == nil || !strings.Contains(loadError.Error(), "PROXY_HEADER and TRUSTED_PROXIES together") {
+		t.Fatalf("a proxy header without trusted proxies was accepted: %v", loadError)
+	}
+}
+
+func TestCloudMigratesWithItsOwnDatabaseUrl(t *testing.T) {
+	cloudEnvironment := map[string]string{
+		"DATABASE_URL":         "postgres://app@db/balce",
+		"ALLOWED_ORIGINS":      "https://app.example.com",
+		"S3_ENDPOINT":          "http://garage:3900",
+		"S3_BUCKET":            "b",
+		"S3_ACCESS_KEY_ID":     "k",
+		"S3_SECRET_ACCESS_KEY": "s",
+		"PROXY_HEADER":         "CF-Connecting-IP",
+		"TRUSTED_PROXIES":      "172.31.250.1",
+	}
+	sameUrlConfig, sameUrlError := config.LoadFrom(lookupFrom(cloudEnvironment))
+	if sameUrlError != nil || sameUrlConfig.MigrationDatabaseUrl != "postgres://app@db/balce" {
+		t.Fatalf("migrations should default to DATABASE_URL: %v %v", sameUrlError, sameUrlConfig)
+	}
+	cloudEnvironment["MIGRATION_DATABASE_URL"] = "postgres://owner@db/balce"
+	splitConfig, splitError := config.LoadFrom(lookupFrom(cloudEnvironment))
+	if splitError != nil || splitConfig.MigrationDatabaseUrl != "postgres://owner@db/balce" || splitConfig.DatabaseUrl != "postgres://app@db/balce" {
+		t.Fatalf("the owner url must be used only for migrations: %v", splitError)
+	}
+	if len(splitConfig.TrustedProxies) != 1 || splitConfig.ProxyHeader != "CF-Connecting-IP" {
+		t.Fatalf("proxy settings were not read: %v", splitConfig.TrustedProxies)
+	}
+
+	_, desktopError := config.LoadFrom(lookupFrom(map[string]string{"DB_PATH": "/tmp/x/balce.sqlite", "MIGRATION_DATABASE_URL": "postgres://owner@db/balce"}))
+	if desktopError == nil {
+		t.Fatal("the desktop accepted a migration database url")
+	}
+}

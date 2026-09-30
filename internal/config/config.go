@@ -24,9 +24,14 @@ const (
 )
 
 type Config struct {
-	Engine        Engine
-	DatabaseUrl   string
-	SqlitePath    string
+	Engine      Engine
+	DatabaseUrl string
+	SqlitePath  string
+
+	MigrationDatabaseUrl string
+	ProxyHeader          string
+	TrustedProxies       []string
+
 	ListenAddress string
 
 	ListenAddressIsExplicit bool
@@ -91,6 +96,19 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 			problems = append(problems, fmt.Sprintf("DB_PATH not set and app data directory unavailable: %v", defaultPathError))
 		}
 		sqlitePath = defaultPath
+	}
+
+	migrationDatabaseUrl := readOrDefault(lookup, "MIGRATION_DATABASE_URL", databaseUrl)
+	if engine == EngineSqlite && readTrimmed(lookup, "MIGRATION_DATABASE_URL") != "" {
+		problems = append(problems, "MIGRATION_DATABASE_URL is for the cloud database only; leave it empty on the desktop")
+	}
+
+	proxyHeader := readTrimmed(lookup, "PROXY_HEADER")
+	trustedProxies := splitList(readTrimmed(lookup, "TRUSTED_PROXIES"))
+	hasProxyHeader := proxyHeader != ""
+	hasTrustedProxies := len(trustedProxies) > 0
+	if hasProxyHeader != hasTrustedProxies {
+		problems = append(problems, "set PROXY_HEADER and TRUSTED_PROXIES together (e.g. CF-Connecting-IP and the address the tunnel connects from)")
 	}
 
 	allowedOrigins := splitList(readTrimmed(lookup, "ALLOWED_ORIGINS"))
@@ -180,6 +198,10 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		DatabaseUrl:   databaseUrl,
 		SqlitePath:    sqlitePath,
 		ListenAddress: listenAddress,
+
+		MigrationDatabaseUrl: migrationDatabaseUrl,
+		ProxyHeader:          proxyHeader,
+		TrustedProxies:       trustedProxies,
 
 		ListenAddressIsExplicit: isListenAddressExplicit,
 		AllowedOrigins:          allowedOrigins,

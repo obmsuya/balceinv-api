@@ -29,6 +29,8 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 		BodyLimit:             8 * 1024 * 1024,
 
 		EnableTrustedProxyCheck: true,
+		TrustedProxies:          loadedConfig.TrustedProxies,
+		ProxyHeader:             loadedConfig.ProxyHeader,
 	})
 
 	application.Use(httpx.RequestLogging(writeLogSeparator))

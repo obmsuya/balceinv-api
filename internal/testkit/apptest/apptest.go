@@ -61,20 +61,25 @@ type Response struct {
 
 func Start(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
-	return start(t, engineCase, false, false)
+	return start(t, engineCase, false, false, nil)
+}
+
+func StartWith(t *testing.T, engineCase testkit.EngineCase, adjustConfig func(*config.Config)) *Harness {
+	t.Helper()
+	return start(t, engineCase, false, false, adjustConfig)
 }
 
 func StartDesktop(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
-	return start(t, engineCase, true, false)
+	return start(t, engineCase, true, false, nil)
 }
 
 func StartDesktopWithLicenseCheck(t *testing.T, engineCase testkit.EngineCase) *Harness {
 	t.Helper()
-	return start(t, engineCase, true, true)
+	return start(t, engineCase, true, true, nil)
 }
 
-func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforcesLicense bool) *Harness {
+func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforcesLicense bool, adjustConfig func(*config.Config)) *Harness {
 	t.Helper()
 
 	openDatabase := testkit.OpenMigratedAsApp(t, engineCase)
@@ -94,6 +99,10 @@ func start(t *testing.T, engineCase testkit.EngineCase, isDesktop bool, enforces
 		testConfig.EnforceLicense = enforcesLicense
 		desktop.Backups = backup.NewStore(openDatabase, testConfig.SqlitePath, testConfig.DataDirectory)
 		desktop.Network = lan.NewController(testConfig.DataDirectory, "127.0.0.1:8080", false, nil)
+	}
+
+	if adjustConfig != nil {
+		adjustConfig(testConfig)
 	}
 
 	objectStore, storeError := storage.NewLocalStore(t.TempDir())
