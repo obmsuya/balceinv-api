@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/chrisostomemataba/balceinv-api/internal/businessmove"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/backup"
@@ -26,7 +27,7 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 		AppName:               "Balce API",
 		ErrorHandler:          httpx.ErrorHandler,
 		DisableStartupMessage: true,
-		BodyLimit:             8 * 1024 * 1024,
+		BodyLimit:             businessmove.PackageSizeLimit + 1<<20,
 
 		EnableTrustedProxyCheck: true,
 		TrustedProxies:          loadedConfig.TrustedProxies,
