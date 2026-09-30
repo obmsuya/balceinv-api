@@ -49,7 +49,7 @@ func main() {
 		}
 	}
 
-	migrationResult, migrateError := database.MigrateUp(startupContext, loadedConfig.Engine, loadedConfig.DatabaseUrl, loadedConfig.SqlitePath)
+	migrationResult, migrateError := database.MigrateUp(startupContext, loadedConfig.Engine, loadedConfig.MigrationDatabaseUrl, loadedConfig.SqlitePath)
 	if migrateError != nil {
 		slog.Error("startup aborted: migrations failed", "error", migrateError)
 		os.Exit(1)
