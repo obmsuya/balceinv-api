@@ -91,6 +91,19 @@ func TestProfitAndLossExportsAStatementThatAgreesWithTheBooks(t *testing.T) {
 		if pdf.Status != http.StatusOK || !bytes.HasPrefix(pdf.Raw, []byte("%PDF")) {
 			t.Fatalf("the PDF returned %d", pdf.Status)
 		}
+		if strings.Contains(allText, "Only amounts recorded for this shop") {
+			t.Error("the whole-business statement warns about one shop")
+		}
+		oneShop := harness.Call(http.MethodGet, "/api/accounting/profit-and-loss?format=xlsx&shop="+company.ShopId.String(), company.OwnerToken, nil)
+		oneShopBook, oneShopError := excelize.OpenReader(bytes.NewReader(oneShop.Raw))
+		if oneShopError != nil {
+			t.Fatalf("open the one-shop workbook: %v", oneShopError)
+		}
+		defer oneShopBook.Close()
+		oneShopText := sheetText(t, oneShopBook)
+		if !strings.Contains(oneShopText, "Only amounts recorded for this shop") || !strings.Contains(oneShopText, "Main Shop") {
+			t.Error("a one-shop statement does not say which shop and what it leaves out")
+		}
 
 		swahili := harness.Call(http.MethodGet, "/api/accounting/profit-and-loss?format=xlsx&lang=sw", company.OwnerToken, nil)
 		swahiliBook, swahiliError := excelize.OpenReader(bytes.NewReader(swahili.Raw))

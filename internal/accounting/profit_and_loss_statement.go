@@ -37,6 +37,7 @@ var profitAndLossLabels = map[string]map[string]string{
 		"noteCogs":       "Cost of goods sold is what the items sold cost to buy, at their average cost on the day of each sale.",
 		"noteSource":     "Prepared from the double-entry books. Every figure can be traced to its entries in the ledger.",
 		"notePartial":    "The books start on {date}, so the previous period may be incomplete.",
+		"noteShop":       "Only amounts recorded for this shop are included. Costs recorded for the whole business, such as rent paid centrally, appear under All shops.",
 	},
 	documents.Swahili: {
 		"revenue":        "Mapato",
@@ -61,6 +62,7 @@ var profitAndLossLabels = map[string]map[string]string{
 		"noteCogs":       "Gharama ya bidhaa zilizouzwa ni bei ya kununua bidhaa hizo, kwa wastani wa gharama siku ya kila mauzo.",
 		"noteSource":     "Imeandaliwa kutoka kwenye leja ya hesabu. Kila kiasi kinaweza kufuatiliwa hadi rekodi zake kwenye leja.",
 		"notePartial":    "Hesabu zinaanza tarehe {date}, kwa hiyo kipindi kilichopita kinaweza kuwa hakijakamilika.",
+		"noteShop":       "Kiasi kilichorekodiwa kwa duka hili pekee ndicho kimejumuishwa. Gharama za biashara nzima, kama kodi ya pango inayolipwa makao makuu, zinaonekana chini ya Maduka yote.",
 	},
 }
 
@@ -117,7 +119,7 @@ func (service *Service) profitAndLossStatement(ctx context.Context, querier data
 		GeneratedBy: generatedBy,
 		GeneratedAt: time.Now(),
 		Rows:        exporting.profitAndLossRows(currentReport, previousReport),
-		Notes:       exporting.profitAndLossNotes(books, previousPeriod),
+		Notes:       exporting.profitAndLossNotes(books, previousPeriod, request.Range.Shop != ""),
 		SheetName:   exporting.profitAndLossLabel("sheet"),
 	}
 	fileName := "profit-and-loss-" + currentReport.FromDate + "-to-" + currentReport.ToDate
@@ -200,8 +202,11 @@ func (exporting exporter) accountRows(currentAmounts []AccountAmountView, previo
 	return statementRows
 }
 
-func (exporting exporter) profitAndLossNotes(books Books, previousPeriod periodRange) []string {
+func (exporting exporter) profitAndLossNotes(books Books, previousPeriod periodRange, isOneShop bool) []string {
 	notes := []string{exporting.profitAndLossLabel("noteBrackets")}
+	if isOneShop {
+		notes = append(notes, exporting.profitAndLossLabel("noteShop"))
+	}
 	if exporting.branding.VatRegistered || books.VatRegistered {
 		notes = append(notes, exporting.profitAndLossLabel("noteVat"))
 	}
