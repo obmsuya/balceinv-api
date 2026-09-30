@@ -254,6 +254,14 @@ func (service *Service) Export(ctx context.Context, querier database.Querier, pr
 		language: documents.ResolveLanguage(request.Language, viewer.Language, branding.DefaultLanguage),
 	}
 
+	if request.Report == ExportProfitAndLoss {
+		statement, fileName, statementError := service.profitAndLossStatement(ctx, querier, principal, request, exporting, viewer.Name)
+		if statementError != nil {
+			return documents.File{}, statementError
+		}
+		return documents.RenderStatement(branding, statement, exportFormat, fileName)
+	}
+
 	document := documents.Document{
 		Language:    exporting.language,
 		Title:       exporting.label("title." + request.Report),
@@ -269,24 +277,6 @@ func (service *Service) Export(ctx context.Context, querier database.Querier, pr
 
 func (service *Service) fillExport(ctx context.Context, querier database.Querier, principal *identity.Principal, request ExportRequest, exporting exporter, document *documents.Document) (string, error) {
 	switch request.Report {
-	case ExportProfitAndLoss:
-		report, reportError := service.ProfitAndLoss(ctx, querier, principal, request.Range)
-		if reportError != nil {
-			return "", reportError
-		}
-		document.Subtitle = periodText(exporting.language, report.FromDate, report.ToDate)
-		document.Tables = []documents.Table{
-			exporting.amountsTable(exporting.label("income"), report.Income),
-			exporting.amountsTable(exporting.label("expenses"), report.Expenses),
-		}
-		document.Totals = []documents.Field{
-			{Label: exporting.label("totalIncome"), Value: report.TotalIncome, Kind: documents.Money},
-			{Label: exporting.label("costOfGoods"), Value: report.CostOfGoods, Kind: documents.Money},
-			{Label: exporting.label("grossProfit"), Value: report.GrossProfit, Kind: documents.Money},
-			{Label: exporting.label("totalExpenses"), Value: report.TotalExpenses, Kind: documents.Money},
-			{Label: exporting.label("netProfit"), Value: report.NetProfit, Kind: documents.Money, Strong: true},
-		}
-		return "profit-and-loss-" + report.FromDate + "-to-" + report.ToDate, nil
 	case ExportBalanceSheet:
 		report, reportError := service.BalanceSheet(ctx, querier, principal, request.Range.ToDate)
 		if reportError != nil {
