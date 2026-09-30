@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN seen_tours TEXT NOT NULL DEFAULT '';

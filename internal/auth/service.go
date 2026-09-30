@@ -314,6 +314,15 @@ func (service *Service) SetLanguage(ctx context.Context, querier database.Querie
 	return service.CurrentUser(ctx, querier, principal)
 }
 
+func (service *Service) MarkTourSeen(ctx context.Context, querier database.Querier, principal *identity.Principal, tourName string) (CurrentUserView, error) {
+	markError := service.repository.MarkTourSeen(ctx, querier, principal.CompanyId, principal.UserId, tourName)
+	if markError != nil {
+		return CurrentUserView{}, markError
+	}
+
+	return service.CurrentUser(ctx, querier, principal)
+}
+
 func (service *Service) buildCurrentUserView(ctx context.Context, querier database.Querier, sessionUser users.User, workableShops []tenancy.ShopSummary, sessionShopId *uuid.UUID) (CurrentUserView, error) {
 	companyBranding, brandingError := service.tenancyRepository.FindBranding(ctx, querier, sessionUser.CompanyId)
 	if brandingError != nil {
@@ -340,6 +349,11 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 		})
 	}
 
+	seenTours, seenToursError := service.repository.FindSeenTours(ctx, querier, sessionUser.CompanyId, sessionUser.Id)
+	if seenToursError != nil {
+		return CurrentUserView{}, seenToursError
+	}
+
 	currentUserView := CurrentUserView{
 		Id:          sessionUser.Id,
 		Name:        sessionUser.Name,
@@ -363,6 +377,7 @@ func (service *Service) buildCurrentUserView(ctx context.Context, querier databa
 		Locale:             sessionUser.Locale,
 		MustChangePassword: sessionUser.MustChangePassword,
 		Features:           features.ToView(companyFeatures),
+		SeenTours:          seenTours,
 	}
 
 	return currentUserView, nil

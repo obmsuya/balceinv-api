@@ -117,13 +117,22 @@ type RecentSaleView struct {
 }
 
 type DashboardView struct {
-	Today        SummaryView      `json:"today"`
-	Yesterday    SummaryView      `json:"yesterday"`
-	MonthToDate  SummaryView      `json:"month_to_date"`
-	LastTwoWeeks []DayView        `json:"last_two_weeks"`
-	TopProducts  []ProductRowView `json:"top_products"`
-	Stock        StockTotalsView  `json:"stock"`
-	RecentSales  []RecentSaleView `json:"recent_sales"`
+	Today          SummaryView        `json:"today"`
+	Yesterday      SummaryView        `json:"yesterday"`
+	MonthToDate    SummaryView        `json:"month_to_date"`
+	LastTwoWeeks   []DayView          `json:"last_two_weeks"`
+	TopProducts    []ProductRowView   `json:"top_products"`
+	Stock          StockTotalsView    `json:"stock"`
+	RecentSales    []RecentSaleView   `json:"recent_sales"`
+	GettingStarted GettingStartedView `json:"getting_started"`
+}
+
+type GettingStartedView struct {
+	BusinessDetails bool `json:"business_details"`
+	Logo            bool `json:"logo"`
+	FirstProduct    bool `json:"first_product"`
+	FirstCashier    bool `json:"first_cashier"`
+	FirstSale       bool `json:"first_sale"`
 }
 
 type StockLineView struct {

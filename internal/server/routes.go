@@ -142,6 +142,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/auth/me", signedIn(authHandler.Me)...)
 	application.Post("/api/auth/switch-shop", signedIn(authHandler.SwitchShop)...)
 	application.Put("/api/auth/language", signedIn(authHandler.SetLanguage)...)
+	application.Put("/api/auth/tours", signedIn(authHandler.MarkTourSeen)...)
 
 	application.Get("/api/users", permitted("users:view", usersHandler.List)...)
 	application.Post("/api/users/update-password", signedIn(usersHandler.ChangePassword)...)

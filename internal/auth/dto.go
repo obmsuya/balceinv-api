@@ -20,6 +20,10 @@ type LanguageRequest struct {
 	Locale *string `json:"locale" validate:"omitnil,oneof=en sw"`
 }
 
+type TourRequest struct {
+	Tour string `json:"tour" validate:"required,max=40,alpha,lowercase"`
+}
+
 type CurrentUserView struct {
 	Id                 uuid.UUID               `json:"id"`
 	Name               string                  `json:"name"`
@@ -36,6 +40,7 @@ type CurrentUserView struct {
 	Locale             *string                 `json:"locale"`
 	MustChangePassword bool                    `json:"must_change_password"`
 	Features           features.FeaturesView   `json:"features"`
+	SeenTours          []string                `json:"seen_tours"`
 }
 
 type BrandingView struct {
