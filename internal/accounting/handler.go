@@ -235,6 +235,9 @@ func (handler *Handler) Receipt(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) Overview(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		return handler.export(c, ExportOverview)
+	}
 	overview, reportError := handler.service.Overview(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), reportRequest(c))
 	if reportError != nil {
 		return respondWithServiceError(c, reportError)
@@ -317,9 +320,7 @@ func (handler *Handler) export(c *fiber.Ctx, report string) error {
 	if exportError != nil {
 		return respondWithServiceError(c, exportError)
 	}
-	c.Set(fiber.HeaderContentType, exportedFile.ContentType)
-	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+exportedFile.Name+`"`)
-	return c.Send(exportedFile.Bytes)
+	return httpx.SendFile(c, exportedFile.Name, exportedFile.ContentType, exportedFile.Bytes)
 }
 
 func reportRequest(c *fiber.Ctx) ReportRequest {

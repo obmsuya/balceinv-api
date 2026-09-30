@@ -11,6 +11,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/features"
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/google/uuid"
@@ -45,14 +46,16 @@ type Service struct {
 	featuresRepository *features.Repository
 	settingsRepository *settings.Repository
 	ledger             *accounting.Ledger
+	objectStore        storage.Store
 }
 
-func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository, ledger *accounting.Ledger) *Service {
+func NewService(repository *Repository, featuresRepository *features.Repository, settingsRepository *settings.Repository, ledger *accounting.Ledger, objectStore storage.Store) *Service {
 	return &Service{
 		repository:         repository,
 		featuresRepository: featuresRepository,
 		settingsRepository: settingsRepository,
 		ledger:             ledger,
+		objectStore:        objectStore,
 	}
 }
 

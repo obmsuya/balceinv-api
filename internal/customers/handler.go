@@ -5,6 +5,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/documents"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -188,6 +189,18 @@ func (handler *Handler) Statement(c *fiber.Ctx) error {
 		return RespondWithServiceError(c, ErrCustomerNotFound)
 	}
 
+	if c.Query("format") != "" {
+		statementFile, documentError := handler.service.StatementDocument(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), customerId, StatementDocumentRequest{
+			Format:   c.Query("format"),
+			Language: c.Query("lang"),
+			From:     c.Query("from"),
+			To:       c.Query("to"),
+		})
+		if documentError != nil {
+			return RespondWithServiceError(c, documentError)
+		}
+		return httpx.SendFile(c, statementFile.Name, statementFile.ContentType, statementFile.Bytes)
+	}
 	statementView, statementError := handler.service.Statement(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), customerId, c.Query("from"), c.Query("to"))
 	if statementError != nil {
 		return RespondWithServiceError(c, statementError)
@@ -197,6 +210,8 @@ func (handler *Handler) Statement(c *fiber.Ctx) error {
 
 func RespondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
+	case errors.Is(serviceError, documents.ErrUnknownFormat):
+		return response.Error(c, fiber.StatusBadRequest, "invalid_format", serviceError.Error())
 	case errors.Is(serviceError, ErrFeatureOff):
 		return response.Error(c, fiber.StatusForbidden, "feature_off", serviceError.Error())
 	case errors.Is(serviceError, ErrCustomerNotFound), errors.Is(serviceError, ErrPaymentNotFound):

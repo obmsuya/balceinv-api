@@ -43,7 +43,5 @@ func (handler *Handler) SaleDocument(c *fiber.Ctx) error {
 		}
 	}
 
-	c.Set(fiber.HeaderContentType, saleFile.ContentType)
-	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+saleFile.Name+`"`)
-	return c.Send(saleFile.Bytes)
+	return httpx.SendFile(c, saleFile.Name, saleFile.ContentType, saleFile.Bytes)
 }

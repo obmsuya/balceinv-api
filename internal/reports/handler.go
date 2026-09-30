@@ -100,9 +100,7 @@ func (handler *Handler) Export(c *fiber.Ctx) error {
 	if exportError != nil {
 		return respondWithServiceError(c, exportError)
 	}
-	c.Set(fiber.HeaderContentType, exportedFile.ContentType)
-	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+exportedFile.Name+`"`)
-	return c.Send(exportedFile.Bytes)
+	return httpx.SendFile(c, exportedFile.Name, exportedFile.ContentType, exportedFile.Bytes)
 }
 
 func respondWithServiceError(c *fiber.Ctx, serviceError error) error {

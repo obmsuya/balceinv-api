@@ -83,7 +83,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	discountsService := discounts.NewService(discounts.NewRepository())
 	discountsHandler := discounts.NewHandler(discountsService)
 	salesRepository := sales.NewRepository()
-	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository, ledger)
+	customersService := customers.NewService(customers.NewRepository(), featuresRepository, settingsRepository, ledger, objectStore)
 	customersHandler := customers.NewHandler(customersService)
 	salesService := sales.NewService(salesRepository, discountsService, settingsRepository, stockService, customersService, ledger)
 	salesHandler := sales.NewHandler(salesService, sales.NewFiscalService(openDatabase, salesService, salesRepository, settingsRepository))
