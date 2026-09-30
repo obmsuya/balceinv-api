@@ -23,6 +23,8 @@ var labelsByLanguage = map[string]map[string]string{
 
 		"statementChange":     "Change",
 		"statementCode":       "Code",
+		"periodThis":          "This period",
+		"periodPrevious":      "Previous period",
 		"statementContinued":  "(continued)",
 		"statementAmountsIn":  "Amounts in {currency}",
 		"statementNotes":      "Notes",
@@ -47,6 +49,8 @@ var labelsByLanguage = map[string]map[string]string{
 
 		"statementChange":     "Mabadiliko",
 		"statementCode":       "Namba",
+		"periodThis":          "Kipindi hiki",
+		"periodPrevious":      "Kipindi kilichopita",
 		"statementContinued":  "(inaendelea)",
 		"statementAmountsIn":  "Kiasi kwa {currency}",
 		"statementNotes":      "Maelezo",

@@ -3,7 +3,6 @@ package accounting
 import (
 	"context"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -219,23 +218,7 @@ func (exporting exporter) profitAndLossNotes(books Books, previousPeriod periodR
 }
 
 func (exporting exporter) periodHeading(period periodRange, fallbackKey string) string {
-	dayAfter := period.toDate.AddDate(0, 0, 1)
-	isWholeMonth := period.fromDate.Day() == 1 && dayAfter.Day() == 1 && dayAfter.AddDate(0, -1, 0).Equal(period.fromDate)
-	if isWholeMonth {
-		return documents.MonthYear(exporting.language, period.fromDate)
-	}
-	isWholeYear := period.fromDate.YearDay() == 1 && dayAfter.YearDay() == 1 && dayAfter.Year() == period.fromDate.Year()+1
-	if isWholeYear {
-		return period.fromDate.Format("2006")
-	}
-	isWithinOneMonth := period.fromDate.Year() == period.toDate.Year() && period.fromDate.Month() == period.toDate.Month()
-	if isWithinOneMonth && period.fromDate.Equal(period.toDate) {
-		return documents.FormatDate(exporting.language, period.fromDate)
-	}
-	if isWithinOneMonth {
-		return strconv.Itoa(period.fromDate.Day()) + "–" + strconv.Itoa(period.toDate.Day()) + " " + documents.MonthYear(exporting.language, period.fromDate)
-	}
-	return exporting.profitAndLossLabel(fallbackKey)
+	return documents.PeriodHeading(exporting.language, period.fromDate, period.toDate, fallbackKey == "previousPeriod")
 }
 
 func (service *Service) shopLabel(ctx context.Context, querier database.Querier, companyId uuid.UUID, rawShopId string, exporting exporter) (string, error) {
@@ -262,24 +245,8 @@ func parsePeriod(fromDate string, toDate string) (periodRange, error) {
 }
 
 func precedingPeriod(period periodRange) periodRange {
-	dayBefore := period.fromDate.AddDate(0, 0, -1)
-	coversWholeMonths := period.fromDate.Day() == 1 && period.toDate.AddDate(0, 0, 1).Day() == 1
-	if coversWholeMonths {
-		monthCount := (period.toDate.Year()-period.fromDate.Year())*12 + int(period.toDate.Month()-period.fromDate.Month()) + 1
-		return periodRange{fromDate: period.fromDate.AddDate(0, -monthCount, 0), toDate: dayBefore}
-	}
-	isMonthToDate := period.fromDate.Day() == 1 && period.toDate.Year() == period.fromDate.Year() && period.toDate.Month() == period.fromDate.Month()
-	if isMonthToDate {
-		previousMonthStart := period.fromDate.AddDate(0, -1, 0)
-		previousMonthEnd := dayBefore
-		sameDay := previousMonthStart.AddDate(0, 0, period.toDate.Day()-1)
-		if sameDay.After(previousMonthEnd) {
-			sameDay = previousMonthEnd
-		}
-		return periodRange{fromDate: previousMonthStart, toDate: sameDay}
-	}
-	dayCount := int(period.toDate.Sub(period.fromDate).Hours()/24) + 1
-	return periodRange{fromDate: dayBefore.AddDate(0, 0, -(dayCount - 1)), toDate: dayBefore}
+	previousFrom, previousTo := documents.PreviousPeriod(period.fromDate, period.toDate)
+	return periodRange{fromDate: previousFrom, toDate: previousTo}
 }
 
 func profitOrLoss(amount int64, profitKey string, lossKey string) string {
