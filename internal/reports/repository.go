@@ -561,3 +561,29 @@ func (repository *Repository) StockLines(ctx context.Context, querier database.Q
 	}
 	return stockLines, stockRows.Err()
 }
+
+func (repository *Repository) GettingStarted(ctx context.Context, querier database.Querier, companyId uuid.UUID) (GettingStartedView, error) {
+	query := `
+		SELECT
+			(c.phone IS NOT NULL AND trim(c.phone) <> '' AND c.address IS NOT NULL AND trim(c.address) <> ''),
+			(c.logo_key IS NOT NULL),
+			EXISTS (SELECT 1 FROM products p WHERE p.company_id = c.id),
+			(SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) > 1,
+			EXISTS (SELECT 1 FROM sales s WHERE s.company_id = c.id)
+		FROM companies c
+		WHERE c.id = $1
+	`
+
+	gettingStarted := GettingStartedView{}
+	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(
+		&gettingStarted.BusinessDetails,
+		&gettingStarted.Logo,
+		&gettingStarted.FirstProduct,
+		&gettingStarted.FirstCashier,
+		&gettingStarted.FirstSale,
+	)
+	if scanError != nil {
+		return GettingStartedView{}, fmt.Errorf("failed to read getting started: %w", scanError)
+	}
+	return gettingStarted, nil
+}

@@ -190,15 +190,20 @@ func (service *Service) Dashboard(ctx context.Context, querier database.Querier,
 	if recentError != nil {
 		return DashboardView{}, recentError
 	}
+	gettingStarted, gettingStartedError := service.repository.GettingStarted(ctx, querier, principal.CompanyId)
+	if gettingStartedError != nil {
+		return DashboardView{}, gettingStartedError
+	}
 
 	dashboardView := DashboardView{
-		Today:        todaySummary,
-		Yesterday:    yesterdaySummary,
-		MonthToDate:  monthSummary,
-		LastTwoWeeks: trendDays,
-		TopProducts:  topProducts,
-		Stock:        stockTotals,
-		RecentSales:  recentSales,
+		Today:          todaySummary,
+		Yesterday:      yesterdaySummary,
+		MonthToDate:    monthSummary,
+		LastTwoWeeks:   trendDays,
+		TopProducts:    topProducts,
+		Stock:          stockTotals,
+		RecentSales:    recentSales,
+		GettingStarted: gettingStarted,
 	}
 	return dashboardView, nil
 }
