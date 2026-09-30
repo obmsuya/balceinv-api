@@ -25,7 +25,7 @@ func wholeDaysUntil(fromTime time.Time, toTime time.Time) int {
 	return int(math.Ceil(toTime.Sub(fromTime).Hours() / 24))
 }
 
-func statusAt(licenseStateObject *LicenseState, currentTime time.Time) Status {
+func StatusAt(licenseStateObject *LicenseState, currentTime time.Time) Status {
 	if licenseStateObject == nil {
 		return Status{LockReason: LockReasonMissing}
 	}
@@ -67,7 +67,7 @@ func statusAt(licenseStateObject *LicenseState, currentTime time.Time) Status {
 func CurrentStatus() Status {
 	licenseStateObject, licenseLoadError := LoadLicenseState()
 	if licenseLoadError != nil {
-		return statusAt(nil, time.Now())
+		return StatusAt(nil, time.Now())
 	}
-	return statusAt(licenseStateObject, time.Now())
+	return StatusAt(licenseStateObject, time.Now())
 }

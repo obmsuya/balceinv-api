@@ -38,7 +38,7 @@ func TestStatusAtCoversEveryLicenseState(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		licenseStatus := statusAt(testCase.licenseState, currentTime)
+		licenseStatus := StatusAt(testCase.licenseState, currentTime)
 		if licenseStatus.Licensed != testCase.licensed ||
 			licenseStatus.DaysRemaining != testCase.daysRemaining ||
 			licenseStatus.IsGracePeriod != testCase.isGracePeriod ||
@@ -48,7 +48,7 @@ func TestStatusAtCoversEveryLicenseState(t *testing.T) {
 		}
 	}
 
-	trialStatus := statusAt(&LicenseState{LicenseKey: "trial", ExpiresAt: currentTime.Add(3 * day).Format(time.RFC3339)}, currentTime)
+	trialStatus := StatusAt(&LicenseState{LicenseKey: "trial", ExpiresAt: currentTime.Add(3 * day).Format(time.RFC3339)}, currentTime)
 	if !trialStatus.IsTrial || trialStatus.DaysRemaining != 3 {
 		t.Errorf("trial: got %+v", trialStatus)
 	}

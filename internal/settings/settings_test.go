@@ -50,8 +50,8 @@ func TestSettingsDefaultsPartialUpdatesAndValidation(t *testing.T) {
 		if defaults.Status != http.StatusOK {
 			t.Fatalf("get settings returned %d: %v", defaults.Status, defaults.Body)
 		}
-		if getQueries > 2 {
-			t.Fatalf("reading settings ran %d queries, want at most 2", getQueries)
+		if getQueries > 3 {
+			t.Fatalf("reading settings ran %d queries, want at most 3", getQueries)
 		}
 		defaultData := defaults.Data()
 		defaultCompany := defaultData["company"].(map[string]any)

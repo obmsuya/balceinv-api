@@ -172,7 +172,7 @@ func TestStockLevelsHistoryAndInvariant(t *testing.T) {
 		levelQueries := harness.CountQueries(func() {
 			levelPage = harness.Call(http.MethodGet, "/api/stock?limit=25", company.OwnerToken, nil)
 		})
-		if levelPage.Data()["total"] != float64(30) || len(levelPage.Items()) != 25 || levelQueries > 2 {
+		if levelPage.Data()["total"] != float64(30) || len(levelPage.Items()) != 25 || levelQueries > 3 {
 			t.Fatalf("levels returned %v of %v in %d queries", len(levelPage.Items()), levelPage.Data()["total"], levelQueries)
 		}
 
@@ -200,7 +200,7 @@ func TestStockLevelsHistoryAndInvariant(t *testing.T) {
 		historyQueries := harness.CountQueries(func() {
 			historyPage = harness.Call(http.MethodGet, "/api/stock-movements?reason=purchase&limit=5", company.OwnerToken, nil)
 		})
-		if historyPage.Data()["total"] != float64(10) || len(historyPage.Items()) != 5 || historyQueries > 2 {
+		if historyPage.Data()["total"] != float64(10) || len(historyPage.Items()) != 5 || historyQueries > 3 {
 			t.Fatalf("purchase history %v of %v in %d queries", len(historyPage.Items()), historyPage.Data()["total"], historyQueries)
 		}
 		future := url.QueryEscape(time.Now().Add(time.Hour).UTC().Format(time.RFC3339))

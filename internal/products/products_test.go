@@ -189,8 +189,8 @@ func TestProductListSearchIsolationAndPermissions(t *testing.T) {
 		if len(firstPage.Items()) != 25 || firstPage.Data()["total"] != float64(200) {
 			t.Fatalf("first page %d items of %v", len(firstPage.Items()), firstPage.Data()["total"])
 		}
-		if pageQueries > 3 {
-			t.Fatalf("listing 25 products ran %d queries, want at most 3", pageQueries)
+		if pageQueries > 4 {
+			t.Fatalf("listing 25 products ran %d queries, want at most 4", pageQueries)
 		}
 		firstItemBarcodes, _ := firstPage.Items()[0].(map[string]any)["barcodes"].([]any)
 		if len(firstItemBarcodes) != 1 {

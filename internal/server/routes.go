@@ -34,6 +34,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/settings"
 	"github.com/chrisostomemataba/balceinv-api/internal/shops"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
+	"github.com/chrisostomemataba/balceinv-api/internal/subscriptions"
 	"github.com/chrisostomemataba/balceinv-api/internal/suppliers"
 	"github.com/chrisostomemataba/balceinv-api/internal/support"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
@@ -100,20 +101,26 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	authenticate := authHandler.Authenticate()
 	supportPasscode := httpx.RequireSupportPasscode(supportPasscodeHash)
 
+	subscriptionsHandler := subscriptions.NewHandler(subscriptions.NewService(subscriptions.NewRepository()))
+	subscriptionGate := func(c *fiber.Ctx) error { return c.Next() }
+	if !loadedConfig.IsDesktop() {
+		subscriptionGate = subscriptionsHandler.Gate()
+	}
+
 	signedIn := func(routeHandler fiber.Handler) []fiber.Handler {
-		return []fiber.Handler{authenticate, requestTransaction, routeHandler}
+		return []fiber.Handler{authenticate, requestTransaction, subscriptionGate, routeHandler}
 	}
 	permitted := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
-		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), routeHandler}
+		return []fiber.Handler{authenticate, requestTransaction, subscriptionGate, httpx.RequirePermission(permissionId), routeHandler}
 	}
 	permittedAny := func(permissionIds []string, routeHandler fiber.Handler) []fiber.Handler {
-		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionIds...), routeHandler}
+		return []fiber.Handler{authenticate, requestTransaction, subscriptionGate, httpx.RequirePermission(permissionIds...), routeHandler}
 	}
 	books := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
-		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(false), routeHandler}
+		return []fiber.Handler{authenticate, requestTransaction, subscriptionGate, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(false), routeHandler}
 	}
 	fullBooks := func(permissionId string, routeHandler fiber.Handler) []fiber.Handler {
-		return []fiber.Handler{authenticate, requestTransaction, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(true), routeHandler}
+		return []fiber.Handler{authenticate, requestTransaction, subscriptionGate, httpx.RequirePermission(permissionId), accountingHandler.RequireAccounting(true), routeHandler}
 	}
 	supportTeam := func(routeHandler fiber.Handler) []fiber.Handler {
 		return []fiber.Handler{authenticate, supportPasscode, requestTransaction, routeHandler}
@@ -135,6 +142,11 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Post("/api/license/pay", authenticate, licensing.Pay)
 	} else {
 		application.Post("/api/setup", newSignupLimiter(), requestTransaction, tenancyHandler.RunFirstSetup)
+		application.Get("/api/license/status", signedIn(subscriptionsHandler.Status)...)
+		application.Post("/api/license/refresh", signedIn(subscriptionsHandler.Refresh)...)
+		application.Get("/api/license/hardware-id", signedIn(subscriptionsHandler.DeviceId)...)
+		application.Get("/api/license/packages", authenticate, licensing.Packages)
+		application.Post("/api/license/pay", authenticate, subscriptionsHandler.Pay)
 	}
 
 	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)

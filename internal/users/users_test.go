@@ -181,8 +181,8 @@ func TestUserListIsPaginatedWithoutExtraQueries(t *testing.T) {
 		if len(fullPage.Items()) != 25 || fullPage.Data()["total"] != float64(31) {
 			t.Fatalf("first page has %d items, total %v; want 25 of 31", len(fullPage.Items()), fullPage.Data()["total"])
 		}
-		if fullPageQueries > 3 {
-			t.Fatalf("listing 25 users ran %d queries, want at most 3", fullPageQueries)
+		if fullPageQueries > 4 {
+			t.Fatalf("listing 25 users ran %d queries, want at most 4", fullPageQueries)
 		}
 		firstUser := fullPage.Items()[0].(map[string]any)
 		firstUserShops, _ := firstUser["shop_ids"].([]any)

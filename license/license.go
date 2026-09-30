@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -420,28 +421,32 @@ func SyncWithDjango() {
 	log.Printf("license sync successful: expires %s", djangoSyncResponseObject.LicenseData.ExpiresAt)
 }
 
-func ActivateFromDjango() error {
-	hardwareIdString, hardwareIdComputeError := ComputeHardwareId()
-	if hardwareIdComputeError != nil {
-		return hardwareIdComputeError
-	}
+type RemoteLicense struct {
+	LicenseKey  string
+	ExpiresAt   string
+	MaxDevices  int
+	DaysGranted int
+}
 
-	activateURL := DjangoBaseURL + "/balce/license/by-hardware/" + hardwareIdString + "/"
+var ErrNoRemoteLicense = errors.New("no license found for this device yet")
+
+func FetchByHardwareId(hardwareIdString string) (RemoteLicense, error) {
+	activateURL := DjangoBaseURL + "/balce/license/by-hardware/" + url.PathEscape(hardwareIdString) + "/"
 	httpClientObject := &http.Client{Timeout: 10 * time.Second}
 
 	djangoHttpResponse, djangoHttpNetworkError := httpClientObject.Get(activateURL)
 	if djangoHttpNetworkError != nil {
-		return fmt.Errorf("%w: %v", ErrLicensingServerUnreachable, djangoHttpNetworkError)
+		return RemoteLicense{}, fmt.Errorf("%w: %v", ErrLicensingServerUnreachable, djangoHttpNetworkError)
 	}
 	defer djangoHttpResponse.Body.Close()
 
 	if djangoHttpResponse.StatusCode != http.StatusOK {
-		return errors.New("no license found for this device yet")
+		return RemoteLicense{}, ErrNoRemoteLicense
 	}
 
-	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(djangoHttpResponse.Body)
+	djangoResponseBodyBytes, djangoResponseBodyReadError := io.ReadAll(io.LimitReader(djangoHttpResponse.Body, 1<<20))
 	if djangoResponseBodyReadError != nil {
-		return djangoResponseBodyReadError
+		return RemoteLicense{}, djangoResponseBodyReadError
 	}
 
 	var djangoActivateResponseObject struct {
@@ -454,28 +459,51 @@ func ActivateFromDjango() error {
 		} `json:"license_data"`
 		Signature string `json:"signature"`
 	}
-	if err := json.Unmarshal(djangoResponseBodyBytes, &djangoActivateResponseObject); err != nil {
-		return err
+	unmarshalError := json.Unmarshal(djangoResponseBodyBytes, &djangoActivateResponseObject)
+	if unmarshalError != nil {
+		return RemoteLicense{}, unmarshalError
 	}
 	if !djangoActivateResponseObject.Success {
-		return errors.New("django reported failure")
+		return RemoteLicense{}, errors.New("django reported failure")
 	}
 
-	expectedSignatureHex := ComputeSignature(djangoActivateResponseObject.LicenseKey, djangoActivateResponseObject.LicenseData.ExpiresAt, djangoActivateResponseObject.LicenseData.MaxDevices, djangoActivateResponseObject.LicenseData.DaysGranted)
-	if !hmac.Equal([]byte(expectedSignatureHex), []byte(djangoActivateResponseObject.Signature)) {
-		return errors.New("django returned invalid signature")
+	isSignatureCheckable := LicenseSecret != ""
+	if isSignatureCheckable {
+		expectedSignatureHex := ComputeSignature(djangoActivateResponseObject.LicenseKey, djangoActivateResponseObject.LicenseData.ExpiresAt, djangoActivateResponseObject.LicenseData.MaxDevices, djangoActivateResponseObject.LicenseData.DaysGranted)
+		if !hmac.Equal([]byte(expectedSignatureHex), []byte(djangoActivateResponseObject.Signature)) {
+			return RemoteLicense{}, errors.New("django returned invalid signature")
+		}
 	}
 
-	if activationWouldShortenLicense(djangoActivateResponseObject.LicenseData.ExpiresAt) {
+	return RemoteLicense{
+		LicenseKey:  djangoActivateResponseObject.LicenseKey,
+		ExpiresAt:   djangoActivateResponseObject.LicenseData.ExpiresAt,
+		MaxDevices:  djangoActivateResponseObject.LicenseData.MaxDevices,
+		DaysGranted: djangoActivateResponseObject.LicenseData.DaysGranted,
+	}, nil
+}
+
+func ActivateFromDjango() error {
+	hardwareIdString, hardwareIdComputeError := ComputeHardwareId()
+	if hardwareIdComputeError != nil {
+		return hardwareIdComputeError
+	}
+
+	remoteLicense, fetchError := FetchByHardwareId(hardwareIdString)
+	if fetchError != nil {
+		return fetchError
+	}
+
+	if activationWouldShortenLicense(remoteLicense.ExpiresAt) {
 		return nil
 	}
 
 	newLicenseStateObject := &LicenseState{
-		LicenseKey:    djangoActivateResponseObject.LicenseKey,
+		LicenseKey:    remoteLicense.LicenseKey,
 		HardwareId:    hardwareIdString,
-		ExpiresAt:     djangoActivateResponseObject.LicenseData.ExpiresAt,
-		MaxDevices:    djangoActivateResponseObject.LicenseData.MaxDevices,
-		DaysGranted:   djangoActivateResponseObject.LicenseData.DaysGranted,
+		ExpiresAt:     remoteLicense.ExpiresAt,
+		MaxDevices:    remoteLicense.MaxDevices,
+		DaysGranted:   remoteLicense.DaysGranted,
 		LastKnownTime: time.Now().UTC().Format(time.RFC3339),
 	}
 

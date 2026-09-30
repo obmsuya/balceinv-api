@@ -25,8 +25,8 @@ func TestDesktopNeedsALicenseAndSetupStartsATrial(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		if engineCase.Engine != config.EngineSqlite {
 			cloudHarness := apptest.Start(t, engineCase)
-			if cloudHarness.Call(http.MethodGet, "/api/license/status", "", nil).Status != http.StatusNotFound {
-				t.Fatal("license routes exist in cloud mode")
+			if cloudHarness.Call(http.MethodGet, "/api/license/status", "", nil).Status != http.StatusUnauthorized {
+				t.Fatal("the cloud license status answered without signing in")
 			}
 			return
 		}
