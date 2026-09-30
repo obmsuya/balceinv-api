@@ -264,7 +264,8 @@ func (writer *registerExcelWriter) writeTotals(sheetRow int, firstLineRow int, l
 			return fmt.Errorf("failed to name a total column: %w", nameError)
 		}
 		sumFormula := fmt.Sprintf("SUM(%s%d:%s%d)", columnName, firstLineRow, columnName, lastLineRow)
-		totalError := writer.writeFormula(sheetRow, columnIndex+1, sumFormula, writer.majorUnits(writer.register.columnTotal(columnIndex)), sheetCellStyle{bold: true, topRule: true, alignEnd: true, format: writer.moneyFormat()})
+		totalValue, totalFormat := writer.excelValue(writer.register.Columns[columnIndex].Kind, writer.register.columnTotal(columnIndex))
+		totalError := writer.writeFormula(sheetRow, columnIndex+1, sumFormula, totalValue, sheetCellStyle{bold: true, topRule: true, alignEnd: true, format: totalFormat})
 		if totalError != nil {
 			return totalError
 		}
