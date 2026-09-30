@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
@@ -144,6 +145,41 @@ func (repository *Repository) UpdateUserLocale(ctx context.Context, querier data
 	_, updateError := querier.ExecContext(ctx, query, companyId, userId, locale, time.Now().UTC())
 	if updateError != nil {
 		return fmt.Errorf("failed to save user language: %w", updateError)
+	}
+
+	return nil
+}
+
+func (repository *Repository) FindSeenTours(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID) ([]string, error) {
+	query := `SELECT seen_tours FROM users WHERE company_id = $1 AND id = $2`
+
+	seenToursText := ""
+	scanError := querier.QueryRowContext(ctx, query, companyId, userId).Scan(&seenToursText)
+	if scanError != nil {
+		return nil, fmt.Errorf("failed to read seen tours: %w", scanError)
+	}
+
+	seenTours := []string{}
+	for _, tourName := range strings.Split(seenToursText, ",") {
+		if tourName != "" {
+			seenTours = append(seenTours, tourName)
+		}
+	}
+	return seenTours, nil
+}
+
+func (repository *Repository) MarkTourSeen(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID, tourName string) error {
+	query := `
+		UPDATE users
+		SET seen_tours = CASE WHEN seen_tours = '' THEN CAST($3 AS TEXT) ELSE seen_tours || ',' || CAST($3 AS TEXT) END,
+		    updated_at = $4
+		WHERE company_id = $1 AND id = $2
+		  AND (',' || seen_tours || ',') NOT LIKE '%,' || CAST($3 AS TEXT) || ',%'
+	`
+
+	_, updateError := querier.ExecContext(ctx, query, companyId, userId, tourName, time.Now().UTC())
+	if updateError != nil {
+		return fmt.Errorf("failed to mark tour seen: %w", updateError)
 	}
 
 	return nil

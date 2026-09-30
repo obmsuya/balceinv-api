@@ -116,6 +116,20 @@ func (handler *Handler) SetLanguage(c *fiber.Ctx) error {
 	return response.Success(c, "Language saved", currentUserView)
 }
 
+func (handler *Handler) MarkTourSeen(c *fiber.Ctx) error {
+	request := TourRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	currentUserView, markError := handler.service.MarkTourSeen(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), request.Tour)
+	if markError != nil {
+		return markError
+	}
+	return response.Success(c, "Tour remembered", currentUserView)
+}
+
 func (handler *Handler) Authenticate() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		sessionToken := sessionTokenFromRequest(c)
