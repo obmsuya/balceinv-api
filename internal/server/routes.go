@@ -101,7 +101,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	authenticate := authHandler.Authenticate()
 	supportPasscode := httpx.RequireSupportPasscode(supportPasscodeHash)
 
-	subscriptionsHandler := subscriptions.NewHandler(subscriptions.NewService(subscriptions.NewRepository()))
+	subscriptionsHandler := subscriptions.NewHandler(subscriptions.NewService(subscriptions.NewRepository(), openDatabase))
 	subscriptionGate := func(c *fiber.Ctx) error { return c.Next() }
 	if !loadedConfig.IsDesktop() {
 		subscriptionGate = subscriptionsHandler.Gate()
