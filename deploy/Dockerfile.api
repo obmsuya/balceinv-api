@@ -1,4 +1,11 @@
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY balce-api /balce-api
+COPY balce-admin /balce-admin
+COPY web /web
+COPY --chown=nonroot:nonroot logs /var/log/balce
 USER nonroot:nonroot
+ENV LISTEN_ADDR=0.0.0.0:8080 \
+    BALCE_STATIC_DIR=/web \
+    LOG_DIR=/var/log/balce
+EXPOSE 8080
 ENTRYPOINT ["/balce-api"]
