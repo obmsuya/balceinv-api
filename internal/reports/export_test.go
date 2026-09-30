@@ -78,6 +78,25 @@ func TestReportExportsAreBrandedAndTraceable(t *testing.T) {
 	}
 }
 
+func valueBeside(t *testing.T, workbook *excelize.File, firstCell string, columnName string) string {
+	t.Helper()
+	sheetName := workbook.GetSheetName(0)
+	calculated, calcError := workbook.CalcCellValue(sheetName, columnName+strconv.Itoa(rowStartingWith(t, workbook, sheetName, firstCell)), excelize.Options{RawCellValue: true})
+	if calcError != nil {
+		t.Fatalf("calculating beside %q: %v", firstCell, calcError)
+	}
+	return calculated
+}
+
+func sheetText(workbook *excelize.File) string {
+	sheetRows, _ := workbook.GetRows(workbook.GetSheetName(0))
+	allText := strings.Builder{}
+	for _, sheetRow := range sheetRows {
+		allText.WriteString(strings.Join(sheetRow, " | ") + "\n")
+	}
+	return allText.String()
+}
+
 func checkReportExports(t *testing.T, harness *apptest.Harness) {
 	company := harness.CreateCompany("Export Shop", "owner@export.test")
 	otherCompany := harness.CreateCompany("Other Export Shop", "owner@otherexport.test")
@@ -104,101 +123,88 @@ func checkReportExports(t *testing.T, harness *apptest.Harness) {
 	sell(t, harness, otherCompany.OwnerToken, "other-export-sale", otherSodaId, 1, cash(99990))
 
 	rangeQuery := "from=" + today() + "&to=" + today()
-	fullReport := harness.Call(http.MethodGet, "/api/reports/summary/export?"+rangeQuery+"&format=xlsx&shop=all", company.OwnerToken, nil)
-	workbook := openWorkbook(t, fullReport)
-	wantDisposition := `attachment; filename="report-` + today() + `-to-` + today() + `.xlsx"`
-	if fullReport.Headers.Get("Content-Disposition") != wantDisposition {
-		t.Fatalf("disposition was %q, want %q", fullReport.Headers.Get("Content-Disposition"), wantDisposition)
+	summary := harness.Call(http.MethodGet, "/api/reports/summary?"+rangeQuery+"&shop=all", company.OwnerToken, nil).Data()
+	salesReport := harness.Call(http.MethodGet, "/api/reports/summary/export?"+rangeQuery+"&format=xlsx&shop=all", company.OwnerToken, nil)
+	salesBook := openWorkbook(t, salesReport)
+	if salesReport.Headers.Get("Content-Disposition") != `attachment; filename="sales-report-`+today()+`-to-`+today()+`.xlsx"` {
+		t.Fatalf("disposition was %q", salesReport.Headers.Get("Content-Disposition"))
 	}
-	if strings.Join(workbook.GetSheetList(), "|") != "Summary|Days|Products|Staff|Shops|Not selling|Filters" {
-		t.Fatalf("sheets were %v", workbook.GetSheetList())
-	}
-
-	companyName, _ := workbook.GetCellValue("Days", "A1")
-	taxLine, _ := workbook.GetCellValue("Days", "A2")
+	companyName, _ := salesBook.GetCellValue(salesBook.GetSheetName(0), "A1")
+	taxLine, _ := salesBook.GetCellValue(salesBook.GetSheetName(0), "A2")
 	if companyName != "Export Shop" || !strings.Contains(taxLine, "123-456-789") || !strings.Contains(taxLine, "VRN: 40-012345-A") {
 		t.Fatalf("the letterhead was %q / %q", companyName, taxLine)
 	}
-	logoPictures, picturesError := workbook.GetPictures("Days", "G1")
+	logoPictures, picturesError := salesBook.GetPictures(salesBook.GetSheetName(0), "E1")
 	if picturesError != nil || len(logoPictures) != 1 {
 		t.Fatalf("the logo was not placed: %d %v", len(logoPictures), picturesError)
 	}
-
-	headerRow := rowStartingWith(t, workbook, "Days", "Date")
-	headerStyleId, _ := workbook.GetCellStyle("Days", "A"+strconv.Itoa(headerRow))
-	headerStyle, styleError := workbook.GetStyle(headerStyleId)
-	if styleError != nil || len(headerStyle.Fill.Color) == 0 || !strings.EqualFold(headerStyle.Fill.Color[0], "5EA500") {
-		t.Fatalf("the header is not in the brand colour: %+v %v", headerStyle.Fill, styleError)
+	salesText := sheetText(salesBook)
+	for _, expected := range []string{"Sales report", "All shops", "Compared with", "Takings, including VAT", "HOW CUSTOMERS PAID", "Prepared by"} {
+		if !strings.Contains(salesText, expected) {
+			t.Errorf("the sales report does not show %q", expected)
+		}
 	}
-	panes, panesError := workbook.GetPanes("Days")
-	if panesError != nil || !panes.Freeze || panes.YSplit != headerRow {
-		t.Fatalf("panes were %+v", panes)
-	}
-	dayRow := strconv.Itoa(headerRow + 1)
-	rawTakings, _ := workbook.GetCellValue("Days", "C"+dayRow, excelize.Options{RawCellValue: true})
-	if rawTakings != "4720" {
-		t.Fatalf("the day's takings cell held %q, want the number 4720", rawTakings)
-	}
-	takingsType, _ := workbook.GetCellType("Days", "C"+dayRow)
-	if takingsType == excelize.CellTypeSharedString || takingsType == excelize.CellTypeInlineString {
-		t.Fatal("money was written as text")
-	}
-	totalsRow := strconv.Itoa(headerRow + 2)
-	takingsFormula, _ := workbook.GetCellFormula("Days", "C"+totalsRow)
-	if strings.TrimPrefix(takingsFormula, "=") != "SUM(C"+dayRow+":C"+dayRow+")" {
-		t.Fatalf("the takings total was %q", takingsFormula)
-	}
-
-	productHeader := rowStartingWith(t, workbook, "Products", "Product")
-	productCells, _ := workbook.GetRows("Products")
-	firstProduct := productCells[productHeader]
-	if firstProduct[0] != "Soda" && firstProduct[0] != "Coffee" {
-		t.Fatalf("products were %v", productCells[productHeader:])
-	}
-	for _, sheetRow := range productCells {
-		for _, cellText := range sheetRow {
-			if strings.Contains(cellText, "Other Soda") {
-				t.Fatal("another company's product leaked into the export")
+	wantGross := strconv.FormatFloat(summary["gross_profit"].(float64), 'f', 0, 64)
+	sheetRows, _ := salesBook.GetRows(salesBook.GetSheetName(0))
+	for rowIndex, sheetRow := range sheetRows {
+		if len(sheetRow) > 1 && sheetRow[1] == "Gross profit" {
+			calculated, _ := salesBook.CalcCellValue(salesBook.GetSheetName(0), "C"+strconv.Itoa(rowIndex+1), excelize.Options{RawCellValue: true})
+			formula, _ := salesBook.GetCellFormula(salesBook.GetSheetName(0), "C"+strconv.Itoa(rowIndex+1))
+			if calculated != wantGross || formula == "" {
+				t.Fatalf("gross profit calculates to %q with formula %q, want %s", calculated, formula, wantGross)
 			}
 		}
 	}
-
-	summaryHeader := rowStartingWith(t, workbook, "Summary", "Item")
-	takingsLabel, _ := workbook.GetCellValue("Summary", "A"+strconv.Itoa(summaryHeader+1))
-	summaryTakings, _ := workbook.GetCellValue("Summary", "B"+strconv.Itoa(summaryHeader+1), excelize.Options{RawCellValue: true})
-	if takingsLabel != "Takings (incl. tax) (TZS)" || summaryTakings != "4720" {
-		t.Fatalf("the summary started %q = %q", takingsLabel, summaryTakings)
-	}
-	filterHeader := rowStartingWith(t, workbook, "Filters", "Filter")
-	shopsFilter, _ := workbook.GetCellValue("Filters", "B"+strconv.Itoa(filterHeader+2))
-	if shopsFilter != "All shops" {
-		t.Fatalf("the shops filter said %q", shopsFilter)
+	if strings.Contains(salesText, "Other Soda") || strings.Contains(salesText, "99,990") {
+		t.Fatal("another company's sales leaked into the report")
 	}
 
-	swahiliReport := harness.Call(http.MethodGet, "/api/reports/summary/export?"+rangeQuery+"&format=xlsx&lang=sw", company.OwnerToken, nil)
-	swahiliWorkbook := openWorkbook(t, swahiliReport)
-	if strings.Join(swahiliWorkbook.GetSheetList(), "|") != "Muhtasari|Siku|Bidhaa|Wafanyakazi|Maduka|Bidhaa zisizouzwa|Vichujio" {
-		t.Fatalf("Swahili sheets were %v", swahiliWorkbook.GetSheetList())
+	daily := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery+"&format=xlsx", company.OwnerToken, nil))
+	if valueBeside(t, daily, "Total", "C") != "4720" || valueBeside(t, daily, "Total", "B") != "2" {
+		t.Fatalf("the daily totals were %s takings from %s sales", valueBeside(t, daily, "Total", "C"), valueBeside(t, daily, "Total", "B"))
 	}
-	swahiliTotal, _ := swahiliWorkbook.GetCellValue("Siku", "A"+strconv.Itoa(rowStartingWith(t, swahiliWorkbook, "Siku", "Tarehe")+2))
-	if swahiliTotal != "Jumla" {
-		t.Fatalf("the Swahili totals label was %q", swahiliTotal)
+	headerRow := rowStartingWith(t, daily, daily.GetSheetName(0), "Date")
+	panes, panesError := daily.GetPanes(daily.GetSheetName(0))
+	if panesError != nil || !panes.Freeze || panes.YSplit != headerRow {
+		t.Fatalf("panes were %+v", panes)
+	}
+	takingsType, _ := daily.GetCellType(daily.GetSheetName(0), "C"+strconv.Itoa(headerRow+1))
+	if takingsType == excelize.CellTypeSharedString || takingsType == excelize.CellTypeInlineString {
+		t.Fatal("money was written as text")
 	}
 
+	products := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/products/export?"+rangeQuery+"&format=xlsx&sort=profit", company.OwnerToken, nil))
+	productsText := sheetText(products)
+	if !strings.Contains(productsText, "Soda") || !strings.Contains(productsText, "Coffee") || !strings.Contains(productsText, "Ranked by: Profit") || strings.Contains(productsText, "Other Soda") {
+		t.Fatalf("the products report was:\n%s", productsText)
+	}
+
+	stock := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/inventory/export?format=xlsx", company.OwnerToken, nil))
+	stockValue := strconv.FormatInt(98*600+99*900+7*200, 10)
+	if valueBeside(t, stock, "Total", "F") != stockValue {
+		t.Fatalf("stock at cost totals %s, want %s", valueBeside(t, stock, "Total", "F"), stockValue)
+	}
+	notSelling := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/dead-stock/export?format=xlsx", company.OwnerToken, nil))
+	if !strings.Contains(sheetText(notSelling), "Idle") || !strings.Contains(sheetText(notSelling), "Never sold") {
+		t.Fatalf("the not-selling report was:\n%s", sheetText(notSelling))
+	}
+
+	swahili := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery+"&format=xlsx&lang=sw", company.OwnerToken, nil))
+	if swahili.GetSheetName(0) != "Mauzo kwa siku" || rowStartingWith(t, swahili, swahili.GetSheetName(0), "Jumla") == 0 {
+		t.Fatalf("the Swahili sheet was %q", swahili.GetSheetName(0))
+	}
 	languageSaved := harness.Call(http.MethodPut, "/api/auth/language", company.OwnerToken, map[string]any{"locale": "sw"})
 	if languageSaved.Status != http.StatusOK {
 		t.Fatalf("language returned %d", languageSaved.Status)
 	}
-	usersLanguage := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery, company.OwnerToken, nil))
-	if usersLanguage.GetSheetList()[1] != "Siku" {
-		t.Fatalf("the export ignored the user's language: %v", usersLanguage.GetSheetList())
+	if usersLanguage := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery, company.OwnerToken, nil)); usersLanguage.GetSheetName(0) != "Mauzo kwa siku" {
+		t.Fatalf("the export ignored the user's language: %q", usersLanguage.GetSheetName(0))
 	}
-	englishOverride := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery+"&lang=en", company.OwnerToken, nil))
-	if englishOverride.GetSheetList()[1] != "Days" {
-		t.Fatalf("lang=en was ignored: %v", englishOverride.GetSheetList())
+	if englishOverride := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export?"+rangeQuery+"&lang=en", company.OwnerToken, nil)); englishOverride.GetSheetName(0) != "Sales per day" {
+		t.Fatalf("lang=en was ignored: %q", englishOverride.GetSheetName(0))
 	}
 
-	for _, reportName := range []string{"summary", "daily", "products", "cashiers", "shops", "inventory"} {
+	for _, reportName := range []string{"summary", "daily", "products", "cashiers", "shops", "inventory", "dead-stock"} {
 		for _, exportFormat := range []string{"xlsx", "pdf"} {
 			exported := harness.Call(http.MethodGet, "/api/reports/"+reportName+"/export?"+rangeQuery+"&format="+exportFormat, company.OwnerToken, nil)
 			if exported.Status != http.StatusOK || !strings.Contains(exported.Headers.Get("Content-Disposition"), "."+exportFormat+`"`) {
@@ -214,7 +220,7 @@ func checkReportExports(t *testing.T, harness *apptest.Harness) {
 		t.Fatal("the PDF title is not in the user's Swahili")
 	}
 	stockExport := harness.Call(http.MethodGet, "/api/reports/inventory/export?format=pdf&lang=en", company.OwnerToken, nil)
-	if !strings.Contains(stockExport.Headers.Get("Content-Disposition"), "stock-report-"+today()+".pdf") || !containsUtf16(stockExport.Raw, "Stock report") {
+	if !strings.Contains(stockExport.Headers.Get("Content-Disposition"), "stock-on-hand-"+today()+".pdf") || !containsUtf16(stockExport.Raw, "Stock on hand") {
 		t.Fatalf("the stock export was %q", stockExport.Headers.Get("Content-Disposition"))
 	}
 

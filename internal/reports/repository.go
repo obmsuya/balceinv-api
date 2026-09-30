@@ -513,3 +513,51 @@ func averageOf(total int64, count int64) int64 {
 	}
 	return (total + count/2) / count
 }
+
+func (repository *Repository) StockLines(ctx context.Context, querier database.Querier, scope Scope) ([]StockLineView, error) {
+	arguments := &queryArguments{}
+	companyPlaceholder := arguments.add(scope.CompanyId)
+	shopFilter := shopCondition("sh.id", scope, arguments)
+	defaultMinimumPlaceholder := arguments.add(stock.DefaultMinimumStock)
+	query := `
+		SELECT p.id, p.name, p.variant_label, p.sku, COALESCE(p.category, ''),
+		       CAST(COALESCE(SUM(COALESCE(ss.quantity, 0)), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(COALESCE(ss.min_stock, ` + defaultMinimumPlaceholder + `)), 0) AS BIGINT),
+		       p.cost_price, p.price
+		FROM products p
+		JOIN shops sh ON sh.company_id = p.company_id AND sh.is_active` + shopFilter + `
+		LEFT JOIN shop_stock ss ON ss.company_id = p.company_id AND ss.product_id = p.id AND ss.shop_id = sh.id
+		WHERE p.company_id = ` + companyPlaceholder + ` AND p.is_active
+		GROUP BY p.id, p.name, p.variant_label, p.sku, p.category, p.cost_price, p.price
+		ORDER BY p.name, p.variant_label, p.id
+	`
+
+	stockRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list stock on hand: %w", queryError)
+	}
+	defer stockRows.Close()
+
+	stockLines := []StockLineView{}
+	for stockRows.Next() {
+		stockLine := StockLineView{}
+		scanError := stockRows.Scan(
+			&stockLine.ProductId,
+			&stockLine.Name,
+			&stockLine.VariantLabel,
+			&stockLine.Sku,
+			&stockLine.Category,
+			&stockLine.Quantity,
+			&stockLine.MinimumStock,
+			&stockLine.CostPrice,
+			&stockLine.Price,
+		)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan stock on hand: %w", scanError)
+		}
+		stockLine.ValueAtCost = stockLine.Quantity * stockLine.CostPrice
+		stockLine.ValueAtPrice = stockLine.Quantity * stockLine.Price
+		stockLines = append(stockLines, stockLine)
+	}
+	return stockLines, stockRows.Err()
+}

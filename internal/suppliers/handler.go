@@ -119,6 +119,17 @@ func (handler *Handler) DeactivateSupplier(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) Aging(c *fiber.Ctx) error {
+	if c.Query("format") != "" {
+		agingFile, documentError := handler.service.AgingDocument(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), AgingDocumentRequest{
+			Format:   c.Query("format"),
+			Language: c.Query("lang"),
+			AsOf:     c.Query("as_of"),
+		})
+		if documentError != nil {
+			return respondWithServiceError(c, documentError)
+		}
+		return httpx.SendFile(c, agingFile.Name, agingFile.ContentType, agingFile.Bytes)
+	}
 	agingView, agingError := handler.service.Aging(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("as_of"))
 	if agingError != nil {
 		return respondWithServiceError(c, agingError)
