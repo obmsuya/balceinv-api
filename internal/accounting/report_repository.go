@@ -167,6 +167,55 @@ func (repository *Repository) StatementLines(ctx context.Context, querier databa
 	return statementLines, lineRows.Err()
 }
 
+func (repository *Repository) CounterpartAccounts(ctx context.Context, querier database.Querier, companyId uuid.UUID, accountId uuid.UUID, entryIds []uuid.UUID) (map[uuid.UUID][]AccountReferenceView, error) {
+	counterparts := map[uuid.UUID][]AccountReferenceView{}
+	const chunkSize = 400
+	for chunkStart := 0; chunkStart < len(entryIds); chunkStart += chunkSize {
+		chunk := entryIds[chunkStart:min(chunkStart+chunkSize, len(entryIds))]
+		arguments := &queryArguments{}
+		companyPlaceholder := arguments.add(companyId)
+		accountPlaceholder := arguments.add(accountId)
+		entryPlaceholders := make([]string, 0, len(chunk))
+		for _, entryId := range chunk {
+			entryPlaceholders = append(entryPlaceholders, arguments.add(entryId))
+		}
+		query := `
+			SELECT l.entry_id, a.code, a.system_key, a.name
+			FROM journal_lines l
+			JOIN accounts a ON a.company_id = l.company_id AND a.id = l.account_id
+			WHERE l.company_id = ` + companyPlaceholder + ` AND l.account_id <> ` + accountPlaceholder + `
+			  AND l.entry_id IN (` + strings.Join(entryPlaceholders, ", ") + `)
+			ORDER BY l.entry_id, l.line_no
+		`
+		counterpartRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
+		if queryError != nil {
+			return nil, fmt.Errorf("failed to list the other side of the entries: %w", queryError)
+		}
+		for counterpartRows.Next() {
+			entryId := uuid.UUID{}
+			reference := AccountReferenceView{}
+			scanError := counterpartRows.Scan(&entryId, &reference.Code, &reference.SystemKey, &reference.Name)
+			if scanError != nil {
+				counterpartRows.Close()
+				return nil, fmt.Errorf("failed to scan the other side of an entry: %w", scanError)
+			}
+			isRepeated := false
+			for _, known := range counterparts[entryId] {
+				isRepeated = isRepeated || known.Code == reference.Code
+			}
+			if !isRepeated {
+				counterparts[entryId] = append(counterparts[entryId], reference)
+			}
+		}
+		rowsError := counterpartRows.Err()
+		counterpartRows.Close()
+		if rowsError != nil {
+			return nil, fmt.Errorf("failed to read the other side of the entries: %w", rowsError)
+		}
+	}
+	return counterparts, nil
+}
+
 func (repository *Repository) SalesBetween(ctx context.Context, querier database.Querier, companyId uuid.UUID, from time.Time, to time.Time) (int64, int64, int64, error) {
 	query := `
 		SELECT COUNT(*), CAST(COALESCE(SUM(total), 0) AS BIGINT), CAST(COALESCE(SUM(tax_total), 0) AS BIGINT)

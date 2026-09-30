@@ -339,6 +339,20 @@ func (service *Service) Statement(ctx context.Context, querier database.Querier,
 	if linesError != nil {
 		return StatementView{}, linesError
 	}
+	entryIds := make([]uuid.UUID, 0, len(statementLines))
+	for _, statementLine := range statementLines {
+		entryIds = append(entryIds, statementLine.EntryId)
+	}
+	counterparts, counterpartsError := service.repository.CounterpartAccounts(ctx, querier, principal.CompanyId, chosenAccount.Id, entryIds)
+	if counterpartsError != nil {
+		return StatementView{}, counterpartsError
+	}
+	for lineIndex := range statementLines {
+		statementLines[lineIndex].Counterparts = counterparts[statementLines[lineIndex].EntryId]
+		if statementLines[lineIndex].Counterparts == nil {
+			statementLines[lineIndex].Counterparts = []AccountReferenceView{}
+		}
+	}
 
 	statement := StatementView{
 		Account:        toAccountView(chosenAccount),

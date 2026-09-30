@@ -207,17 +207,24 @@ type TrialBalanceView struct {
 }
 
 type StatementLineView struct {
-	EntryId     uuid.UUID  `json:"entry_id"`
-	EntryNumber int64      `json:"entry_number"`
-	Number      string     `json:"number"`
-	EntryDate   string     `json:"entry_date"`
-	SourceType  string     `json:"source_type"`
-	Memo        *string    `json:"memo"`
-	Debit       int64      `json:"debit"`
-	Credit      int64      `json:"credit"`
-	Balance     int64      `json:"balance"`
-	ShopId      *uuid.UUID `json:"shop_id"`
-	ShopName    *string    `json:"shop_name"`
+	EntryId      uuid.UUID              `json:"entry_id"`
+	EntryNumber  int64                  `json:"entry_number"`
+	Number       string                 `json:"number"`
+	EntryDate    string                 `json:"entry_date"`
+	SourceType   string                 `json:"source_type"`
+	Memo         *string                `json:"memo"`
+	Debit        int64                  `json:"debit"`
+	Credit       int64                  `json:"credit"`
+	Balance      int64                  `json:"balance"`
+	ShopId       *uuid.UUID             `json:"shop_id"`
+	ShopName     *string                `json:"shop_name"`
+	Counterparts []AccountReferenceView `json:"counterparts"`
+}
+
+type AccountReferenceView struct {
+	Code      string  `json:"code"`
+	SystemKey *string `json:"system_key"`
+	Name      *string `json:"name"`
 }
 
 type StatementView struct {
