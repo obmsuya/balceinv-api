@@ -134,7 +134,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Get("/api/license/packages", authenticate, licensing.Packages)
 		application.Post("/api/license/pay", authenticate, licensing.Pay)
 	} else {
-		application.Post("/api/setup", requestTransaction, tenancyHandler.RunFirstSetup)
+		application.Post("/api/setup", newSignupLimiter(), requestTransaction, tenancyHandler.RunFirstSetup)
 	}
 
 	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)
@@ -372,6 +372,19 @@ func newPhoneUploadLimiter() fiber.Handler {
 		Expiration: time.Minute,
 		LimitReached: func(c *fiber.Ctx) error {
 			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many photos. Try again in a minute")
+		},
+	})
+}
+
+func newSignupLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: time.Hour,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many new businesses from this network. Try again in an hour")
 		},
 	})
 }

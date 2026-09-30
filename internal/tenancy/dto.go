@@ -20,6 +20,7 @@ type SetupRequest struct {
 type SetupStatusView struct {
 	Configured   bool `json:"configured"`
 	OldDataFound bool `json:"old_data_found"`
+	SignupOpen   bool `json:"signup_open"`
 }
 
 type SetupResultView struct {
