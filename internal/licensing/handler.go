@@ -40,23 +40,34 @@ func Enforce() fiber.Handler {
 		if !isApiPath {
 			return c.Next()
 		}
-		for _, skippedPrefix := range skippedPathPrefixes {
-			if strings.HasPrefix(requestPath, skippedPrefix) {
-				return c.Next()
-			}
+		if IsSkippedPath(requestPath) {
+			return c.Next()
 		}
 
 		checkError := license.Check()
 		if checkError == nil {
 			return c.Next()
 		}
-		return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
-			"success": false,
-			"error":   "subscription_required",
-			"code":    "subscription_required",
-			"message": checkError.Error(),
-		})
+		return PaymentRequired(c, checkError.Error())
 	}
+}
+
+func PaymentRequired(c *fiber.Ctx, message string) error {
+	return c.Status(fiber.StatusPaymentRequired).JSON(fiber.Map{
+		"success": false,
+		"error":   "subscription_required",
+		"code":    "subscription_required",
+		"message": message,
+	})
+}
+
+func IsSkippedPath(requestPath string) bool {
+	for _, skippedPrefix := range skippedPathPrefixes {
+		if strings.HasPrefix(requestPath, skippedPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func IssueTrialAfterSetup() fiber.Handler {
@@ -110,6 +121,10 @@ func Packages(c *fiber.Ctx) error {
 }
 
 func Pay(c *fiber.Ctx) error {
+	return PayFor(c, license.ComputeHardwareId)
+}
+
+func PayFor(c *fiber.Ctx, hardwareIdOf func() (string, error)) error {
 	if !httpx.CurrentPrincipal(c).IsOwner {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"success": false, "code": "forbidden", "error": "Only the owner can pay for the subscription."})
 	}
@@ -132,7 +147,7 @@ func Pay(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Choose a plan first."})
 	}
 
-	hardwareId, computeError := license.ComputeHardwareId()
+	hardwareId, computeError := hardwareIdOf()
 	if computeError != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to read hardware identifier"})
 	}
