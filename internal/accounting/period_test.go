@@ -24,8 +24,10 @@ func TestThePreviousPeriodMatchesTheShapeOfTheReport(t *testing.T) {
 		{"January against December", "2027-01-01", "2027-01-31", "2026-12-01", "2026-12-31", [2]string{"Jan 2027", "Dec 2026"}},
 		{"a quarter", "2026-07-01", "2026-09-30", "2026-04-01", "2026-06-30", [2]string{"This period", "Previous period"}},
 		{"a whole year", "2026-01-01", "2026-12-31", "2025-01-01", "2025-12-31", [2]string{"2026", "2025"}},
-		{"month to date", "2026-09-01", "2026-09-17", "2026-08-15", "2026-08-31", [2]string{"This period", "Previous period"}},
-		{"one day", "2026-09-17", "2026-09-17", "2026-09-16", "2026-09-16", [2]string{"This period", "Previous period"}},
+		{"month to date", "2026-09-01", "2026-09-17", "2026-08-01", "2026-08-17", [2]string{"1–17 Sep 2026", "1–17 Aug 2026"}},
+		{"month to date past the end of a shorter month", "2026-03-01", "2026-03-30", "2026-02-01", "2026-02-28", [2]string{"1–30 Mar 2026", "Feb 2026"}},
+		{"one day", "2026-09-17", "2026-09-17", "2026-09-16", "2026-09-16", [2]string{"17 Sep 2026", "16 Sep 2026"}},
+		{"days across two months", "2026-08-25", "2026-09-07", "2026-08-11", "2026-08-24", [2]string{"This period", "11–24 Aug 2026"}},
 	}
 	exporting := exporter{language: documents.English}
 	for _, testCase := range cases {

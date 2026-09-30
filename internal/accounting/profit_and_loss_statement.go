@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -222,6 +223,13 @@ func (exporting exporter) periodHeading(period periodRange, fallbackKey string) 
 	if isWholeYear {
 		return period.fromDate.Format("2006")
 	}
+	isWithinOneMonth := period.fromDate.Year() == period.toDate.Year() && period.fromDate.Month() == period.toDate.Month()
+	if isWithinOneMonth && period.fromDate.Equal(period.toDate) {
+		return documents.FormatDate(exporting.language, period.fromDate)
+	}
+	if isWithinOneMonth {
+		return strconv.Itoa(period.fromDate.Day()) + "–" + strconv.Itoa(period.toDate.Day()) + " " + documents.MonthYear(exporting.language, period.fromDate)
+	}
 	return exporting.profitAndLossLabel(fallbackKey)
 }
 
@@ -254,6 +262,16 @@ func precedingPeriod(period periodRange) periodRange {
 	if coversWholeMonths {
 		monthCount := (period.toDate.Year()-period.fromDate.Year())*12 + int(period.toDate.Month()-period.fromDate.Month()) + 1
 		return periodRange{fromDate: period.fromDate.AddDate(0, -monthCount, 0), toDate: dayBefore}
+	}
+	isMonthToDate := period.fromDate.Day() == 1 && period.toDate.Year() == period.fromDate.Year() && period.toDate.Month() == period.fromDate.Month()
+	if isMonthToDate {
+		previousMonthStart := period.fromDate.AddDate(0, -1, 0)
+		previousMonthEnd := dayBefore
+		sameDay := previousMonthStart.AddDate(0, 0, period.toDate.Day()-1)
+		if sameDay.After(previousMonthEnd) {
+			sameDay = previousMonthEnd
+		}
+		return periodRange{fromDate: previousMonthStart, toDate: sameDay}
 	}
 	dayCount := int(period.toDate.Sub(period.fromDate).Hours()/24) + 1
 	return periodRange{fromDate: dayBefore.AddDate(0, 0, -(dayCount - 1)), toDate: dayBefore}
