@@ -16,7 +16,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit/apptest"
 )
 
-func TestFirstSetupRunsOnceOnDesktopAndIsClosedInCloud(t *testing.T) {
+func TestFirstSetupRunsOnceOnDesktopAndIsOpenToEveryBusinessInCloud(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		harness := apptest.Start(t, engineCase)
 		setupBody := map[string]any{
@@ -28,14 +28,7 @@ func TestFirstSetupRunsOnceOnDesktopAndIsClosedInCloud(t *testing.T) {
 
 		isCloud := engineCase.Engine == config.EnginePostgres
 		if isCloud {
-			statusResponse := harness.Call(http.MethodGet, "/api/setup/status", "", nil)
-			if statusResponse.Data()["configured"] != true {
-				t.Fatalf("cloud must always report configured, got %v", statusResponse.Body)
-			}
-			setupResponse := harness.Call(http.MethodPost, "/api/setup", "", setupBody)
-			if setupResponse.Status != http.StatusNotFound {
-				t.Fatalf("cloud setup returned %d, want 404", setupResponse.Status)
-			}
+			checkCloudSignUp(t, harness, setupBody)
 			return
 		}
 
@@ -354,4 +347,50 @@ func TestSetupWarnsWhenTheOldAppsDataIsOnThisComputer(t *testing.T) {
 			t.Fatal("the notice stayed after the business was set up")
 		}
 	})
+}
+
+func checkCloudSignUp(t *testing.T, harness *apptest.Harness, setupBody map[string]any) {
+	statusResponse := harness.Call(http.MethodGet, "/api/setup/status", "", nil)
+	if statusResponse.Data()["signup_open"] != true {
+		t.Fatalf("cloud must report signup open, got %v", statusResponse.Body)
+	}
+
+	firstBusiness := harness.Call(http.MethodPost, "/api/setup", "", setupBody)
+	if firstBusiness.Status != http.StatusCreated {
+		t.Fatalf("cloud sign-up returned %d: %v", firstBusiness.Status, firstBusiness.Body)
+	}
+	sameEmail := harness.Call(http.MethodPost, "/api/setup", "", setupBody)
+	if sameEmail.Status != http.StatusConflict || sameEmail.Code() != "email_taken" {
+		t.Fatalf("a second business with the same email returned %d %v", sameEmail.Status, sameEmail.Body)
+	}
+	secondBusiness := harness.Call(http.MethodPost, "/api/setup", "", map[string]any{
+		"business_name":  "Duka la Baba",
+		"owner_name":     "Baba",
+		"owner_email":    "baba@duka.test",
+		"owner_password": "strong-password-2",
+	})
+	if secondBusiness.Status != http.StatusCreated {
+		t.Fatalf("a second business returned %d: %v", secondBusiness.Status, secondBusiness.Body)
+	}
+
+	mamaToken := harness.MustLogin("mama@duka.test", "strong-password-1")
+	babaToken := harness.MustLogin("baba@duka.test", "strong-password-2")
+	mamaMe := harness.Call(http.MethodGet, "/api/auth/me", mamaToken, nil).Data()
+	babaMe := harness.Call(http.MethodGet, "/api/auth/me", babaToken, nil).Data()
+	if mamaMe["company_name"] != "Duka la Mama" || babaMe["company_name"] != "Duka la Baba" || mamaMe["must_change_password"] == true {
+		t.Fatalf("each owner must land in their own business: %v %v", mamaMe, babaMe)
+	}
+	harness.Call(http.MethodPost, "/api/products", mamaToken, map[string]any{"sku": "MAMA-1", "name": "Sukari", "price": 3000})
+	babaProducts := harness.Call(http.MethodGet, "/api/products", babaToken, nil)
+	if strings.Contains(fmt.Sprint(babaProducts.Body), "Sukari") {
+		t.Fatal("one business saw another business's products")
+	}
+
+	lastStatus := 0
+	for attempt := 0; attempt < 10; attempt++ {
+		lastStatus = harness.Call(http.MethodPost, "/api/setup", "", setupBody).Status
+	}
+	if lastStatus != http.StatusTooManyRequests {
+		t.Fatalf("sign-ups from one network were not limited, last status %d", lastStatus)
+	}
 }
