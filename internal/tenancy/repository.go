@@ -3,8 +3,10 @@ package tenancy
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/license"
 	"github.com/google/uuid"
 )
 
@@ -24,6 +26,20 @@ func (repository *Repository) CountCompanies(ctx context.Context, querier databa
 	}
 
 	return companyCount, nil
+}
+
+func (repository *Repository) InsertTrialSubscription(ctx context.Context, querier database.Querier, companyId uuid.UUID, trialEndsAt time.Time, createdAt time.Time) error {
+	query := `
+		INSERT INTO company_subscriptions (company_id, license_key, expires_at, days_granted, max_devices, is_trial, created_at, updated_at)
+		VALUES ($1, 'trial', $2, $3, 1, TRUE, $4, $4)
+	`
+
+	_, insertError := querier.ExecContext(ctx, query, companyId, trialEndsAt, license.TrialDurationDays, createdAt)
+	if insertError != nil {
+		return fmt.Errorf("failed to insert trial subscription: %w", insertError)
+	}
+
+	return nil
 }
 
 func (repository *Repository) InsertCompany(ctx context.Context, querier database.Querier, newCompany Company) error {

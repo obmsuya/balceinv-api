@@ -3,6 +3,7 @@ package tenancy
 import (
 	"context"
 	"errors"
+	"github.com/chrisostomemataba/balceinv-api/license"
 	"os"
 	"strings"
 	"time"
@@ -80,6 +81,12 @@ func (service *Service) CreateCompany(ctx context.Context, querier database.Quer
 	insertCompanyError := service.repository.InsertCompany(ctx, querier, newCompany)
 	if insertCompanyError != nil {
 		return SetupResultView{}, insertCompanyError
+	}
+
+	trialEndsAt := createdAt.AddDate(0, 0, license.TrialDurationDays)
+	insertTrialError := service.repository.InsertTrialSubscription(ctx, querier, companyId, trialEndsAt, createdAt)
+	if insertTrialError != nil {
+		return SetupResultView{}, insertTrialError
 	}
 
 	insertSettingsError := service.settingsRepository.InsertDefaults(ctx, querier, companyId, createdAt)
