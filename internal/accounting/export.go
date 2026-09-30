@@ -17,6 +17,7 @@ const (
 	ExportTrialBalance  = "trial-balance"
 	ExportStatement     = "statement"
 	ExportVat           = "vat"
+	ExportOverview      = "overview"
 )
 
 var ErrUnknownExport = errors.New("this report cannot be exported")
@@ -221,21 +222,6 @@ func (exporting exporter) accountName(code string, systemKey *string, name *stri
 	return code + " · " + displayName
 }
 
-func (exporting exporter) amountsTable(title string, rows []AccountAmountView) documents.Table {
-	tableRows := [][]any{}
-	for _, row := range rows {
-		tableRows = append(tableRows, []any{exporting.accountName(row.Code, row.SystemKey, row.Name), row.Amount})
-	}
-	return documents.Table{
-		Title: title,
-		Columns: []documents.Column{
-			{Title: exporting.label("account"), Kind: documents.Text},
-			{Title: exporting.moneyTitle("amount"), Kind: documents.Money, Sum: true},
-		},
-		Rows: tableRows,
-	}
-}
-
 func (service *Service) Export(ctx context.Context, querier database.Querier, principal *identity.Principal, request ExportRequest) (documents.File, error) {
 	exportFormat, formatError := documents.NormalizeFormat(request.Format)
 	if formatError != nil {
@@ -254,129 +240,43 @@ func (service *Service) Export(ctx context.Context, querier database.Querier, pr
 		language: documents.ResolveLanguage(request.Language, viewer.Language, branding.DefaultLanguage),
 	}
 
-	if request.Report == ExportProfitAndLoss {
-		statement, fileName, statementError := service.profitAndLossStatement(ctx, querier, principal, request, exporting, viewer.Name)
+	switch request.Report {
+	case ExportProfitAndLoss, ExportBalanceSheet, ExportOverview:
+		statement, fileName, statementError := service.statementFor(ctx, querier, principal, request, exporting, viewer.Name)
 		if statementError != nil {
 			return documents.File{}, statementError
 		}
 		return documents.RenderStatement(branding, statement, exportFormat, fileName)
+	case ExportTrialBalance, ExportStatement, ExportVat:
+		register, fileName, registerError := service.registerFor(ctx, querier, principal, request, exporting, viewer.Name)
+		if registerError != nil {
+			return documents.File{}, registerError
+		}
+		return documents.RenderRegister(branding, register, exportFormat, fileName)
 	}
-
-	document := documents.Document{
-		Language:    exporting.language,
-		Title:       exporting.label("title." + request.Report),
-		GeneratedBy: viewer.Name,
-		GeneratedAt: time.Now(),
-	}
-	fileName, fillError := service.fillExport(ctx, querier, principal, request, exporting, &document)
-	if fillError != nil {
-		return documents.File{}, fillError
-	}
-	return documents.Render(branding, document, exportFormat, fileName)
+	return documents.File{}, ErrUnknownExport
 }
 
-func (service *Service) fillExport(ctx context.Context, querier database.Querier, principal *identity.Principal, request ExportRequest, exporting exporter, document *documents.Document) (string, error) {
+func (service *Service) statementFor(ctx context.Context, querier database.Querier, principal *identity.Principal, request ExportRequest, exporting exporter, generatedBy string) (documents.Statement, string, error) {
 	switch request.Report {
 	case ExportBalanceSheet:
-		report, reportError := service.BalanceSheet(ctx, querier, principal, request.Range.ToDate)
-		if reportError != nil {
-			return "", reportError
-		}
-		document.Subtitle = exporting.asAt(report.AsOf)
-		equityRows := append(report.Equity, AccountAmountView{Code: "", Name: textOrNil(exporting.label("profitToDate")), Amount: report.ProfitToDate})
-		document.Tables = []documents.Table{
-			exporting.amountsTable(exporting.label("assets"), report.Assets),
-			exporting.amountsTable(exporting.label("liabilities"), report.Liabilities),
-			exporting.amountsTable(exporting.label("equity"), equityRows),
-		}
-		document.Totals = []documents.Field{
-			{Label: exporting.label("totalAssets"), Value: report.TotalAssets, Kind: documents.Money, Strong: true},
-			{Label: exporting.label("totalLiabilities"), Value: report.TotalLiabilities, Kind: documents.Money},
-			{Label: exporting.label("totalEquity"), Value: report.TotalEquity, Kind: documents.Money},
-			{Label: exporting.label("liabilitiesAndEquity"), Value: report.TotalLiabilities + report.TotalEquity, Kind: documents.Money, Strong: true},
-		}
-		return "balance-sheet-" + report.AsOf, nil
-	case ExportTrialBalance:
-		report, reportError := service.TrialBalance(ctx, querier, principal, request.Range.ToDate)
-		if reportError != nil {
-			return "", reportError
-		}
-		document.Subtitle = exporting.asAt(report.AsOf)
-		trialRows := [][]any{}
-		for _, row := range report.Rows {
-			trialRows = append(trialRows, []any{exporting.accountName(row.Code, row.SystemKey, row.Name), row.DebitBalance, row.CreditBalance})
-		}
-		document.Tables = []documents.Table{{
-			Title: exporting.label("title.trial-balance"),
-			Columns: []documents.Column{
-				{Title: exporting.label("account"), Kind: documents.Text},
-				{Title: exporting.moneyTitle("debit"), Kind: documents.Money, Sum: true},
-				{Title: exporting.moneyTitle("credit"), Kind: documents.Money, Sum: true},
-			},
-			Rows: trialRows,
-		}}
-		return "trial-balance-" + report.AsOf, nil
-	case ExportStatement:
-		report, reportError := service.Statement(ctx, querier, principal, request.Range, request.Account)
-		if reportError != nil {
-			return "", reportError
-		}
-		accountTitle := exporting.accountName(report.Account.Code, report.Account.SystemKey, report.Account.Name)
-		document.Subtitle = accountTitle + " · " + periodText(exporting.language, report.FromDate, report.ToDate)
-		inTitle, outTitle := "debit", "credit"
-		if report.Account.IsMoney {
-			inTitle, outTitle = "moneyIn", "moneyOut"
-		}
-		statementRows := [][]any{}
-		for _, line := range report.Lines {
-			description := exporting.label("source." + line.SourceType)
-			if line.Memo != nil {
-				description += " · " + *line.Memo
-			}
-			statementRows = append(statementRows, []any{exporting.dateCell(line.EntryDate), line.Number, description, line.Debit, line.Credit, line.Balance})
-		}
-		document.Cards = []documents.Field{
-			{Label: exporting.label("openingBalance"), Value: report.OpeningBalance, Kind: documents.Money},
-			{Label: exporting.label("closingBalance"), Value: report.ClosingBalance, Kind: documents.Money},
-		}
-		document.Tables = []documents.Table{{
-			Title: exporting.label("lines"),
-			Columns: []documents.Column{
-				{Title: exporting.label("date"), Kind: documents.Date},
-				{Title: exporting.label("entry"), Kind: documents.Text},
-				{Title: exporting.label("description"), Kind: documents.Text},
-				{Title: exporting.moneyTitle(inTitle), Kind: documents.Money, Sum: true},
-				{Title: exporting.moneyTitle(outTitle), Kind: documents.Money, Sum: true},
-				{Title: exporting.moneyTitle("balance"), Kind: documents.Money},
-			},
-			Rows: statementRows,
-		}}
-		document.Landscape = true
-		return "statement-" + report.Account.Code + "-" + report.FromDate + "-to-" + report.ToDate, nil
-	case ExportVat:
-		report, reportError := service.VatReport(ctx, querier, principal, request.Range)
-		if reportError != nil {
-			return "", reportError
-		}
-		document.Subtitle = periodText(exporting.language, report.FromDate, report.ToDate)
-		vatRows := [][]any{}
-		for _, month := range report.Months {
-			vatRows = append(vatRows, []any{month.Month, month.Charged, month.Reclaimable, month.ToPay, exporting.dateCell(month.DueDate)})
-		}
-		document.Tables = []documents.Table{{
-			Title: exporting.label("title.vat"),
-			Columns: []documents.Column{
-				{Title: exporting.label("month"), Kind: documents.Text},
-				{Title: exporting.moneyTitle("vatCharged"), Kind: documents.Money, Sum: true},
-				{Title: exporting.moneyTitle("vatReclaimable"), Kind: documents.Money, Sum: true},
-				{Title: exporting.moneyTitle("vatToPay"), Kind: documents.Money, Sum: true},
-				{Title: exporting.label("dueDate"), Kind: documents.Date},
-			},
-			Rows: vatRows,
-		}}
-		return "vat-" + report.FromDate + "-to-" + report.ToDate, nil
+		return service.balanceSheetStatement(ctx, querier, principal, request, exporting, generatedBy)
+	case ExportOverview:
+		return service.overviewStatement(ctx, querier, principal, request, exporting, generatedBy)
+	default:
+		return service.profitAndLossStatement(ctx, querier, principal, request, exporting, generatedBy)
 	}
-	return "", ErrUnknownExport
+}
+
+func (service *Service) registerFor(ctx context.Context, querier database.Querier, principal *identity.Principal, request ExportRequest, exporting exporter, generatedBy string) (documents.Register, string, error) {
+	switch request.Report {
+	case ExportTrialBalance:
+		return service.trialBalanceRegister(ctx, querier, principal, request, exporting, generatedBy)
+	case ExportStatement:
+		return service.accountStatementRegister(ctx, querier, principal, request, exporting, generatedBy)
+	default:
+		return service.vatRegister(ctx, querier, principal, request, exporting, generatedBy)
+	}
 }
 
 func (exporting exporter) dateCell(date string) any {

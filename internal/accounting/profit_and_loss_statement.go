@@ -128,7 +128,7 @@ func (service *Service) profitAndLossStatement(ctx context.Context, querier data
 
 func (exporting exporter) profitAndLossRows(currentReport ProfitAndLossView, previousReport ProfitAndLossView) []documents.StatementRow {
 	statementRows := []documents.StatementRow{{Style: documents.StatementHeading, Label: exporting.profitAndLossLabel("revenue")}}
-	statementRows = append(statementRows, exporting.accountRows(currentReport.Income, previousReport.Income, "noRevenue")...)
+	statementRows = append(statementRows, exporting.accountRows(currentReport.Income, previousReport.Income, exporting.profitAndLossLabel("noRevenue"))...)
 	statementRows = append(statementRows,
 		documents.StatementRow{Key: "revenue", Style: documents.StatementSubtotal, Label: exporting.profitAndLossLabel("totalRevenue"), Current: currentReport.TotalIncome, Previous: previousReport.TotalIncome, SumsSection: true},
 		documents.StatementRow{Key: "cogs", Style: documents.StatementLine, Label: exporting.profitAndLossLabel("costOfGoods"), Current: -currentReport.CostOfGoods, Previous: -previousReport.CostOfGoods, IsDeduction: true},
@@ -143,7 +143,7 @@ func (exporting exporter) profitAndLossRows(currentReport ProfitAndLossView, pre
 		documents.StatementRow{Style: documents.StatementRatio, Label: exporting.profitAndLossLabel("grossMargin"), RatioNumerator: "gross", RatioDenominator: "revenue"},
 		documents.StatementRow{Style: documents.StatementHeading, Label: exporting.profitAndLossLabel("expenses")},
 	)
-	statementRows = append(statementRows, exporting.accountRows(currentReport.Expenses, previousReport.Expenses, "noExpenses")...)
+	statementRows = append(statementRows, exporting.accountRows(currentReport.Expenses, previousReport.Expenses, exporting.profitAndLossLabel("noExpenses"))...)
 	statementRows = append(statementRows,
 		documents.StatementRow{Key: "expenses", Style: documents.StatementSubtotal, Label: exporting.profitAndLossLabel("totalExpenses"), Current: currentReport.TotalExpenses, Previous: previousReport.TotalExpenses, SumsSection: true},
 		documents.StatementRow{
@@ -159,7 +159,7 @@ func (exporting exporter) profitAndLossRows(currentReport ProfitAndLossView, pre
 	return statementRows
 }
 
-func (exporting exporter) accountRows(currentAmounts []AccountAmountView, previousAmounts []AccountAmountView, emptyKey string) []documents.StatementRow {
+func (exporting exporter) accountRows(currentAmounts []AccountAmountView, previousAmounts []AccountAmountView, emptyLabel string) []documents.StatementRow {
 	accountsById := map[uuid.UUID]AccountAmountView{}
 	currentById := map[uuid.UUID]int64{}
 	previousById := map[uuid.UUID]int64{}
@@ -197,7 +197,7 @@ func (exporting exporter) accountRows(currentAmounts []AccountAmountView, previo
 		})
 	}
 	if len(statementRows) == 0 {
-		statementRows = append(statementRows, documents.StatementRow{Style: documents.StatementEmpty, Label: exporting.profitAndLossLabel(emptyKey)})
+		statementRows = append(statementRows, documents.StatementRow{Style: documents.StatementEmpty, Label: emptyLabel})
 	}
 	return statementRows
 }
