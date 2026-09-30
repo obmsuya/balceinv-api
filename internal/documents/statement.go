@@ -51,6 +51,7 @@ type Statement struct {
 	Rows            []StatementRow
 	Notes           []string
 	SheetName       string
+	SingleColumn    bool
 }
 
 var ErrStatementDoesNotAdd = errors.New("a statement total does not match its parts")
@@ -114,6 +115,15 @@ func (statement Statement) Check() error {
 		}
 	}
 	return nil
+}
+
+func (statement Statement) hasCodes() bool {
+	for _, statementRow := range statement.Rows {
+		if statementRow.Code != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (statement Statement) language() string {
