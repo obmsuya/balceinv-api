@@ -165,3 +165,24 @@ func TestTrialWebBusinessPicksUpAnActivationStraightAway(t *testing.T) {
 		}
 	})
 }
+
+func TestABusinessWithoutASubscriptionRowGetsATrialNotALock(t *testing.T) {
+	startFakeLicensingServer(t)
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Rowless Shop", "owner@rowless.test")
+		harness.ExecForCompany(company.Id, `DELETE FROM company_subscriptions WHERE company_id = $1`, company.Id)
+
+		products := harness.Call(http.MethodGet, "/api/products", company.OwnerToken, nil)
+		if products.Status != http.StatusOK {
+			t.Fatalf("a business without a subscription row was locked: %d %v", products.Status, products.Body)
+		}
+		status := harness.Call(http.MethodGet, "/api/license/status", company.OwnerToken, nil).Data()
+		if status["is_trial"] != true || status["days_remaining"] != float64(14) {
+			t.Fatalf("the missing row did not become a 14-day trial: %v", status)
+		}
+		if harness.QueryIntForCompany(company.Id, `SELECT COUNT(*) FROM company_subscriptions WHERE company_id = $1`, company.Id) != 1 {
+			t.Fatal("the trial was not saved")
+		}
+	})
+}

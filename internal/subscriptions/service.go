@@ -12,11 +12,53 @@ import (
 )
 
 type Service struct {
-	repository *Repository
+	repository   *Repository
+	openDatabase *database.Database
 }
 
-func NewService(repository *Repository) *Service {
-	return &Service{repository: repository}
+func NewService(repository *Repository, openDatabase *database.Database) *Service {
+	return &Service{repository: repository, openDatabase: openDatabase}
+}
+
+func (service *Service) startMissingTrial(ctx context.Context, companyId uuid.UUID) (*Subscription, error) {
+	writeTransaction, beginError := service.openDatabase.Writer.BeginTx(ctx, nil)
+	if beginError != nil {
+		return nil, fmt.Errorf("failed to begin trial transaction: %w", beginError)
+	}
+	defer writeTransaction.Rollback()
+
+	setTenantError := database.SetTenant(ctx, writeTransaction, service.openDatabase.IsPostgres(), companyId)
+	if setTenantError != nil {
+		return nil, setTenantError
+	}
+
+	startedAt := time.Now().UTC()
+	insertError := service.repository.InsertTrialIfMissing(ctx, writeTransaction, companyId, startedAt.AddDate(0, 0, license.TrialDurationDays), startedAt)
+	if insertError != nil {
+		return nil, insertError
+	}
+
+	startedSubscription, findError := service.repository.Find(ctx, writeTransaction, companyId)
+	if findError != nil {
+		return nil, findError
+	}
+
+	commitError := writeTransaction.Commit()
+	if commitError != nil {
+		return nil, fmt.Errorf("failed to commit trial: %w", commitError)
+	}
+	return startedSubscription, nil
+}
+
+func (service *Service) findOrStartTrial(ctx context.Context, querier database.Querier, companyId uuid.UUID) (*Subscription, error) {
+	foundSubscription, findError := service.repository.Find(ctx, querier, companyId)
+	if findError != nil {
+		return nil, findError
+	}
+	if foundSubscription != nil {
+		return foundSubscription, nil
+	}
+	return service.startMissingTrial(ctx, companyId)
 }
 
 func DeviceIdFor(companyId uuid.UUID) string {
@@ -38,7 +80,7 @@ func statusOf(foundSubscription *Subscription, currentTime time.Time) license.St
 }
 
 func (service *Service) Status(ctx context.Context, querier database.Querier, companyId uuid.UUID) (license.Status, error) {
-	foundSubscription, findError := service.repository.Find(ctx, querier, companyId)
+	foundSubscription, findError := service.findOrStartTrial(ctx, querier, companyId)
 	if findError != nil {
 		return license.Status{}, findError
 	}
@@ -46,7 +88,7 @@ func (service *Service) Status(ctx context.Context, querier database.Querier, co
 }
 
 func (service *Service) Refresh(ctx context.Context, querier database.Querier, companyId uuid.UUID) (license.Status, error) {
-	foundSubscription, findError := service.repository.Find(ctx, querier, companyId)
+	foundSubscription, findError := service.findOrStartTrial(ctx, querier, companyId)
 	if findError != nil {
 		return license.Status{}, findError
 	}
