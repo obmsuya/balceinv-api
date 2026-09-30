@@ -63,11 +63,48 @@ services:
       retries: 3
     logging: *default-logging
 
+  api:
+    image: balce-api:${BALCE_API_TAG:?}
+    container_name: balce-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://balce_app:${BALCE_APP_PASSWORD:?}@postgres:5432/balce?sslmode=disable
+      MIGRATION_DATABASE_URL: postgres://balce_owner:${BALCE_OWNER_PASSWORD:?}@postgres:5432/balce?sslmode=disable
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?}
+      PROXY_HEADER: CF-Connecting-IP
+      TRUSTED_PROXIES: 172.31.250.1
+      S3_ENDPOINT: http://garage:3900
+      S3_BUCKET: balce-media
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?}
+      BALCE_SUPPORT_PASSCODE_HASH: ${BALCE_SUPPORT_PASSCODE_HASH:-}
+      SUPPORT_SMTP_PASSWORD: ${SUPPORT_SMTP_PASSWORD:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - api_logs:/var/log/balce
+    networks:
+      - balce_internal
+      - balce_edge
+    mem_limit: 192m
+    logging: *default-logging
+
 networks:
   balce_internal:
     internal: true
+  balce_edge:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+          gateway: 172.31.250.1
 
 volumes:
+  api_logs:
   postgres_data:
   garage_meta:
   garage_data:
