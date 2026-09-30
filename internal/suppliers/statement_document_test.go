@@ -65,5 +65,34 @@ func TestSupplierStatementExportsWhatWeOwe(t *testing.T) {
 		if foreign := harness.Call(http.MethodGet, "/api/suppliers/"+supplierId+"/statement?format=pdf", otherCompany.OwnerToken, nil); foreign.Status != http.StatusNotFound {
 			t.Errorf("another company's owner got %d", foreign.Status)
 		}
+
+		agingExport := harness.Call(http.MethodGet, "/api/suppliers/aging?format=xlsx", company.OwnerToken, nil)
+		agingBook, agingError := excelize.OpenReader(bytes.NewReader(agingExport.Raw))
+		if agingExport.Status != http.StatusOK || agingError != nil {
+			t.Fatalf("the aging export returned %d: %v", agingExport.Status, agingError)
+		}
+		defer agingBook.Close()
+		agingSheet := agingBook.GetSheetName(0)
+		agingRows, _ := agingBook.GetRows(agingSheet)
+		totalOwed := ""
+		for rowIndex, sheetRow := range agingRows {
+			if len(sheetRow) > 0 && sheetRow[0] == "Total" {
+				totalOwed, _ = agingBook.CalcCellValue(agingSheet, "G"+strconv.Itoa(rowIndex+1), excelize.Options{RawCellValue: true})
+			}
+		}
+		if totalOwed != "17000" {
+			t.Errorf("the aging workbook totals %q, want 17000", totalOwed)
+		}
+		otherAging := harness.Call(http.MethodGet, "/api/suppliers/aging?format=xlsx", otherCompany.OwnerToken, nil)
+		otherBook, _ := excelize.OpenReader(bytes.NewReader(otherAging.Raw))
+		if otherBook != nil {
+			otherRows, _ := otherBook.GetRows(otherBook.GetSheetName(0))
+			for _, sheetRow := range otherRows {
+				if strings.Contains(strings.Join(sheetRow, " "), "Kariakoo Wholesale") {
+					t.Error("another company's supplier leaked into the aging report")
+				}
+			}
+			otherBook.Close()
+		}
 	})
 }
