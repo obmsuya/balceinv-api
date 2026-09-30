@@ -10,6 +10,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
 	"github.com/chrisostomemataba/balceinv-api/internal/auth"
 	"github.com/chrisostomemataba/balceinv-api/internal/backup"
+	"github.com/chrisostomemataba/balceinv-api/internal/businessmove"
 	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
@@ -129,6 +130,8 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/health", platformHandler.Health)
 	application.Get("/api/platform", platformHandler.Describe)
 
+	businessMoveHandler := businessmove.NewHandler(businessmove.NewService(openDatabase, objectStore))
+
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
 	if loadedConfig.IsDesktop() {
 		application.Post("/api/setup", licensing.IssueTrialAfterSetup(), requestTransaction, tenancyHandler.RunFirstSetup)
@@ -140,8 +143,10 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Get("/api/license/hardware-id", authenticate, licensing.HardwareId)
 		application.Get("/api/license/packages", authenticate, licensing.Packages)
 		application.Post("/api/license/pay", authenticate, licensing.Pay)
+		application.Post("/api/move-to-web/file", authenticate, businessMoveHandler.DownloadPackage)
 	} else {
 		application.Post("/api/setup", newSignupLimiter(), requestTransaction, tenancyHandler.RunFirstSetup)
+		application.Post("/api/setup/move-from-desktop", newSignupLimiter(), businessMoveHandler.ImportPackage)
 		application.Get("/api/license/status", signedIn(subscriptionsHandler.Status)...)
 		application.Post("/api/license/refresh", signedIn(subscriptionsHandler.Refresh)...)
 		application.Get("/api/license/hardware-id", signedIn(subscriptionsHandler.DeviceId)...)
