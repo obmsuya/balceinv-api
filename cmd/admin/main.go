@@ -66,7 +66,7 @@ func main() {
 	commandContext, cancelCommand := context.WithTimeout(context.Background(), time.Minute)
 	defer cancelCommand()
 
-	_, migrateError := database.MigrateUp(commandContext, loadedConfig.Engine, loadedConfig.DatabaseUrl, loadedConfig.SqlitePath)
+	_, migrateError := database.MigrateUp(commandContext, loadedConfig.Engine, loadedConfig.MigrationDatabaseUrl, loadedConfig.SqlitePath)
 	if migrateError != nil {
 		exitWith(migrateError)
 	}
