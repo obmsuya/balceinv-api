@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	SessionCookieName   = "balce_session"
-	desktopClientHeader = "X-Balce-Client"
-	userAgentMaxLength  = 300
+	SessionCookieName  = "balce_session"
+	userAgentMaxLength = 300
 )
 
 type Handler struct {
@@ -55,7 +54,7 @@ func (handler *Handler) Login(c *fiber.Ctx) error {
 	loginView := LoginView{
 		User: loginOutcome.View,
 	}
-	isDesktopClient := c.Get(desktopClientHeader) == "desktop"
+	isDesktopClient := c.Get(httpx.DesktopClientHeader) == "desktop"
 	if isDesktopClient {
 		loginView.SessionToken = loginOutcome.SessionToken
 	}

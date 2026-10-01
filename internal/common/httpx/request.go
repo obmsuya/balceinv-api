@@ -14,6 +14,8 @@ import (
 
 const principalLocalKey = "principal"
 
+const DesktopClientHeader = "X-Balce-Client"
+
 func SetPrincipal(c *fiber.Ctx, principal *identity.Principal) {
 	c.Locals(principalLocalKey, principal)
 }

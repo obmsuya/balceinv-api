@@ -40,7 +40,7 @@ func New(loadedConfig *config.Config, openDatabase *database.Database, objectSto
 	application.Use(cors.New(cors.Config{
 		AllowOrigins:     strings.Join(loadedConfig.AllowedOrigins, ","),
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization," + httpx.SupportPasscodeHeader,
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization," + httpx.SupportPasscodeHeader + "," + httpx.DesktopClientHeader,
 		AllowCredentials: true,
 		ExposeHeaders:    "X-Request-Id",
 	}))
