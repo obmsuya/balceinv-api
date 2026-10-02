@@ -6,7 +6,9 @@ import (
 	"errors"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"io"
+	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -106,6 +108,9 @@ func Status(c *fiber.Ctx) error {
 
 func Refresh(c *fiber.Ctx) error {
 	activationError := license.ActivateFromDjango()
+	if activationError != nil {
+		slog.Warn("licence not activated from the licensing server", "error", activationError)
+	}
 	if errors.Is(activationError, license.ErrLicensingServerUnreachable) {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": noInternetMessage, "message": noInternetMessage})
 	}
@@ -167,16 +172,27 @@ func PayFor(c *fiber.Ctx, hardwareIdOf func() (string, error)) error {
 
 func forwardToLicensingServer(c *fiber.Ctx, licensingRequest *http.Request) error {
 	licensingClient := &http.Client{Timeout: licensingProxyTimeout}
+	licensingPath := licensingRequest.URL.Path
+	callStartedAt := time.Now()
 	licensingResponse, sendError := licensingClient.Do(licensingRequest)
+	callDuration := time.Since(callStartedAt)
 	if sendError != nil {
+		slog.Warn("licensing server unreachable", "path", licensingPath, "durationMs", callDuration.Milliseconds(), "error", sendError)
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"success": false, "error": noInternetMessage})
 	}
 	defer licensingResponse.Body.Close()
 
 	responseBytes, readError := io.ReadAll(io.LimitReader(licensingResponse.Body, licensingResponseLimit))
 	if readError != nil {
+		slog.Warn("licensing server reply unreadable", "path", licensingPath, "status", licensingResponse.StatusCode, "error", readError)
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"success": false, "error": paymentServiceTroubleMessage})
 	}
+	slog.Info("licensing server responded",
+		"path", licensingPath,
+		"status", licensingResponse.StatusCode,
+		"durationMs", callDuration.Milliseconds(),
+		"reason", licensingReplyReason(responseBytes),
+	)
 	serverFailed := licensingResponse.StatusCode >= http.StatusInternalServerError
 	if serverFailed || !json.Valid(responseBytes) {
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"success": false, "error": paymentServiceTroubleMessage})
@@ -185,4 +201,24 @@ func forwardToLicensingServer(c *fiber.Ctx, licensingRequest *http.Request) erro
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	c.Status(licensingResponse.StatusCode)
 	return c.Send(responseBytes)
+}
+
+func licensingReplyReason(responseBytes []byte) string {
+	reply := map[string]any{}
+	decodeError := json.Unmarshal(responseBytes, &reply)
+	if decodeError != nil {
+		return "reply is not JSON"
+	}
+	for _, reasonField := range []string{"error", "message", "detail"} {
+		reason, isText := reply[reasonField].(string)
+		if isText && reason != "" {
+			return reason
+		}
+	}
+	fieldNames := []string{}
+	for fieldName := range reply {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+	return "fields: " + strings.Join(fieldNames, ",")
 }
