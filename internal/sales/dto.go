@@ -74,7 +74,6 @@ type TillOptionsView struct {
 	CustomerDisplayEnabled    bool `json:"customer_display_enabled"`
 	EfdEnabled                bool `json:"efd_enabled"`
 	PrintReceiptAutomatically bool `json:"print_receipt_automatically"`
-	DiscountLimitBasisPoints  int  `json:"discount_limit_basis_points"`
 }
 
 type QuoteView struct {

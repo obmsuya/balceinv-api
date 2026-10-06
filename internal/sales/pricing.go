@@ -151,10 +151,6 @@ func manualDiscountAmount(manualDiscount ManualDiscount, grossTotal int64) int64
 	return manualDiscount.Value
 }
 
-func ManualDiscountLimit(pricedLine PricedLine, limitBasisPoints int) int64 {
-	return multiplyDivideRoundHalfUp(pricedLine.GrossTotal(), int64(limitBasisPoints), basisPointsPerWhole)
-}
-
 func bestDiscountFor(productId uuid.UUID, unitPrice int64, quantity int64, applicableDiscounts []discounts.Discount) (*discounts.Discount, int64) {
 	var bestDiscount *discounts.Discount
 	bestAmount := int64(0)
