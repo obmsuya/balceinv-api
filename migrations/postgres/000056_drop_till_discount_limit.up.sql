@@ -1,0 +1,2 @@
+ALTER TABLE settings DROP CONSTRAINT settings_till_discount_limit_range;
+ALTER TABLE settings DROP COLUMN till_discount_limit_basis_points;

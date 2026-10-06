@@ -256,9 +256,6 @@ func applySettingsChanges(companySettings Settings, request UpdateSettingsReques
 	if request.CustomerDisplayEnabled != nil {
 		companySettings.CustomerDisplayEnabled = *request.CustomerDisplayEnabled
 	}
-	if request.TillDiscountLimitBasisPoints != nil {
-		companySettings.TillDiscountLimitBasisPoints = *request.TillDiscountLimitBasisPoints
-	}
 	isEfdIncomplete := companySettings.EfdEnabled && (companySettings.EfdEndpoint == nil || companySettings.EfdApiKey == nil)
 	if isEfdIncomplete {
 		return companySettings, ErrEfdIncomplete
@@ -304,34 +301,33 @@ func toSettingsView(companySettings Settings, companyProfile CompanyProfile) Set
 			ReceiptHeader:    companyProfile.ReceiptHeader,
 			ReceiptFooter:    companyProfile.ReceiptFooter,
 		},
-		TaxRate:                      float64(companySettings.TaxRateBasisPoints) / 100,
-		DateFormat:                   companySettings.DateFormat,
-		ReceiptNumberFormat:          companySettings.ReceiptNumberFormat,
-		ReceiptLanguage:              companySettings.ReceiptLanguage,
-		EfdEnabled:                   companySettings.EfdEnabled,
-		EfdEndpoint:                  companySettings.EfdEndpoint,
-		EfdApiKeySet:                 companySettings.EfdApiKey != nil,
-		LowStockThreshold:            companySettings.LowStockThreshold,
-		EmailNotificationsEnabled:    companySettings.EmailNotificationsEnabled,
-		NotificationEmail:            companySettings.NotificationEmail,
-		AlertSoundEnabled:            companySettings.AlertSoundEnabled,
-		AlertOnLowStock:              companySettings.AlertOnLowStock,
-		AlertOnOutOfStock:            companySettings.AlertOnOutOfStock,
-		AlertOnDeadStock:             companySettings.AlertOnDeadStock,
-		DeadStockDays:                companySettings.DeadStockDays,
-		PrintReceiptAutomatically:    companySettings.PrintReceiptAutomatically,
-		ShowTaxOnReceipt:             companySettings.ShowTaxOnReceipt,
-		ShowBarcodesOnReceipt:        companySettings.ShowBarcodesOnReceipt,
-		PrinterEnabled:               companySettings.PrinterEnabled,
-		PrinterPort:                  companySettings.PrinterPort,
-		PrinterModel:                 companySettings.PrinterModel,
-		PrinterBaudRate:              companySettings.PrinterBaudRate,
-		PrinterPaperWidth:            companySettings.PrinterPaperWidth,
-		OpenCashDrawer:               companySettings.OpenCashDrawer,
-		TillNumpadEnabled:            companySettings.TillNumpadEnabled,
-		CustomerDisplayEnabled:       companySettings.CustomerDisplayEnabled,
-		TillDiscountLimitBasisPoints: companySettings.TillDiscountLimitBasisPoints,
-		UpdatedAt:                    companySettings.UpdatedAt,
+		TaxRate:                   float64(companySettings.TaxRateBasisPoints) / 100,
+		DateFormat:                companySettings.DateFormat,
+		ReceiptNumberFormat:       companySettings.ReceiptNumberFormat,
+		ReceiptLanguage:           companySettings.ReceiptLanguage,
+		EfdEnabled:                companySettings.EfdEnabled,
+		EfdEndpoint:               companySettings.EfdEndpoint,
+		EfdApiKeySet:              companySettings.EfdApiKey != nil,
+		LowStockThreshold:         companySettings.LowStockThreshold,
+		EmailNotificationsEnabled: companySettings.EmailNotificationsEnabled,
+		NotificationEmail:         companySettings.NotificationEmail,
+		AlertSoundEnabled:         companySettings.AlertSoundEnabled,
+		AlertOnLowStock:           companySettings.AlertOnLowStock,
+		AlertOnOutOfStock:         companySettings.AlertOnOutOfStock,
+		AlertOnDeadStock:          companySettings.AlertOnDeadStock,
+		DeadStockDays:             companySettings.DeadStockDays,
+		PrintReceiptAutomatically: companySettings.PrintReceiptAutomatically,
+		ShowTaxOnReceipt:          companySettings.ShowTaxOnReceipt,
+		ShowBarcodesOnReceipt:     companySettings.ShowBarcodesOnReceipt,
+		PrinterEnabled:            companySettings.PrinterEnabled,
+		PrinterPort:               companySettings.PrinterPort,
+		PrinterModel:              companySettings.PrinterModel,
+		PrinterBaudRate:           companySettings.PrinterBaudRate,
+		PrinterPaperWidth:         companySettings.PrinterPaperWidth,
+		OpenCashDrawer:            companySettings.OpenCashDrawer,
+		TillNumpadEnabled:         companySettings.TillNumpadEnabled,
+		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
+		UpdatedAt:                 companySettings.UpdatedAt,
 	}
 }
 
