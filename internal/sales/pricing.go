@@ -9,6 +9,12 @@ import (
 
 const basisPointsPerWhole = 10000
 
+const (
+	ManualDiscountPercent  = "percent"
+	ManualDiscountAmount   = "amount"
+	TillDiscountPermission = "till_discounts:create"
+)
+
 type PricingProduct struct {
 	Id             uuid.UUID
 	Name           string
@@ -29,10 +35,16 @@ type PricingAddon struct {
 	Price     int64
 }
 
+type ManualDiscount struct {
+	Kind  string
+	Value int64
+}
+
 type PricingLine struct {
-	Product  PricingProduct
-	Quantity int
-	Addons   []PricingAddon
+	Product        PricingProduct
+	Quantity       int
+	Addons         []PricingAddon
+	ManualDiscount *ManualDiscount
 }
 
 type PricedLine struct {
@@ -45,7 +57,12 @@ type PricedLine struct {
 	DiscountId      *uuid.UUID
 	DiscountName    *string
 	DiscountAmount  int64
+	ManualDiscount  int64
 	LineTotal       int64
+}
+
+func (pricedLine PricedLine) GrossTotal() int64 {
+	return int64(pricedLine.Quantity) * (pricedLine.UnitPrice + pricedLine.AddonsUnitTotal)
 }
 
 type PricedSale struct {
@@ -117,8 +134,25 @@ func priceLine(pricingLine PricingLine, applicableDiscounts []discounts.Discount
 		}
 	}
 
-	pricedLine.LineTotal = quantity*(unitPrice+addonsUnitTotal) - pricedLine.DiscountAmount
+	if pricingLine.ManualDiscount != nil {
+		amountLeftToDiscount := pricedLine.GrossTotal() - pricedLine.DiscountAmount
+		pricedLine.ManualDiscount = min(manualDiscountAmount(*pricingLine.ManualDiscount, pricedLine.GrossTotal()), amountLeftToDiscount)
+		pricedLine.DiscountAmount += pricedLine.ManualDiscount
+	}
+
+	pricedLine.LineTotal = pricedLine.GrossTotal() - pricedLine.DiscountAmount
 	return pricedLine
+}
+
+func manualDiscountAmount(manualDiscount ManualDiscount, grossTotal int64) int64 {
+	if manualDiscount.Kind == ManualDiscountPercent {
+		return multiplyDivideRoundHalfUp(grossTotal, min(manualDiscount.Value, basisPointsPerWhole), basisPointsPerWhole)
+	}
+	return manualDiscount.Value
+}
+
+func ManualDiscountLimit(pricedLine PricedLine, limitBasisPoints int) int64 {
+	return multiplyDivideRoundHalfUp(pricedLine.GrossTotal(), int64(limitBasisPoints), basisPointsPerWhole)
 }
 
 func bestDiscountFor(productId uuid.UUID, unitPrice int64, quantity int64, applicableDiscounts []discounts.Discount) (*discounts.Discount, int64) {

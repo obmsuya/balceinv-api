@@ -15,8 +15,8 @@ import (
 )
 
 var receiptLabels = map[string]map[string]string{
-	"en": {"receipt": "Receipt", "date": "Date", "cashier": "Served by", "item": "Item", "amount": "Amount", "subtotal": "Subtotal", "discounts": "Discounts", "total": "TOTAL", "tax": "Includes VAT", "paid": "Paid", "change": "Change", "tin": "TIN", "tel": "Tel", "note": "Note", "efd": "EFD verification", "efdPending": "EFD receipt to follow", "thanks": "Thank you for shopping with us", "cash": "Cash", "card": "Card", "mobile": "Mobile money", "customer": "Customer", "credit": "Balance owed", "order": "Order", "test": "Test print OK"},
-	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "customer": "Mteja", "credit": "Deni", "order": "Oda", "test": "Jaribio la printa limefaulu"},
+	"en": {"receipt": "Receipt", "date": "Date", "cashier": "Served by", "item": "Item", "amount": "Amount", "subtotal": "Subtotal", "discounts": "Discounts", "cashierDiscount": "Cashier discount", "total": "TOTAL", "tax": "Includes VAT", "paid": "Paid", "change": "Change", "tin": "TIN", "tel": "Tel", "note": "Note", "efd": "EFD verification", "efdPending": "EFD receipt to follow", "thanks": "Thank you for shopping with us", "cash": "Cash", "card": "Card", "mobile": "Mobile money", "customer": "Customer", "credit": "Balance owed", "order": "Order", "test": "Test print OK"},
+	"sw": {"receipt": "Risiti", "date": "Tarehe", "cashier": "Umehudumiwa na", "item": "Bidhaa", "amount": "Kiasi", "subtotal": "Jumla ndogo", "discounts": "Punguzo", "cashierDiscount": "Punguzo la keshia", "total": "JUMLA", "tax": "Inajumuisha VAT", "paid": "Umelipa", "change": "Chenji", "tin": "TIN", "tel": "Simu", "note": "Maelezo", "efd": "Uthibitisho wa EFD", "efdPending": "Risiti ya EFD itafuata", "thanks": "Asante kwa kununua kwetu", "cash": "Taslimu", "card": "Kadi", "mobile": "Pesa ya simu", "customer": "Mteja", "credit": "Deni", "order": "Oda", "test": "Jaribio la printa limefaulu"},
 }
 
 func labelsFor(language string) map[string]string {
@@ -104,12 +104,16 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 		}
 		quantityText := fmt.Sprintf("  %d x %s%s", saleLine.Quantity, money(saleLine.UnitPrice+saleLine.AddonsUnitTotal), wholesaleMarker)
 		printer.Write(leftRightText(quantityText, money(saleLine.LineTotal+saleLine.DiscountAmount), columns) + "\n")
-		if saleLine.DiscountAmount > 0 {
+		automaticDiscount := saleLine.DiscountAmount - saleLine.ManualDiscount
+		if automaticDiscount > 0 {
 			discountName := labels["discounts"]
 			if saleLine.DiscountName != nil {
 				discountName = *saleLine.DiscountName
 			}
-			printer.Write(leftRightText("  "+fitText(discountName, columns-16), "-"+money(saleLine.DiscountAmount), columns) + "\n")
+			printer.Write(leftRightText("  "+fitText(discountName, columns-16), "-"+money(automaticDiscount), columns) + "\n")
+		}
+		if saleLine.ManualDiscount > 0 {
+			printer.Write(leftRightText("  "+fitText(labels["cashierDiscount"], columns-16), "-"+money(saleLine.ManualDiscount), columns) + "\n")
 		}
 	}
 

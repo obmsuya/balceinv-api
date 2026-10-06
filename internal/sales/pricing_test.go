@@ -112,3 +112,37 @@ func TestLargeAmountsDoNotOverflow(t *testing.T) {
 		t.Fatalf("large sale priced as %+v", priced)
 	}
 }
+
+func TestCashierDiscountStacksOnTheAutomaticOneAndNeverGoesBelowZero(t *testing.T) {
+	coffee := product(3000, nil, 0)
+	extraShot := PricingAddon{Id: uuid.Must(uuid.NewV7()), ProductId: coffee.Id, Name: "Extra shot", Price: 500}
+	coffeeHour := discount(discounts.KindPercent, 1000, &coffee.Id)
+	priceWith := func(manualDiscount *ManualDiscount, applicableDiscounts []discounts.Discount) PricedLine {
+		pricingLine := PricingLine{Product: coffee, Quantity: 2, Addons: []PricingAddon{extraShot}, ManualDiscount: manualDiscount}
+		return PriceSale([]PricingLine{pricingLine}, applicableDiscounts, 0).Lines[0]
+	}
+
+	tenPercent := priceWith(&ManualDiscount{Kind: ManualDiscountPercent, Value: 1000}, nil)
+	if tenPercent.ManualDiscount != 700 || tenPercent.DiscountAmount != 700 || tenPercent.LineTotal != 6300 {
+		t.Fatalf("10%% off 2 coffees with a shot priced as %+v", tenPercent)
+	}
+
+	stacked := priceWith(&ManualDiscount{Kind: ManualDiscountPercent, Value: 1000}, []discounts.Discount{coffeeHour})
+	if stacked.ManualDiscount != 700 || stacked.DiscountAmount != 1300 || stacked.LineTotal != 5700 || *stacked.DiscountName != coffeeHour.Name {
+		t.Fatalf("a cashier discount on top of coffee hour priced as %+v", stacked)
+	}
+
+	tooBig := priceWith(&ManualDiscount{Kind: ManualDiscountAmount, Value: 100000}, []discounts.Discount{coffeeHour})
+	if tooBig.ManualDiscount != 6400 || tooBig.LineTotal != 0 {
+		t.Fatalf("an amount larger than the line priced as %+v", tooBig)
+	}
+
+	overHundredPercent := priceWith(&ManualDiscount{Kind: ManualDiscountPercent, Value: 25000}, nil)
+	if overHundredPercent.ManualDiscount != 7000 || overHundredPercent.LineTotal != 0 {
+		t.Fatalf("more than 100%% priced as %+v", overHundredPercent)
+	}
+
+	if limit := ManualDiscountLimit(tenPercent, 1500); limit != 1050 {
+		t.Fatalf("a 15%% limit on a 7,000 line is %d, want 1050", limit)
+	}
+}

@@ -81,8 +81,9 @@ func (repository *Repository) InsertLines(ctx context.Context, querier database.
 		itemId := uuid.Must(uuid.NewV7())
 		itemQuery := `
 			INSERT INTO sale_items (id, company_id, sale_id, position, product_id, product_name, variant_label, sku, unit, quantity,
-			                        unit_price, unit_cost, is_wholesale, addons_unit_total, discount_id, discount_name, discount_amount, line_total)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+			                        unit_price, unit_cost, is_wholesale, addons_unit_total, discount_id, discount_name, discount_amount,
+			                        manual_discount_amount, line_total)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		`
 		_, itemError := querier.ExecContext(ctx, itemQuery,
 			itemId,
@@ -102,6 +103,7 @@ func (repository *Repository) InsertLines(ctx context.Context, querier database.
 			pricedLine.DiscountId,
 			pricedLine.DiscountName,
 			pricedLine.DiscountAmount,
+			pricedLine.ManualDiscount,
 			pricedLine.LineTotal,
 		)
 		if itemError != nil {
@@ -181,7 +183,7 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 func (repository *Repository) ListLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) ([]LineView, error) {
 	query := `
 		SELECT i.id, i.product_id, i.product_name, i.variant_label, i.sku, i.unit, i.quantity, i.unit_price, i.is_wholesale,
-		       i.addons_unit_total, i.discount_name, i.discount_amount, i.line_total
+		       i.addons_unit_total, i.discount_name, i.discount_amount, i.manual_discount_amount, i.line_total
 		FROM sale_items i
 		WHERE i.company_id = $1 AND i.sale_id = $2
 		ORDER BY i.position
@@ -211,6 +213,7 @@ func (repository *Repository) ListLines(ctx context.Context, querier database.Qu
 			&lineView.AddonsUnitTotal,
 			&lineView.DiscountName,
 			&lineView.DiscountAmount,
+			&lineView.ManualDiscount,
 			&lineView.LineTotal,
 		)
 		if scanError != nil {

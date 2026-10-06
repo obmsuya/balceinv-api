@@ -7,9 +7,15 @@ import (
 )
 
 type LineRequest struct {
-	ProductId string   `json:"product_id" validate:"required,uuid"`
-	Quantity  int      `json:"quantity" validate:"required,gte=1,lte=100000"`
-	AddonIds  []string `json:"addon_ids" validate:"omitempty,max=20,dive,uuid"`
+	ProductId      string                 `json:"product_id" validate:"required,uuid"`
+	Quantity       int                    `json:"quantity" validate:"required,gte=1,lte=100000"`
+	AddonIds       []string               `json:"addon_ids" validate:"omitempty,max=20,dive,uuid"`
+	ManualDiscount *ManualDiscountRequest `json:"manual_discount" validate:"omitnil"`
+}
+
+type ManualDiscountRequest struct {
+	Kind  string `json:"kind" validate:"required,oneof=percent amount"`
+	Value int64  `json:"value" validate:"required,gt=0,lte=1000000000000000"`
 }
 
 type PaymentRequest struct {
@@ -58,6 +64,7 @@ type LineView struct {
 	AddonsUnitTotal int64       `json:"addons_unit_total"`
 	DiscountName    *string     `json:"discount_name"`
 	DiscountAmount  int64       `json:"discount_amount"`
+	ManualDiscount  int64       `json:"manual_discount_amount"`
 	LineTotal       int64       `json:"line_total"`
 	InStock         *int        `json:"in_stock,omitempty"`
 }
@@ -67,6 +74,7 @@ type TillOptionsView struct {
 	CustomerDisplayEnabled    bool `json:"customer_display_enabled"`
 	EfdEnabled                bool `json:"efd_enabled"`
 	PrintReceiptAutomatically bool `json:"print_receipt_automatically"`
+	DiscountLimitBasisPoints  int  `json:"discount_limit_basis_points"`
 }
 
 type QuoteView struct {

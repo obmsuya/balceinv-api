@@ -22,18 +22,20 @@ import (
 )
 
 var (
-	ErrNoActiveShop      = errors.New("choose a shop first")
-	ErrShopClosed        = errors.New("this shop is closed; reopen it or switch shops to sell")
-	ErrProductNotFound   = errors.New("one of the products is not for sale")
-	ErrAddonNotFound     = errors.New("one of the add-ons is not available for that product")
-	ErrSaleNotFound      = errors.New("sale not found")
-	ErrClientRefReused   = errors.New("this checkout reference was already used for a different sale")
-	ErrClientRefInFlight = errors.New("this checkout is already being saved; try again in a moment")
-	ErrDuplicatePayment  = errors.New("each payment method can appear only once")
-	ErrPaymentTooLow     = errors.New("the payments do not cover the total")
-	ErrChangeWithoutCash = errors.New("change can only be given from cash; card, mobile and pay-later amounts cannot exceed what is owed")
-	ErrInvalidCustomerId = errors.New("the customer is not valid")
-	ErrMissingSettings   = errors.New("company settings are missing")
+	ErrNoActiveShop       = errors.New("choose a shop first")
+	ErrShopClosed         = errors.New("this shop is closed; reopen it or switch shops to sell")
+	ErrProductNotFound    = errors.New("one of the products is not for sale")
+	ErrAddonNotFound      = errors.New("one of the add-ons is not available for that product")
+	ErrSaleNotFound       = errors.New("sale not found")
+	ErrClientRefReused    = errors.New("this checkout reference was already used for a different sale")
+	ErrClientRefInFlight  = errors.New("this checkout is already being saved; try again in a moment")
+	ErrDuplicatePayment   = errors.New("each payment method can appear only once")
+	ErrPaymentTooLow      = errors.New("the payments do not cover the total")
+	ErrChangeWithoutCash  = errors.New("change can only be given from cash; card, mobile and pay-later amounts cannot exceed what is owed")
+	ErrInvalidCustomerId  = errors.New("the customer is not valid")
+	ErrMissingSettings    = errors.New("company settings are missing")
+	ErrDiscountNotAllowed = errors.New("you are not allowed to give discounts at the till")
+	ErrDiscountOverLimit  = errors.New("the discount is more than a cashier may give")
 )
 
 type Service struct {
@@ -88,6 +90,10 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
 	if priceError != nil {
 		return QuoteView{}, priceError
+	}
+	discountCheckError := checkManualDiscounts(principal, companySettings, pricedSale)
+	if discountCheckError != nil {
+		return QuoteView{}, discountCheckError
 	}
 
 	quoteView := QuoteView{
@@ -146,6 +152,10 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
 	if priceError != nil {
 		return SaleView{}, priceError
+	}
+	discountCheckError := checkManualDiscounts(principal, companySettings, pricedSale)
+	if discountCheckError != nil {
+		return SaleView{}, discountCheckError
 	}
 
 	customerId, customerIdError := parseOptionalId(request.CustomerId)
@@ -370,9 +380,10 @@ func (service *Service) price(ctx context.Context, querier database.Querier, pri
 		}
 
 		pricingLines = append(pricingLines, PricingLine{
-			Product:  pricingProduct,
-			Quantity: lineRequest.Quantity,
-			Addons:   lineAddons,
+			Product:        pricingProduct,
+			Quantity:       lineRequest.Quantity,
+			Addons:         lineAddons,
+			ManualDiscount: toManualDiscount(lineRequest.ManualDiscount),
 		})
 	}
 
@@ -395,8 +406,33 @@ func (service *Service) TillOptions(ctx context.Context, querier database.Querie
 		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
 		EfdEnabled:                companySettings.EfdEnabled,
 		PrintReceiptAutomatically: companySettings.PrintReceiptAutomatically,
+		DiscountLimitBasisPoints:  companySettings.TillDiscountLimitBasisPoints,
 	}
 	return tillOptions, nil
+}
+
+func toManualDiscount(manualDiscountRequest *ManualDiscountRequest) *ManualDiscount {
+	if manualDiscountRequest == nil {
+		return nil
+	}
+	return &ManualDiscount{Kind: manualDiscountRequest.Kind, Value: manualDiscountRequest.Value}
+}
+
+func checkManualDiscounts(principal *identity.Principal, companySettings *settings.Settings, pricedSale PricedSale) error {
+	for _, pricedLine := range pricedSale.Lines {
+		hasManualDiscount := pricedLine.ManualDiscount > 0
+		if !hasManualDiscount {
+			continue
+		}
+		if !principal.Can(TillDiscountPermission) {
+			return ErrDiscountNotAllowed
+		}
+		isOverLimit := !principal.IsOwner && pricedLine.ManualDiscount > ManualDiscountLimit(pricedLine, companySettings.TillDiscountLimitBasisPoints)
+		if isOverLimit {
+			return ErrDiscountOverLimit
+		}
+	}
+	return nil
 }
 
 func (service *Service) saleTaxRate(ctx context.Context, querier database.Querier, companyId uuid.UUID, companySettings *settings.Settings) (int, error) {
@@ -548,6 +584,7 @@ func toLineView(pricedLine PricedLine) LineView {
 		AddonsUnitTotal: pricedLine.AddonsUnitTotal,
 		DiscountName:    pricedLine.DiscountName,
 		DiscountAmount:  pricedLine.DiscountAmount,
+		ManualDiscount:  pricedLine.ManualDiscount,
 		LineTotal:       pricedLine.LineTotal,
 	}
 }

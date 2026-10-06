@@ -41,8 +41,8 @@ func TestSchemaEnforcesTenantBoundaries(t *testing.T) {
 		if countError != nil {
 			t.Fatalf("count permissions: %v", countError)
 		}
-		if permissionCount != 60 {
-			t.Fatalf("seeded %d permissions, want 60", permissionCount)
+		if permissionCount != 61 {
+			t.Fatalf("seeded %d permissions, want 61", permissionCount)
 		}
 
 		sampleDescription := ""
