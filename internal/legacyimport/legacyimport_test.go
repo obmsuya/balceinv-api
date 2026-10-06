@@ -394,7 +394,7 @@ func TestBringingOverTheOldAppsData(t *testing.T) {
 		ownerToken := harness.MustLogin("amina@duka.test", "old-admin-password")
 		ownerMe := harness.Call(http.MethodGet, "/api/auth/me", ownerToken, nil).Data()
 		ownerPermissions, _ := ownerMe["permissions"].([]any)
-		if ownerMe["is_owner"] != true || ownerMe["company_name"] != "Duka Jipya" || len(ownerPermissions) != 60 {
+		if ownerMe["is_owner"] != true || ownerMe["company_name"] != "Duka Jipya" || len(ownerPermissions) != 61 {
 			t.Fatalf("owner after import: %v", ownerMe)
 		}
 		cashierToken := harness.MustLogin("JUMA@duka.test", "old-cashier-password")

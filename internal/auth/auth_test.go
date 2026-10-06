@@ -58,8 +58,8 @@ func TestFirstSetupRunsOnceOnDesktopAndIsOpenToEveryBusinessInCloud(t *testing.T
 			t.Fatalf("owner should start in the Main Shop, got %v", meData)
 		}
 		ownerPermissions, _ := meData["permissions"].([]any)
-		if len(ownerPermissions) != 60 {
-			t.Fatalf("owner has %d permissions, want all 60", len(ownerPermissions))
+		if len(ownerPermissions) != 61 {
+			t.Fatalf("owner has %d permissions, want all 61", len(ownerPermissions))
 		}
 	})
 }
