@@ -39,7 +39,7 @@ func (repository *Repository) FindSettings(ctx context.Context, querier database
 		       alert_on_dead_stock, dead_stock_days, print_receipt_automatically, show_tax_on_receipt,
 		       show_barcodes_on_receipt, printer_enabled, printer_port, printer_model, printer_baud_rate,
 		       printer_paper_width, open_cash_drawer, till_numpad_enabled, customer_display_enabled,
-		       updated_by, created_at, updated_at
+		       till_discount_limit_basis_points, updated_by, created_at, updated_at
 		FROM settings
 		WHERE company_id = $1
 	`
@@ -73,6 +73,7 @@ func (repository *Repository) FindSettings(ctx context.Context, querier database
 		&foundSettings.OpenCashDrawer,
 		&foundSettings.TillNumpadEnabled,
 		&foundSettings.CustomerDisplayEnabled,
+		&foundSettings.TillDiscountLimitBasisPoints,
 		&foundSettings.UpdatedBy,
 		&foundSettings.CreatedAt,
 		&foundSettings.UpdatedAt,
@@ -97,7 +98,7 @@ func (repository *Repository) SaveSettings(ctx context.Context, querier database
 		    dead_stock_days = $16, print_receipt_automatically = $17, show_tax_on_receipt = $18,
 		    show_barcodes_on_receipt = $19, printer_enabled = $20, printer_port = $21, printer_model = $22,
 		    printer_baud_rate = $23, printer_paper_width = $24, open_cash_drawer = $25, till_numpad_enabled = $26,
-		    customer_display_enabled = $27, updated_by = $28, updated_at = $29
+		    customer_display_enabled = $27, till_discount_limit_basis_points = $28, updated_by = $29, updated_at = $30
 		WHERE company_id = $1
 	`
 
@@ -129,6 +130,7 @@ func (repository *Repository) SaveSettings(ctx context.Context, querier database
 		changedSettings.OpenCashDrawer,
 		changedSettings.TillNumpadEnabled,
 		changedSettings.CustomerDisplayEnabled,
+		changedSettings.TillDiscountLimitBasisPoints,
 		changedSettings.UpdatedBy,
 		time.Now().UTC(),
 	)
