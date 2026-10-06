@@ -13,7 +13,7 @@ func discountedLine(productId string, quantity int, kind string, value int64) ma
 	return map[string]any{"product_id": productId, "quantity": quantity, "manual_discount": map[string]any{"kind": kind, "value": value}}
 }
 
-func TestCashierDiscountNeedsThePermissionAndStaysWithinTheOwnersLimit(t *testing.T) {
+func TestCashierDiscountNeedsOnlyThePermissionAndCanGoToTheFullPrice(t *testing.T) {
 	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
 		harness := apptest.Start(t, engineCase)
 		company := harness.CreateCompany("Discount Shop", "owner@discount.test")
@@ -28,38 +28,24 @@ func TestCashierDiscountNeedsThePermissionAndStaysWithinTheOwnersLimit(t *testin
 			t.Fatalf("a cashier without the permission got quote %d %v and sale %d %v", quoteWithoutPermission.Status, quoteWithoutPermission.Body, saleWithoutPermission.Status, saleWithoutPermission.Body)
 		}
 
-		setLimit := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"till_discount_limit_basis_points": 1000})
-		if setLimit.Status != http.StatusOK || setLimit.Data()["till_discount_limit_basis_points"] != float64(1000) {
-			t.Fatalf("setting the limit returned %d %v", setLimit.Status, setLimit.Body)
-		}
-		tillOptions := harness.Call(http.MethodGet, "/api/sales/till", trustedCashierToken, nil)
-		if tillOptions.Data()["discount_limit_basis_points"] != float64(1000) {
-			t.Fatalf("the till did not get the limit: %v", tillOptions.Body)
+		allowedSale := sell(harness, trustedCashierToken, "discount-allowed-0001", []map[string]any{discountedLine(riceId, 2, "percent", 10000), discountedLine(riceId, 1, "amount", 1000)}, cash(9000))
+		allowedData := allowedSale.Data()
+		if allowedSale.Status != http.StatusCreated || allowedData["discount_total"] != float64(21000) || allowedData["total"] != float64(9000) {
+			t.Fatalf("a full and a partial cashier discount returned %d %v", allowedSale.Status, allowedSale.Body)
 		}
 
-		overLimit := sell(harness, trustedCashierToken, "discount-over-0001", []map[string]any{discountedLine(riceId, 2, "percent", 1500)}, cash(20000))
-		if overLimit.Status != http.StatusUnprocessableEntity || overLimit.Code() != "till_discount_over_limit" {
-			t.Fatalf("15%% with a 10%% limit returned %d %v", overLimit.Status, overLimit.Body)
-		}
-
-		withinLimit := sell(harness, trustedCashierToken, "discount-within-0001", []map[string]any{discountedLine(riceId, 2, "percent", 1000), discountedLine(riceId, 1, "amount", 1000)}, cash(30000))
-		withinData := withinLimit.Data()
-		if withinLimit.Status != http.StatusCreated || withinData["discount_total"] != float64(3000) || withinData["total"] != float64(27000) {
-			t.Fatalf("discounts within the limit returned %d %v", withinLimit.Status, withinLimit.Body)
-		}
-
-		savedSale := harness.Call(http.MethodGet, "/api/sales/"+withinData["id"].(string), company.OwnerToken, nil)
+		savedSale := harness.Call(http.MethodGet, "/api/sales/"+allowedData["id"].(string), company.OwnerToken, nil)
 		savedLines := savedSale.Data()["items"].([]any)
 		firstLine := savedLines[0].(map[string]any)
 		secondLine := savedLines[1].(map[string]any)
-		if firstLine["manual_discount_amount"] != float64(2000) || firstLine["discount_amount"] != float64(2000) || firstLine["line_total"] != float64(18000) ||
-			secondLine["manual_discount_amount"] != float64(1000) || savedSale.Data()["cashier_name"] == nil {
+		if firstLine["manual_discount_amount"] != float64(20000) || firstLine["line_total"] != float64(0) ||
+			secondLine["manual_discount_amount"] != float64(1000) || secondLine["line_total"] != float64(9000) || savedSale.Data()["cashier_name"] == nil {
 			t.Fatalf("the saved sale shows %v", savedSale.Body)
 		}
 
-		ownerOverLimit := sell(harness, company.OwnerToken, "discount-owner-0001", []map[string]any{discountedLine(riceId, 1, "percent", 5000)}, cash(5000))
-		if ownerOverLimit.Status != http.StatusCreated || ownerOverLimit.Data()["total"] != float64(5000) {
-			t.Fatalf("the owner giving 50%% returned %d %v", ownerOverLimit.Status, ownerOverLimit.Body)
+		ownerSale := sell(harness, company.OwnerToken, "discount-owner-0001", []map[string]any{discountedLine(riceId, 1, "percent", 5000)}, cash(5000))
+		if ownerSale.Status != http.StatusCreated || ownerSale.Data()["total"] != float64(5000) {
+			t.Fatalf("the owner giving 50%% returned %d %v", ownerSale.Status, ownerSale.Body)
 		}
 
 		badKind := harness.Call(http.MethodPost, "/api/sales/quote", company.OwnerToken, map[string]any{"items": []any{discountedLine(riceId, 1, "free", 1)}})

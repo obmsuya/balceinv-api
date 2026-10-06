@@ -35,7 +35,6 @@ var (
 	ErrInvalidCustomerId  = errors.New("the customer is not valid")
 	ErrMissingSettings    = errors.New("company settings are missing")
 	ErrDiscountNotAllowed = errors.New("you are not allowed to give discounts at the till")
-	ErrDiscountOverLimit  = errors.New("the discount is more than a cashier may give")
 )
 
 type Service struct {
@@ -91,7 +90,7 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 	if priceError != nil {
 		return QuoteView{}, priceError
 	}
-	discountCheckError := checkManualDiscounts(principal, companySettings, pricedSale)
+	discountCheckError := checkManualDiscounts(principal, pricedSale)
 	if discountCheckError != nil {
 		return QuoteView{}, discountCheckError
 	}
@@ -153,7 +152,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	if priceError != nil {
 		return SaleView{}, priceError
 	}
-	discountCheckError := checkManualDiscounts(principal, companySettings, pricedSale)
+	discountCheckError := checkManualDiscounts(principal, pricedSale)
 	if discountCheckError != nil {
 		return SaleView{}, discountCheckError
 	}
@@ -406,7 +405,6 @@ func (service *Service) TillOptions(ctx context.Context, querier database.Querie
 		CustomerDisplayEnabled:    companySettings.CustomerDisplayEnabled,
 		EfdEnabled:                companySettings.EfdEnabled,
 		PrintReceiptAutomatically: companySettings.PrintReceiptAutomatically,
-		DiscountLimitBasisPoints:  companySettings.TillDiscountLimitBasisPoints,
 	}
 	return tillOptions, nil
 }
@@ -418,18 +416,11 @@ func toManualDiscount(manualDiscountRequest *ManualDiscountRequest) *ManualDisco
 	return &ManualDiscount{Kind: manualDiscountRequest.Kind, Value: manualDiscountRequest.Value}
 }
 
-func checkManualDiscounts(principal *identity.Principal, companySettings *settings.Settings, pricedSale PricedSale) error {
+func checkManualDiscounts(principal *identity.Principal, pricedSale PricedSale) error {
 	for _, pricedLine := range pricedSale.Lines {
 		hasManualDiscount := pricedLine.ManualDiscount > 0
-		if !hasManualDiscount {
-			continue
-		}
-		if !principal.Can(TillDiscountPermission) {
+		if hasManualDiscount && !principal.Can(TillDiscountPermission) {
 			return ErrDiscountNotAllowed
-		}
-		isOverLimit := !principal.IsOwner && pricedLine.ManualDiscount > ManualDiscountLimit(pricedLine, companySettings.TillDiscountLimitBasisPoints)
-		if isOverLimit {
-			return ErrDiscountOverLimit
 		}
 	}
 	return nil

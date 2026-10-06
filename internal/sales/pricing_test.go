@@ -142,7 +142,4 @@ func TestCashierDiscountStacksOnTheAutomaticOneAndNeverGoesBelowZero(t *testing.
 		t.Fatalf("more than 100%% priced as %+v", overHundredPercent)
 	}
 
-	if limit := ManualDiscountLimit(tenPercent, 1500); limit != 1050 {
-		t.Fatalf("a 15%% limit on a 7,000 line is %d, want 1050", limit)
-	}
 }

@@ -181,8 +181,6 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusBadRequest, "invalid_payment", serviceError.Error())
 	case errors.Is(serviceError, ErrDiscountNotAllowed):
 		return response.Error(c, fiber.StatusForbidden, "till_discount_not_allowed", serviceError.Error())
-	case errors.Is(serviceError, ErrDiscountOverLimit):
-		return response.Error(c, fiber.StatusUnprocessableEntity, "till_discount_over_limit", serviceError.Error())
 	case errors.Is(serviceError, ErrNoActiveShop):
 		return response.Error(c, fiber.StatusBadRequest, "no_active_shop", serviceError.Error())
 	case errors.Is(serviceError, ErrEfdOff), errors.Is(serviceError, ErrEfdNotReady), errors.Is(serviceError, ErrFiscalNotQueued):
