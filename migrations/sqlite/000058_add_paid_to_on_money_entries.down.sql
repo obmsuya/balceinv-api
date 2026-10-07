@@ -1,0 +1,2 @@
+DROP INDEX idx_journal_entries_company_id_paid_to_user_id;
+ALTER TABLE journal_entries DROP COLUMN paid_to_user_id;
