@@ -123,6 +123,24 @@ func (handler *Handler) Get(c *fiber.Ctx) error {
 	return response.Success(c, "Sale", saleView)
 }
 
+func (handler *Handler) Void(c *fiber.Ctx) error {
+	saleId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrSaleNotFound)
+	}
+	request := VoidRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	saleView, voidError := handler.service.Void(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), saleId, request)
+	if voidError != nil {
+		return respondWithServiceError(c, voidError)
+	}
+	return response.Success(c, "Sale voided", saleView)
+}
+
 func (handler *Handler) Receipt(c *fiber.Ctx) error {
 	saleId, isValidId := httpx.UuidParam(c, "id")
 	if !isValidId {
@@ -179,6 +197,12 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "shop_closed", serviceError.Error())
 	case errors.Is(serviceError, ErrDuplicatePayment), errors.Is(serviceError, ErrPaymentTooLow), errors.Is(serviceError, ErrChangeWithoutCash):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_payment", serviceError.Error())
+	case errors.Is(serviceError, ErrSaleAlreadyVoided):
+		return response.Error(c, fiber.StatusConflict, "sale_already_voided", serviceError.Error())
+	case errors.Is(serviceError, ErrSaleFromOrder):
+		return response.Error(c, fiber.StatusConflict, "sale_from_order", serviceError.Error())
+	case errors.Is(serviceError, ErrFiscalBusy):
+		return response.Error(c, fiber.StatusConflict, "efd_busy", serviceError.Error())
 	case errors.Is(serviceError, ErrDiscountNotAllowed):
 		return response.Error(c, fiber.StatusForbidden, "till_discount_not_allowed", serviceError.Error())
 	case errors.Is(serviceError, ErrNoActiveShop):

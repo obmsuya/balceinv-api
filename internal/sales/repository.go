@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/google/uuid"
@@ -15,7 +16,8 @@ const saleViewColumns = `
 	s.tax_total, s.tax_rate_basis_points, s.amount_paid, s.change_given, s.currency_code, s.currency_decimals, s.note, s.created_at,
 	s.customer_id, c.name, c.phone,
 	COALESCE((SELECT p.amount FROM sale_payments p WHERE p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'), 0),
-	(SELECT o.number FROM customer_orders o WHERE o.company_id = s.company_id AND o.sale_id = s.id)
+	(SELECT o.number FROM customer_orders o WHERE o.company_id = s.company_id AND o.sale_id = s.id),
+	s.voided_at, s.void_reason, vu.name
 `
 
 const saleViewJoins = `
@@ -23,6 +25,7 @@ const saleViewJoins = `
 	JOIN shops sh ON sh.company_id = s.company_id AND sh.id = s.shop_id
 	JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
 	LEFT JOIN customers c ON c.company_id = s.company_id AND c.id = s.customer_id
+	LEFT JOIN users vu ON vu.company_id = s.company_id AND vu.id = s.voided_by
 `
 
 func (repository *Repository) FindHashByClientRef(ctx context.Context, querier database.Querier, companyId uuid.UUID, clientRef string) (*uuid.UUID, string, error) {
@@ -136,6 +139,24 @@ func (repository *Repository) InsertPayments(ctx context.Context, querier databa
 	return nil
 }
 
+func (repository *Repository) MarkVoided(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID, voidedBy uuid.UUID, reason string, voidedAt time.Time) (bool, error) {
+	query := `
+		UPDATE sales
+		SET voided_at = $3, voided_by = $4, void_reason = $5
+		WHERE company_id = $1 AND id = $2 AND voided_at IS NULL
+	`
+
+	updateResult, updateError := querier.ExecContext(ctx, query, companyId, saleId, voidedAt, voidedBy, reason)
+	if updateError != nil {
+		return false, fmt.Errorf("failed to void the sale: %w", updateError)
+	}
+	updatedRows, rowsError := updateResult.RowsAffected()
+	if rowsError != nil {
+		return false, fmt.Errorf("failed to read the voided sale: %w", rowsError)
+	}
+	return updatedRows == 1, nil
+}
+
 func (repository *Repository) FindView(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) (*SaleView, error) {
 	query := `SELECT ` + saleViewColumns + saleViewJoins + ` WHERE s.company_id = $1 AND s.id = $2`
 
@@ -165,6 +186,9 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 		&saleView.CustomerPhone,
 		&saleView.CreditAmount,
 		&orderNumber,
+		&saleView.VoidedAt,
+		&saleView.VoidReason,
+		&saleView.VoidedByName,
 	)
 	if errors.Is(scanError, sql.ErrNoRows) {
 		return nil, nil

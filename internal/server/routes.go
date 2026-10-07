@@ -296,6 +296,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/reports/:report/export", permitted("reports:view", reportsHandler.Export)...)
 
 	application.Post("/api/sales/fiscal/send-waiting", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendWaitingToEfd)
+	application.Post("/api/sales/:id/void", permitted("sales:delete", salesHandler.Void)...)
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
 	application.Get("/api/sales/:id/document", permittedAny(sellingOrViewing, invoicesHandler.SaleDocument)...)

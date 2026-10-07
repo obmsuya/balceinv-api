@@ -35,6 +35,9 @@ var (
 	ErrInvalidCustomerId  = errors.New("the customer is not valid")
 	ErrMissingSettings    = errors.New("company settings are missing")
 	ErrDiscountNotAllowed = errors.New("you are not allowed to give discounts at the till")
+	ErrSaleAlreadyVoided  = errors.New("this sale was already voided")
+	ErrSaleFromOrder      = errors.New("this sale completed a customer order; cancel or change the order instead")
+	ErrFiscalBusy         = errors.New("this sale is being sent to the EFD right now; try again in a moment")
 )
 
 type Service struct {
@@ -284,7 +287,7 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 		return SaleView{}, insertPaymentsError
 	}
 	if companySettings.EfdEnabled {
-		queueError := service.repository.InsertFiscalPending(ctx, querier, principal.CompanyId, newSale.Id, createdAt)
+		queueError := service.repository.InsertFiscalPending(ctx, querier, FiscalReceipt, principal.CompanyId, newSale.Id, createdAt)
 		if queueError != nil {
 			return SaleView{}, queueError
 		}
@@ -317,6 +320,80 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 	return service.Get(ctx, querier, principal.CompanyId, newSale.Id)
 }
 
+func (service *Service) Void(ctx context.Context, querier database.Querier, principal *identity.Principal, saleId uuid.UUID, request VoidRequest) (SaleView, error) {
+	saleView, getError := service.Get(ctx, querier, principal.CompanyId, saleId)
+	if getError != nil {
+		return SaleView{}, getError
+	}
+	if saleView.VoidedAt != nil {
+		return SaleView{}, ErrSaleAlreadyVoided
+	}
+	if saleView.OrderNumber != nil {
+		return SaleView{}, ErrSaleFromOrder
+	}
+
+	voidedAt := time.Now().UTC()
+	reason := strings.TrimSpace(request.Reason)
+	isMarked, markError := service.repository.MarkVoided(ctx, querier, principal.CompanyId, saleId, principal.UserId, reason, voidedAt)
+	if markError != nil {
+		return SaleView{}, markError
+	}
+	if !isMarked {
+		return SaleView{}, ErrSaleAlreadyVoided
+	}
+
+	fiscalError := service.settleFiscalForVoid(ctx, querier, principal.CompanyId, saleView, voidedAt)
+	if fiscalError != nil {
+		return SaleView{}, fiscalError
+	}
+
+	for _, lineView := range saleView.Items {
+		returnMovement := stock.MovementRequest{
+			CompanyId: principal.CompanyId,
+			ShopId:    saleView.ShopId,
+			ProductId: lineView.ProductId,
+			Change:    lineView.Quantity,
+			Reason:    "sale",
+			Reference: &saleView.ReceiptNumber,
+			UserId:    &principal.UserId,
+		}
+		_, movementError := service.stockService.RecordMovement(ctx, querier, returnMovement)
+		if movementError != nil {
+			return SaleView{}, movementError
+		}
+	}
+
+	saleReversal := accounting.ReversalPosting{
+		CompanyId:          principal.CompanyId,
+		OriginalSourceType: accounting.SourceSale,
+		OriginalSourceId:   saleId,
+		SourceType:         accounting.SourceSaleVoid,
+		ReversedAt:         voidedAt,
+		Reason:             reason,
+		UserId:             &principal.UserId,
+	}
+	_, reverseError := service.ledger.ReverseSource(ctx, querier, saleReversal)
+	if reverseError != nil {
+		return SaleView{}, reverseError
+	}
+
+	return service.Get(ctx, querier, principal.CompanyId, saleId)
+}
+
+func (service *Service) settleFiscalForVoid(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleView SaleView, voidedAt time.Time) error {
+	if saleView.Fiscal == nil {
+		return nil
+	}
+	switch saleView.Fiscal.Status {
+	case "sending":
+		return ErrFiscalBusy
+	case "sent":
+		return service.repository.InsertFiscalPending(ctx, querier, FiscalCreditNote, companyId, saleView.Id, voidedAt)
+	default:
+		return service.repository.DeleteUnsentFiscal(ctx, querier, companyId, saleView.Id)
+	}
+}
+
 func (service *Service) Get(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) (SaleView, error) {
 	saleView, findError := service.repository.FindView(ctx, querier, companyId, saleId)
 	if findError != nil {
@@ -335,14 +412,19 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 		return SaleView{}, paymentsError
 	}
 
-	fiscalView, fiscalError := service.repository.FindFiscal(ctx, querier, companyId, saleId)
+	fiscalView, fiscalError := service.repository.FindFiscal(ctx, querier, FiscalReceipt, companyId, saleId)
 	if fiscalError != nil {
 		return SaleView{}, fiscalError
+	}
+	creditNoteView, creditNoteError := service.repository.FindFiscal(ctx, querier, FiscalCreditNote, companyId, saleId)
+	if creditNoteError != nil {
+		return SaleView{}, creditNoteError
 	}
 
 	saleView.Items = lineViews
 	saleView.Payments = paymentViews
 	saleView.Fiscal = fiscalView
+	saleView.CreditNote = creditNoteView
 	return *saleView, nil
 }
 

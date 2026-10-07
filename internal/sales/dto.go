@@ -117,6 +117,14 @@ type SaleView struct {
 	Items              []LineView    `json:"items"`
 	Payments           []PaymentView `json:"payments"`
 	Fiscal             *FiscalView   `json:"fiscal"`
+	VoidedAt           *time.Time    `json:"voided_at"`
+	VoidReason         *string       `json:"void_reason"`
+	VoidedByName       *string       `json:"voided_by_name"`
+	CreditNote         *FiscalView   `json:"credit_note"`
+}
+
+type VoidRequest struct {
+	Reason string `json:"reason" validate:"required,min=3,max=200"`
 }
 
 type FiscalView struct {
@@ -143,15 +151,16 @@ type SendWaitingView struct {
 }
 
 type SaleSummaryView struct {
-	Id             uuid.UUID `json:"id"`
-	ReceiptNumber  string    `json:"receipt_number"`
-	Total          int64     `json:"total"`
-	DiscountTotal  int64     `json:"discount_total"`
-	UnitCount      int64     `json:"unit_count"`
-	PaymentMethods []string  `json:"payment_methods"`
-	CashierName    string    `json:"cashier_name"`
-	FiscalStatus   *string   `json:"fiscal_status"`
-	CreatedAt      time.Time `json:"created_at"`
+	Id             uuid.UUID  `json:"id"`
+	ReceiptNumber  string     `json:"receipt_number"`
+	Total          int64      `json:"total"`
+	DiscountTotal  int64      `json:"discount_total"`
+	UnitCount      int64      `json:"unit_count"`
+	PaymentMethods []string   `json:"payment_methods"`
+	CashierName    string     `json:"cashier_name"`
+	FiscalStatus   *string    `json:"fiscal_status"`
+	VoidedAt       *time.Time `json:"voided_at"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type TotalsView struct {
