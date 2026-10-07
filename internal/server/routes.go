@@ -358,6 +358,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/accounting/entries/:id/receipt", books("accounting:view", accountingHandler.Receipt)...)
 	application.Post("/api/accounting/entries/:id/reverse", books("accounting:delete", accountingHandler.Reverse)...)
 	application.Post("/api/accounting/money", books("accounting:create", accountingHandler.RecordMoney)...)
+	application.Get("/api/accounting/people", books("accounting:create", accountingHandler.People)...)
 	application.Post("/api/accounting/receipts", books("accounting:create", accountingHandler.UploadReceipt)...)
 	application.Post("/api/accounting/manual", fullBooks("accounting:edit", accountingHandler.PostManual)...)
 	application.Post("/api/accounting/close", fullBooks("accounting:edit", accountingHandler.ClosePeriod)...)

@@ -233,6 +233,11 @@ func (service *Service) RecordMoney(ctx context.Context, querier database.Querie
 		return EntryView{}, false, attachmentError
 	}
 
+	paidToUserId, paidToError := service.paidTo(ctx, querier, principal.CompanyId, request)
+	if paidToError != nil {
+		return EntryView{}, false, paidToError
+	}
+
 	moneyLines, linesError := service.moneyLines(ctx, querier, books, request, shopId)
 	if linesError != nil {
 		return EntryView{}, false, linesError
@@ -264,6 +269,7 @@ func (service *Service) RecordMoney(ctx context.Context, querier database.Querie
 		AttachmentKey: request.AttachmentKey,
 		ReceiptNumber: trimmedOrNil(request.ReceiptNumber),
 		SupplierTin:   trimmedOrNil(request.SupplierTin),
+		PaidToUserId:  paidToUserId,
 		CreatedBy:     &principal.UserId,
 		Lines:         entryLines,
 	}
@@ -273,6 +279,26 @@ func (service *Service) RecordMoney(ctx context.Context, querier database.Querie
 	}
 	entryView, viewError := service.Entry(ctx, querier, principal, postedEntry.Id)
 	return entryView, true, viewError
+}
+
+func (service *Service) paidTo(ctx context.Context, querier database.Querier, companyId uuid.UUID, request MoneyRequest) (*uuid.UUID, error) {
+	isExpenseToSomeone := request.Kind == SourceExpense && request.PaidToUserId != nil
+	if !isExpenseToSomeone {
+		return nil, nil
+	}
+	paidToUserId := uuid.MustParse(*request.PaidToUserId)
+	isCompanyUser, lookupError := service.repository.IsCompanyUser(ctx, querier, companyId, paidToUserId)
+	if lookupError != nil {
+		return nil, lookupError
+	}
+	if !isCompanyUser {
+		return nil, ErrPaidToNotFound
+	}
+	return &paidToUserId, nil
+}
+
+func (service *Service) People(ctx context.Context, querier database.Querier, principal *identity.Principal) ([]PersonView, error) {
+	return service.repository.ListPeople(ctx, querier, principal.CompanyId)
 }
 
 type moneyLine struct {

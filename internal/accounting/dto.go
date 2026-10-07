@@ -29,6 +29,12 @@ type MoneyRequest struct {
 	VatAmount        *int64  `json:"vat_amount" validate:"omitnil,gte=0,lte=100000000000000"`
 	SupplierTin      *string `json:"supplier_tin" validate:"omitnil,max=40"`
 	ReceiptNumber    *string `json:"receipt_number" validate:"omitnil,max=60"`
+	PaidToUserId     *string `json:"paid_to_user_id" validate:"omitnil,uuid"`
+}
+
+type PersonView struct {
+	Id   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 type ReverseRequest struct {
@@ -118,6 +124,9 @@ type EntryView struct {
 	SupplierTin       *string    `json:"supplier_tin"`
 	PartyType         *string    `json:"party_type"`
 	PartyId           *uuid.UUID `json:"party_id"`
+	PartyName         *string    `json:"party_name"`
+	PaidToUserId      *uuid.UUID `json:"paid_to_user_id"`
+	PaidToName        *string    `json:"paid_to_name"`
 	ReversesEntryId   *uuid.UUID `json:"reverses_entry_id"`
 	ReversedByEntryId *uuid.UUID `json:"reversed_by_entry_id"`
 	IsReversible      bool       `json:"is_reversible"`
