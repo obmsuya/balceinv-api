@@ -55,7 +55,8 @@ func salesWhere(scope Scope, arguments *queryArguments) string {
 	return "s.company_id = " + arguments.add(scope.CompanyId) +
 		" AND s.created_at >= " + arguments.add(scope.From) +
 		" AND s.created_at < " + arguments.add(scope.To) +
-		shopCondition("s.shop_id", scope, arguments)
+		shopCondition("s.shop_id", scope, arguments) +
+		" AND s.voided_at IS NULL"
 }
 
 func (repository *Repository) SaleTotals(ctx context.Context, querier database.Querier, scope Scope) (SummaryView, error) {
@@ -157,7 +158,7 @@ func (repository *Repository) Daily(ctx context.Context, querier database.Querie
 			SELECT i.sale_id, SUM(i.unit_cost * i.quantity) AS cost
 			FROM sale_items i
 			JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
-			WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + `
+			WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
 			GROUP BY i.sale_id
 		)
 		SELECT d.day,
@@ -166,7 +167,7 @@ func (repository *Repository) Daily(ctx context.Context, querier database.Querie
 		       CAST(COALESCE(SUM(s.tax_total), 0) AS BIGINT),
 		       CAST(COALESCE(SUM(c.cost), 0) AS BIGINT)
 		FROM days d
-		LEFT JOIN sales s ON s.company_id = ` + companyPlaceholder + ` AND s.created_at >= d.starts_at AND s.created_at < d.ends_at` + shopFilter + `
+		LEFT JOIN sales s ON s.company_id = ` + companyPlaceholder + ` AND s.created_at >= d.starts_at AND s.created_at < d.ends_at AND s.voided_at IS NULL` + shopFilter + `
 		LEFT JOIN item_costs c ON c.sale_id = s.id
 		GROUP BY d.day
 		ORDER BY d.day
@@ -366,7 +367,7 @@ func (repository *Repository) DeadStock(ctx context.Context, querier database.Qu
 			SELECT i.product_id, MAX(s.created_at) AS last_sold_at
 			FROM sale_items i
 			JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
-			WHERE s.company_id = ` + companyPlaceholder + saleShopFilter + `
+			WHERE s.company_id = ` + companyPlaceholder + saleShopFilter + ` AND s.voided_at IS NULL
 			GROUP BY i.product_id
 		)
 		SELECT p.id, p.name, p.variant_label, p.sku,
@@ -415,7 +416,7 @@ func (repository *Repository) RecentSales(ctx context.Context, querier database.
 		FROM sales s
 		JOIN shops sh ON sh.company_id = s.company_id AND sh.id = s.shop_id
 		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
-		WHERE s.company_id = ` + arguments.add(scope.CompanyId) + shopCondition("s.shop_id", scope, arguments) + `
+		WHERE s.company_id = ` + arguments.add(scope.CompanyId) + shopCondition("s.shop_id", scope, arguments) + ` AND s.voided_at IS NULL
 		ORDER BY s.created_at DESC, s.id DESC
 		LIMIT ` + arguments.add(limit)
 

@@ -220,7 +220,7 @@ func (repository *Repository) SalesBetween(ctx context.Context, querier database
 	query := `
 		SELECT COUNT(*), CAST(COALESCE(SUM(total), 0) AS BIGINT), CAST(COALESCE(SUM(tax_total), 0) AS BIGINT)
 		FROM sales
-		WHERE company_id = $1 AND created_at >= $2 AND created_at < $3
+		WHERE company_id = $1 AND created_at >= $2 AND created_at < $3 AND voided_at IS NULL
 	`
 	saleCount := int64(0)
 	salesTotal := int64(0)
