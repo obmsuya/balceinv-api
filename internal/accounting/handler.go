@@ -137,6 +137,14 @@ func (handler *Handler) Accounts(c *fiber.Ctx) error {
 	return response.Success(c, "Accounts", accountViews)
 }
 
+func (handler *Handler) People(c *fiber.Ctx) error {
+	people, listError := handler.service.People(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c))
+	if listError != nil {
+		return respondWithServiceError(c, listError)
+	}
+	return response.Success(c, "People", people)
+}
+
 func (handler *Handler) CreateAccount(c *fiber.Ctx) error {
 	request := AccountRequest{}
 	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
@@ -392,6 +400,7 @@ func statusFor(serviceError error) (int, string, bool) {
 		{ErrEntryNotFound, fiber.StatusNotFound, "not_found"},
 		{ErrAccountNotFound, fiber.StatusNotFound, "not_found"},
 		{ErrShopNotFound, fiber.StatusNotFound, "not_found"},
+		{ErrPaidToNotFound, fiber.StatusNotFound, "not_found"},
 		{ErrNotReversible, fiber.StatusConflict, "not_reversible"},
 		{ErrAlreadyReversed, fiber.StatusConflict, "already_reversed"},
 		{ErrSameMoneyAccount, fiber.StatusBadRequest, "same_money_account"},

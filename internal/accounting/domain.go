@@ -181,6 +181,7 @@ var (
 	ErrInvalidAttachment = errors.New("the receipt photo was not found; upload it again")
 	ErrInvalidFilter     = errors.New("the filter is not valid")
 	ErrRangeTooLong      = errors.New("choose a range of at most 366 days")
+	ErrPaidToNotFound    = errors.New("the person paid was not found among this business's users")
 )
 
 type Books struct {
@@ -227,6 +228,7 @@ type Entry struct {
 	PartyType       *string
 	PartyId         *uuid.UUID
 	ReversesEntryId *uuid.UUID
+	PaidToUserId    *uuid.UUID
 	CreatedBy       *uuid.UUID
 	Lines           []Line
 }

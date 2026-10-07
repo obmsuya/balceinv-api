@@ -42,7 +42,7 @@ func (repository *Repository) Totals(ctx context.Context, querier database.Queri
 		       CAST(COALESCE(SUM(s.total), 0) AS BIGINT),
 		       CAST(COALESCE(SUM(s.tax_total), 0) AS BIGINT),
 		       CAST(COALESCE(SUM(s.discount_total), 0) AS BIGINT)
-		FROM sales s` + whereClause
+		FROM sales s` + whereClause + ` AND s.voided_at IS NULL`
 
 	totals := TotalsView{}
 	scanError := querier.QueryRowContext(ctx, query, whereArguments...).Scan(&totals.SaleCount, &totals.Total, &totals.TaxTotal, &totals.DiscountTotal)
@@ -60,7 +60,8 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 	query := `
 		SELECT s.id, s.receipt_number, s.total, s.discount_total, u.name, s.created_at,
 		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id),
-		       (SELECT f.status FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id)
+		       (SELECT f.status FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id),
+		       s.voided_at
 		FROM sales s
 		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id` + whereClause + `
 		ORDER BY s.created_at DESC, s.id DESC
@@ -86,6 +87,7 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 			&summary.CreatedAt,
 			&summary.UnitCount,
 			&summary.FiscalStatus,
+			&summary.VoidedAt,
 		)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan sale: %w", scanError)

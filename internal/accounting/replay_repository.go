@@ -15,7 +15,7 @@ const bookedMovementReasons = `('opening', 'return', 'purchase', 'adjustment', '
 
 func (repository *Repository) UnpostedSales(ctx context.Context, querier database.Querier, companyId uuid.UUID, since time.Time, onlySaleId *uuid.UUID) ([]SalePosting, error) {
 	arguments := &queryArguments{}
-	where := `s.company_id = ` + arguments.add(companyId) + ` AND s.created_at >= ` + arguments.add(since) +
+	where := `s.company_id = ` + arguments.add(companyId) + ` AND s.created_at >= ` + arguments.add(since) + ` AND s.voided_at IS NULL` +
 		` AND NOT EXISTS (SELECT 1 FROM journal_entries e WHERE e.company_id = s.company_id AND e.source_type = 'sale' AND e.source_id = s.id)`
 	if onlySaleId != nil {
 		where += ` AND s.id = ` + arguments.add(*onlySaleId)

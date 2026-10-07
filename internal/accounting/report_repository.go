@@ -220,7 +220,7 @@ func (repository *Repository) SalesBetween(ctx context.Context, querier database
 	query := `
 		SELECT COUNT(*), CAST(COALESCE(SUM(total), 0) AS BIGINT), CAST(COALESCE(SUM(tax_total), 0) AS BIGINT)
 		FROM sales
-		WHERE company_id = $1 AND created_at >= $2 AND created_at < $3
+		WHERE company_id = $1 AND created_at >= $2 AND created_at < $3 AND voided_at IS NULL
 	`
 	saleCount := int64(0)
 	salesTotal := int64(0)
@@ -296,10 +296,16 @@ const entryViewSelect = `
 	       e.attachment_key, e.receipt_number, e.supplier_tin, e.party_type, e.party_id, e.reverses_entry_id,
 	       (SELECT r.id FROM journal_entries r WHERE r.company_id = e.company_id AND r.reverses_entry_id = e.id LIMIT 1),
 	       u.name, e.created_at,
-	       CAST(COALESCE((SELECT SUM(l.debit) FROM journal_lines l WHERE l.company_id = e.company_id AND l.entry_id = e.id), 0) AS BIGINT)
+	       CAST(COALESCE((SELECT SUM(l.debit) FROM journal_lines l WHERE l.company_id = e.company_id AND l.entry_id = e.id), 0) AS BIGINT),
+	       CASE e.party_type
+	           WHEN 'customer' THEN (SELECT c.name FROM customers c WHERE c.company_id = e.company_id AND c.id = e.party_id)
+	           WHEN 'supplier' THEN (SELECT sp.name FROM suppliers sp WHERE sp.company_id = e.company_id AND sp.id = e.party_id)
+	       END,
+	       e.paid_to_user_id, pu.name
 	FROM journal_entries e
 	LEFT JOIN shops sh ON sh.company_id = e.company_id AND sh.id = e.shop_id
 	LEFT JOIN users u ON u.company_id = e.company_id AND u.id = e.created_by
+	LEFT JOIN users pu ON pu.company_id = e.company_id AND pu.id = e.paid_to_user_id
 `
 
 func (repository *Repository) ListEntries(ctx context.Context, querier database.Querier, companyId uuid.UUID, filter EntryFilter, limit int, offset int) ([]EntryView, error) {
@@ -347,7 +353,7 @@ func (repository *Repository) queryEntries(ctx context.Context, querier database
 		scanError := entryRows.Scan(&entryView.Id, &entryView.EntryNumber, &entryView.EntryDate, &entryView.SourceType, &entryView.SourceId,
 			&entryView.Memo, &entryView.ShopId, &entryView.ShopName, &attachmentKey, &entryView.ReceiptNumber, &entryView.SupplierTin,
 			&entryView.PartyType, &entryView.PartyId, &entryView.ReversesEntryId, &entryView.ReversedByEntryId, &entryView.CreatedByName,
-			&entryView.CreatedAt, &entryView.Amount)
+			&entryView.CreatedAt, &entryView.Amount, &entryView.PartyName, &entryView.PaidToUserId, &entryView.PaidToName)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan an entry: %w", scanError)
 		}

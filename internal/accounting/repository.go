@@ -216,8 +216,9 @@ func (repository *Repository) UpdateAccount(ctx context.Context, querier databas
 func (repository *Repository) InsertEntry(ctx context.Context, querier database.Querier, companyId uuid.UUID, postedEntry PostedEntry, entry Entry, createdAt time.Time) error {
 	entryQuery := `
 		INSERT INTO journal_entries (id, company_id, entry_number, entry_date, source_type, source_id, client_ref, memo, shop_id,
-		                             attachment_key, receipt_number, supplier_tin, party_type, party_id, reverses_entry_id, created_by, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		                             attachment_key, receipt_number, supplier_tin, party_type, party_id, reverses_entry_id, paid_to_user_id,
+		                             created_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`
 	_, entryError := querier.ExecContext(ctx, entryQuery,
 		postedEntry.Id,
@@ -235,6 +236,7 @@ func (repository *Repository) InsertEntry(ctx context.Context, querier database.
 		entry.PartyType,
 		entry.PartyId,
 		entry.ReversesEntryId,
+		entry.PaidToUserId,
 		entry.CreatedBy,
 		createdAt,
 	)
@@ -337,4 +339,34 @@ func joinedPlaceholders(arguments *queryArguments, values []string) string {
 		placeholders = append(placeholders, arguments.add(value))
 	}
 	return strings.Join(placeholders, ", ")
+}
+
+func (repository *Repository) IsCompanyUser(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID) (bool, error) {
+	userCount := int64(0)
+	scanError := querier.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE company_id = $1 AND id = $2`, companyId, userId).Scan(&userCount)
+	if scanError != nil {
+		return false, fmt.Errorf("failed to find the person paid: %w", scanError)
+	}
+	return userCount == 1, nil
+}
+
+func (repository *Repository) ListPeople(ctx context.Context, querier database.Querier, companyId uuid.UUID) ([]PersonView, error) {
+	query := `SELECT id, name FROM users WHERE company_id = $1 AND is_active ORDER BY name, id`
+
+	peopleRows, queryError := querier.QueryContext(ctx, query, companyId)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list the people who can be paid: %w", queryError)
+	}
+	defer peopleRows.Close()
+
+	people := []PersonView{}
+	for peopleRows.Next() {
+		person := PersonView{}
+		scanError := peopleRows.Scan(&person.Id, &person.Name)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a person who can be paid: %w", scanError)
+		}
+		people = append(people, person)
+	}
+	return people, peopleRows.Err()
 }

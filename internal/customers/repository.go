@@ -15,13 +15,13 @@ import (
 const customerColumns = `
 	c.id, c.company_id, c.name, c.phone, c.email, c.address, c.tin, c.credit_limit, c.opening_balance, c.notes, c.is_active,
 	c.created_at, c.updated_at,
-	(SELECT MAX(s.created_at) FROM sales s WHERE s.company_id = c.company_id AND s.customer_id = c.id) AS last_visit_at
+	(SELECT MAX(s.created_at) FROM sales s WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL) AS last_visit_at
 `
 
 const creditOnSales = `
 	SELECT s.customer_id, s.id, s.receipt_number, s.created_at, p.amount
 	FROM sales s
-	JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'
+	JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit' AND s.voided_at IS NULL
 `
 
 type Repository struct{}
@@ -169,7 +169,7 @@ func (repository *Repository) ListOwing(ctx context.Context, querier database.Qu
 			c.opening_balance > 0 OR EXISTS (
 				SELECT 1 FROM sales s
 				JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'
-				WHERE s.company_id = c.company_id AND s.customer_id = c.id
+				WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL
 			)
 		)
 	`
@@ -188,7 +188,7 @@ func (repository *Repository) Balance(ctx context.Context, querier database.Quer
 			+ COALESCE((
 				SELECT SUM(p.amount) FROM sales s
 				JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'
-				WHERE s.company_id = c.company_id AND s.customer_id = c.id
+				WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL
 			), 0)
 			- COALESCE((
 				SELECT SUM(cp.amount) FROM customer_payments cp
@@ -344,7 +344,7 @@ func (repository *Repository) ListPayments(ctx context.Context, querier database
 
 func (repository *Repository) CountSales(ctx context.Context, querier database.Querier, companyId uuid.UUID, customerId uuid.UUID) (int64, error) {
 	saleCount := int64(0)
-	scanError := querier.QueryRowContext(ctx, `SELECT COUNT(*) FROM sales WHERE company_id = $1 AND customer_id = $2`, companyId, customerId).Scan(&saleCount)
+	scanError := querier.QueryRowContext(ctx, `SELECT COUNT(*) FROM sales WHERE company_id = $1 AND customer_id = $2 AND voided_at IS NULL`, companyId, customerId).Scan(&saleCount)
 	if scanError != nil {
 		return 0, fmt.Errorf("failed to count customer sales: %w", scanError)
 	}
@@ -358,7 +358,7 @@ func (repository *Repository) ListSales(ctx context.Context, querier database.Qu
 		       s.created_at
 		FROM sales s
 		JOIN shops sh ON sh.company_id = s.company_id AND sh.id = s.shop_id
-		WHERE s.company_id = $1 AND s.customer_id = $2
+		WHERE s.company_id = $1 AND s.customer_id = $2 AND s.voided_at IS NULL
 		ORDER BY s.created_at DESC, s.id DESC
 		LIMIT $3 OFFSET $4
 	`

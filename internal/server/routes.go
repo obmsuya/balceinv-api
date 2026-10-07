@@ -296,6 +296,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/reports/:report/export", permitted("reports:view", reportsHandler.Export)...)
 
 	application.Post("/api/sales/fiscal/send-waiting", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendWaitingToEfd)
+	application.Post("/api/sales/:id/void", permitted("sales:delete", salesHandler.Void)...)
 	application.Post("/api/sales/:id/fiscal", authenticate, httpx.RequirePermission(sellingOrViewing...), salesHandler.SendToEfd)
 	application.Get("/api/sales/:id/receipt", permittedAny(sellingOrViewing, salesHandler.Receipt)...)
 	application.Get("/api/sales/:id/document", permittedAny(sellingOrViewing, invoicesHandler.SaleDocument)...)
@@ -357,6 +358,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/accounting/entries/:id/receipt", books("accounting:view", accountingHandler.Receipt)...)
 	application.Post("/api/accounting/entries/:id/reverse", books("accounting:delete", accountingHandler.Reverse)...)
 	application.Post("/api/accounting/money", books("accounting:create", accountingHandler.RecordMoney)...)
+	application.Get("/api/accounting/people", books("accounting:create", accountingHandler.People)...)
 	application.Post("/api/accounting/receipts", books("accounting:create", accountingHandler.UploadReceipt)...)
 	application.Post("/api/accounting/manual", fullBooks("accounting:edit", accountingHandler.PostManual)...)
 	application.Post("/api/accounting/close", fullBooks("accounting:edit", accountingHandler.ClosePeriod)...)
