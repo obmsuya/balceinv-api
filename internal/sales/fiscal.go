@@ -101,24 +101,29 @@ func IsPublicAddress(dialedIp net.IP) bool {
 }
 
 type fiscalTarget struct {
-	endpoint string
-	apiKey   string
-	payload  FiscalPayload
+	endpoint       string
+	apiKey         string
+	idempotencyKey string
+	payload        FiscalPayload
 }
 
 type FiscalPayload struct {
-	SaleId        uuid.UUID           `json:"sale_id"`
-	ReceiptNumber string              `json:"receipt_number"`
-	IssuedAt      time.Time           `json:"issued_at"`
-	LocalDate     string              `json:"local_date"`
-	LocalTime     string              `json:"local_time"`
-	Timezone      string              `json:"timezone"`
-	Seller        FiscalSeller        `json:"seller"`
-	ShopName      string              `json:"shop_name"`
-	Currency      FiscalCurrency      `json:"currency"`
-	Items         []FiscalPayloadItem `json:"items"`
-	Totals        FiscalPayloadTotals `json:"totals"`
-	Payments      []PaymentView       `json:"payments"`
+	DocumentType          string              `json:"document_type"`
+	SaleId                uuid.UUID           `json:"sale_id"`
+	ReceiptNumber         string              `json:"receipt_number"`
+	OriginalReceiptNumber *string             `json:"original_receipt_number,omitempty"`
+	OriginalVerification  *string             `json:"original_verification_code,omitempty"`
+	Reason                *string             `json:"reason,omitempty"`
+	IssuedAt              time.Time           `json:"issued_at"`
+	LocalDate             string              `json:"local_date"`
+	LocalTime             string              `json:"local_time"`
+	Timezone              string              `json:"timezone"`
+	Seller                FiscalSeller        `json:"seller"`
+	ShopName              string              `json:"shop_name"`
+	Currency              FiscalCurrency      `json:"currency"`
+	Items                 []FiscalPayloadItem `json:"items"`
+	Totals                FiscalPayloadTotals `json:"totals"`
+	Payments              []PaymentView       `json:"payments"`
 }
 
 type FiscalSeller struct {
@@ -157,56 +162,62 @@ type fiscalAnswer struct {
 }
 
 func (service *FiscalService) Send(ctx context.Context, companyId uuid.UUID, saleId uuid.UUID) (FiscalView, error) {
-	target, isClaimed, claimError := service.claim(ctx, companyId, saleId)
+	return service.sendDocument(ctx, FiscalReceipt, companyId, saleId)
+}
+
+func (service *FiscalService) sendDocument(ctx context.Context, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID) (FiscalView, error) {
+	target, isClaimed, claimError := service.claim(ctx, document, companyId, saleId)
 	if claimError != nil {
 		return FiscalView{}, claimError
 	}
 	if !isClaimed {
-		return service.current(ctx, companyId, saleId)
+		return service.current(ctx, document, companyId, saleId)
 	}
 
 	fiscalResult := service.post(ctx, companyId, target)
 
-	recordError := service.record(ctx, companyId, saleId, fiscalResult)
+	recordError := service.record(ctx, document, companyId, saleId, fiscalResult)
 	if recordError != nil {
 		return FiscalView{}, recordError
 	}
-	return service.current(ctx, companyId, saleId)
+	return service.current(ctx, document, companyId, saleId)
 }
 
 func (service *FiscalService) SendWaiting(ctx context.Context, companyId uuid.UUID) (SendWaitingView, error) {
-	waitingSaleIds, listError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) ([]uuid.UUID, error) {
-		staleBefore := time.Now().UTC().Add(-fiscalStaleAfter)
-		return service.repository.ListWaitingFiscal(ctx, tenantTransaction, companyId, staleBefore, fiscalSendWaitingSize)
-	})
-	if listError != nil {
-		return SendWaitingView{}, listError
-	}
-
 	sendSummary := SendWaitingView{}
-	for _, waitingSaleId := range waitingSaleIds {
-		fiscalView, sendError := service.Send(ctx, companyId, waitingSaleId)
-		if sendError != nil {
-			return SendWaitingView{}, sendError
+	for _, document := range []FiscalDocument{FiscalReceipt, FiscalCreditNote} {
+		waitingSaleIds, listError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) ([]uuid.UUID, error) {
+			staleBefore := time.Now().UTC().Add(-fiscalStaleAfter)
+			return service.repository.ListWaitingFiscal(ctx, tenantTransaction, document, companyId, staleBefore, fiscalSendWaitingSize)
+		})
+		if listError != nil {
+			return SendWaitingView{}, listError
 		}
-		if fiscalView.Status == "sent" {
-			sendSummary.Sent++
-		} else {
-			sendSummary.Failed++
-		}
-	}
 
-	stillWaiting, countError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) (int64, error) {
-		return service.repository.CountWaitingFiscal(ctx, tenantTransaction, companyId)
-	})
-	if countError != nil {
-		return SendWaitingView{}, countError
+		for _, waitingSaleId := range waitingSaleIds {
+			fiscalView, sendError := service.sendDocument(ctx, document, companyId, waitingSaleId)
+			if sendError != nil {
+				return SendWaitingView{}, sendError
+			}
+			if fiscalView.Status == "sent" {
+				sendSummary.Sent++
+			} else {
+				sendSummary.Failed++
+			}
+		}
+
+		stillWaiting, countError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) (int64, error) {
+			return service.repository.CountWaitingFiscal(ctx, tenantTransaction, document, companyId)
+		})
+		if countError != nil {
+			return SendWaitingView{}, countError
+		}
+		sendSummary.StillWaiting += stillWaiting
 	}
-	sendSummary.StillWaiting = stillWaiting
 	return sendSummary, nil
 }
 
-func (service *FiscalService) claim(ctx context.Context, companyId uuid.UUID, saleId uuid.UUID) (fiscalTarget, bool, error) {
+func (service *FiscalService) claim(ctx context.Context, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID) (fiscalTarget, bool, error) {
 	claimTransaction, beginError := service.openDatabase.Writer.BeginTx(ctx, nil)
 	if beginError != nil {
 		return fiscalTarget{}, false, fmt.Errorf("failed to begin the EFD claim: %w", beginError)
@@ -229,7 +240,7 @@ func (service *FiscalService) claim(ctx context.Context, companyId uuid.UUID, sa
 		return fiscalTarget{}, false, ErrEfdNotReady
 	}
 
-	existingFiscal, findError := service.repository.FindFiscal(ctx, claimTransaction, companyId, saleId)
+	existingFiscal, findError := service.repository.FindFiscal(ctx, claimTransaction, document, companyId, saleId)
 	if findError != nil {
 		return fiscalTarget{}, false, findError
 	}
@@ -242,7 +253,7 @@ func (service *FiscalService) claim(ctx context.Context, companyId uuid.UUID, sa
 	}
 
 	claimedAt := time.Now().UTC()
-	isClaimed, claimError := service.repository.ClaimFiscal(ctx, claimTransaction, companyId, saleId, claimedAt, claimedAt.Add(-fiscalStaleAfter))
+	isClaimed, claimError := service.repository.ClaimFiscal(ctx, claimTransaction, document, companyId, saleId, claimedAt, claimedAt.Add(-fiscalStaleAfter))
 	if claimError != nil {
 		return fiscalTarget{}, false, claimError
 	}
@@ -267,10 +278,17 @@ func (service *FiscalService) claim(ctx context.Context, companyId uuid.UUID, sa
 		return fiscalTarget{}, false, fmt.Errorf("failed to commit the EFD claim: %w", commitError)
 	}
 
+	fiscalPayload := BuildFiscalPayload(saleView, *companyProfile)
+	idempotencyKey := saleView.Id.String()
+	if document == FiscalCreditNote {
+		fiscalPayload = BuildCreditNotePayload(fiscalPayload, saleView)
+		idempotencyKey += ":credit-note"
+	}
 	target := fiscalTarget{
-		endpoint: *companySettings.EfdEndpoint,
-		apiKey:   *companySettings.EfdApiKey,
-		payload:  BuildFiscalPayload(saleView, *companyProfile),
+		endpoint:       *companySettings.EfdEndpoint,
+		apiKey:         *companySettings.EfdApiKey,
+		idempotencyKey: idempotencyKey,
+		payload:        fiscalPayload,
 	}
 	return target, true, nil
 }
@@ -288,10 +306,11 @@ func (service *FiscalService) post(ctx context.Context, companyId uuid.UUID, tar
 	fiscalRequest.Header.Set("Content-Type", "application/json")
 	fiscalRequest.Header.Set("Accept", "application/json")
 	fiscalRequest.Header.Set("Authorization", "Bearer "+target.apiKey)
-	fiscalRequest.Header.Set("Idempotency-Key", target.payload.SaleId.String())
+	fiscalRequest.Header.Set("Idempotency-Key", target.idempotencyKey)
 
 	slog.Info("calling EFD",
 		"companyId", companyId,
+		"document", target.payload.DocumentType,
 		"saleId", target.payload.SaleId,
 		"receiptNumber", target.payload.ReceiptNumber,
 	)
@@ -342,17 +361,17 @@ func (service *FiscalService) post(ctx context.Context, companyId uuid.UUID, tar
 	return acceptedResult
 }
 
-func (service *FiscalService) record(ctx context.Context, companyId uuid.UUID, saleId uuid.UUID, fiscalResult FiscalResult) error {
+func (service *FiscalService) record(ctx context.Context, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID, fiscalResult FiscalResult) error {
 	_, recordError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) (bool, error) {
-		updateError := service.repository.RecordFiscalResult(ctx, tenantTransaction, companyId, saleId, fiscalResult, time.Now().UTC())
+		updateError := service.repository.RecordFiscalResult(ctx, tenantTransaction, document, companyId, saleId, fiscalResult, time.Now().UTC())
 		return updateError == nil, updateError
 	})
 	return recordError
 }
 
-func (service *FiscalService) current(ctx context.Context, companyId uuid.UUID, saleId uuid.UUID) (FiscalView, error) {
+func (service *FiscalService) current(ctx context.Context, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID) (FiscalView, error) {
 	return inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) (FiscalView, error) {
-		foundFiscal, findError := service.repository.FindFiscal(ctx, tenantTransaction, companyId, saleId)
+		foundFiscal, findError := service.repository.FindFiscal(ctx, tenantTransaction, document, companyId, saleId)
 		if findError != nil {
 			return FiscalView{}, findError
 		}
@@ -418,6 +437,7 @@ func BuildFiscalPayload(saleView SaleView, companyProfile settings.CompanyProfil
 	}
 
 	fiscalPayload := FiscalPayload{
+		DocumentType:  "receipt",
 		SaleId:        saleView.Id,
 		ReceiptNumber: saleView.ReceiptNumber,
 		IssuedAt:      saleView.CreatedAt.UTC(),
@@ -446,6 +466,28 @@ func BuildFiscalPayload(saleView SaleView, companyProfile settings.CompanyProfil
 		Payments: saleView.Payments,
 	}
 	return fiscalPayload
+}
+
+func BuildCreditNotePayload(receiptPayload FiscalPayload, saleView SaleView) FiscalPayload {
+	originalReceiptNumber := saleView.ReceiptNumber
+	creditNotePayload := receiptPayload
+	creditNotePayload.DocumentType = "credit_note"
+	creditNotePayload.OriginalReceiptNumber = &originalReceiptNumber
+	creditNotePayload.Reason = saleView.VoidReason
+	if saleView.Fiscal != nil {
+		creditNotePayload.OriginalVerification = saleView.Fiscal.VerificationCode
+	}
+	if saleView.VoidedAt != nil {
+		companyLocation, locationError := time.LoadLocation(receiptPayload.Timezone)
+		if locationError != nil {
+			companyLocation = time.UTC
+		}
+		localVoidedAt := saleView.VoidedAt.In(companyLocation)
+		creditNotePayload.IssuedAt = saleView.VoidedAt.UTC()
+		creditNotePayload.LocalDate = localVoidedAt.Format("2006-01-02")
+		creditNotePayload.LocalTime = localVoidedAt.Format("15:04:05")
+	}
+	return creditNotePayload
 }
 
 func failedResult(problem string) FiscalResult {
