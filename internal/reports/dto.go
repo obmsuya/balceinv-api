@@ -34,6 +34,10 @@ type SummaryView struct {
 	Total             int64             `json:"total"`
 	TaxTotal          int64             `json:"tax_total"`
 	DiscountTotal     int64             `json:"discount_total"`
+	RefundCount       int64             `json:"refund_count"`
+	RefundTotal       int64             `json:"refund_total"`
+	RefundTax         int64             `json:"-"`
+	RefundCost        int64             `json:"-"`
 	NetSales          int64             `json:"net_sales"`
 	CostTotal         int64             `json:"cost_total"`
 	GrossProfit       int64             `json:"gross_profit"`

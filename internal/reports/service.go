@@ -215,7 +215,8 @@ func (service *Service) summaryFor(ctx context.Context, querier database.Querier
 	}
 	summary.FromDate = scope.FromDate
 	summary.ToDate = scope.ToDate
-	summary.NetSales = summary.Total - summary.TaxTotal
+	summary.NetSales = summary.Total - summary.TaxTotal - (summary.RefundTotal - summary.RefundTax)
+	summary.CostTotal -= summary.RefundCost
 	summary.GrossProfit = summary.NetSales - summary.CostTotal
 	summary.AverageSale = averageOf(summary.Total, summary.SaleCount)
 	if summary.NetSales > 0 {
