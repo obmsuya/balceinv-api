@@ -282,9 +282,12 @@ func (service *Service) RecordMoney(ctx context.Context, querier database.Querie
 }
 
 func (service *Service) paidTo(ctx context.Context, querier database.Querier, companyId uuid.UUID, request MoneyRequest) (*uuid.UUID, error) {
-	isExpenseToSomeone := request.Kind == SourceExpense && request.PaidToUserId != nil
-	if !isExpenseToSomeone {
+	isExpense := request.Kind == SourceExpense
+	if !isExpense {
 		return nil, nil
+	}
+	if request.PaidToUserId == nil {
+		return nil, service.checkSalaryNamesWhoWasPaid(ctx, querier, companyId, request.ExpenseAccountId)
 	}
 	paidToUserId := uuid.MustParse(*request.PaidToUserId)
 	isCompanyUser, lookupError := service.repository.IsCompanyUser(ctx, querier, companyId, paidToUserId)
@@ -295,6 +298,21 @@ func (service *Service) paidTo(ctx context.Context, querier database.Querier, co
 		return nil, ErrPaidToNotFound
 	}
 	return &paidToUserId, nil
+}
+
+func (service *Service) checkSalaryNamesWhoWasPaid(ctx context.Context, querier database.Querier, companyId uuid.UUID, expenseAccountId *string) error {
+	if expenseAccountId == nil {
+		return nil
+	}
+	systemAccountIds, accountsError := service.repository.SystemAccountIds(ctx, querier, companyId)
+	if accountsError != nil {
+		return accountsError
+	}
+	isSalary := systemAccountIds["salaries"].String() == *expenseAccountId
+	if isSalary {
+		return ErrPaidToRequired
+	}
+	return nil
 }
 
 func (service *Service) People(ctx context.Context, querier database.Querier, principal *identity.Principal) ([]PersonView, error) {
