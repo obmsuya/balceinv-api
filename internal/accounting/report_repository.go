@@ -301,7 +301,11 @@ const entryViewSelect = `
 	           WHEN 'customer' THEN (SELECT c.name FROM customers c WHERE c.company_id = e.company_id AND c.id = e.party_id)
 	           WHEN 'supplier' THEN (SELECT sp.name FROM suppliers sp WHERE sp.company_id = e.company_id AND sp.id = e.party_id)
 	       END,
-	       e.paid_to_user_id, pu.name
+	       e.paid_to_user_id, pu.name,
+	       CASE e.source_type
+	           WHEN 'sale' THEN e.source_id
+	           WHEN 'sale_void' THEN COALESCE((SELECT rf.sale_id FROM sale_refunds rf WHERE rf.company_id = e.company_id AND rf.id = e.source_id), e.source_id)
+	       END
 	FROM journal_entries e
 	LEFT JOIN shops sh ON sh.company_id = e.company_id AND sh.id = e.shop_id
 	LEFT JOIN users u ON u.company_id = e.company_id AND u.id = e.created_by
@@ -353,7 +357,7 @@ func (repository *Repository) queryEntries(ctx context.Context, querier database
 		scanError := entryRows.Scan(&entryView.Id, &entryView.EntryNumber, &entryView.EntryDate, &entryView.SourceType, &entryView.SourceId,
 			&entryView.Memo, &entryView.ShopId, &entryView.ShopName, &attachmentKey, &entryView.ReceiptNumber, &entryView.SupplierTin,
 			&entryView.PartyType, &entryView.PartyId, &entryView.ReversesEntryId, &entryView.ReversedByEntryId, &entryView.CreatedByName,
-			&entryView.CreatedAt, &entryView.Amount, &entryView.PartyName, &entryView.PaidToUserId, &entryView.PaidToName)
+			&entryView.CreatedAt, &entryView.Amount, &entryView.PartyName, &entryView.PaidToUserId, &entryView.PaidToName, &entryView.SourceSaleId)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan an entry: %w", scanError)
 		}
