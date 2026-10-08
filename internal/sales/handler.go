@@ -141,6 +141,27 @@ func (handler *Handler) Void(c *fiber.Ctx) error {
 	return response.Success(c, "Sale voided", saleView)
 }
 
+func (handler *Handler) Refund(c *fiber.Ctx) error {
+	saleId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrSaleNotFound)
+	}
+	request := RefundRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	saleView, isNew, refundError := handler.service.Refund(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), saleId, request)
+	if refundError != nil {
+		return respondWithServiceError(c, refundError)
+	}
+	if !isNew {
+		return response.Success(c, "Refund already recorded", saleView)
+	}
+	return response.Created(c, "Refund recorded", saleView)
+}
+
 func (handler *Handler) Receipt(c *fiber.Ctx) error {
 	saleId, isValidId := httpx.UuidParam(c, "id")
 	if !isValidId {
@@ -197,6 +218,14 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "shop_closed", serviceError.Error())
 	case errors.Is(serviceError, ErrDuplicatePayment), errors.Is(serviceError, ErrPaymentTooLow), errors.Is(serviceError, ErrChangeWithoutCash):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_payment", serviceError.Error())
+	case errors.Is(serviceError, ErrSaleVoidedNoRefund), errors.Is(serviceError, ErrSaleHasRefunds):
+		return response.Error(c, fiber.StatusConflict, "refund_not_possible", serviceError.Error())
+	case errors.Is(serviceError, ErrRefundLineUnknown), errors.Is(serviceError, ErrRefundTooMany):
+		return response.Error(c, fiber.StatusBadRequest, "refund_too_many", serviceError.Error())
+	case errors.Is(serviceError, ErrRefundCreditTooMuch), errors.Is(serviceError, ErrRefundCreditNoDebt):
+		return response.Error(c, fiber.StatusBadRequest, "refund_credit_not_possible", serviceError.Error())
+	case errors.Is(serviceError, ErrRefundRefReused):
+		return response.Error(c, fiber.StatusConflict, "client_ref_reused", serviceError.Error())
 	case errors.Is(serviceError, ErrSaleAlreadyVoided):
 		return response.Error(c, fiber.StatusConflict, "sale_already_voided", serviceError.Error())
 	case errors.Is(serviceError, ErrSaleFromOrder):

@@ -41,11 +41,12 @@ func (repository *Repository) Totals(ctx context.Context, querier database.Queri
 		SELECT COUNT(*),
 		       CAST(COALESCE(SUM(s.total), 0) AS BIGINT),
 		       CAST(COALESCE(SUM(s.tax_total), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(s.discount_total), 0) AS BIGINT)
+		       CAST(COALESCE(SUM(s.discount_total), 0) AS BIGINT),
+		       CAST(COALESCE(SUM((SELECT SUM(r.amount) FROM sale_refunds r WHERE r.company_id = s.company_id AND r.sale_id = s.id)), 0) AS BIGINT)
 		FROM sales s` + whereClause + ` AND s.voided_at IS NULL`
 
 	totals := TotalsView{}
-	scanError := querier.QueryRowContext(ctx, query, whereArguments...).Scan(&totals.SaleCount, &totals.Total, &totals.TaxTotal, &totals.DiscountTotal)
+	scanError := querier.QueryRowContext(ctx, query, whereArguments...).Scan(&totals.SaleCount, &totals.Total, &totals.TaxTotal, &totals.DiscountTotal, &totals.RefundTotal)
 	if scanError != nil {
 		return TotalsView{}, fmt.Errorf("failed to total sales: %w", scanError)
 	}

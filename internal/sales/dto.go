@@ -52,21 +52,23 @@ type AddonView struct {
 }
 
 type LineView struct {
-	ProductId       uuid.UUID   `json:"product_id"`
-	ProductName     string      `json:"product_name"`
-	VariantLabel    string      `json:"variant_label"`
-	Sku             string      `json:"sku"`
-	Unit            string      `json:"unit"`
-	Quantity        int         `json:"quantity"`
-	UnitPrice       int64       `json:"unit_price"`
-	IsWholesale     bool        `json:"is_wholesale"`
-	Addons          []AddonView `json:"addons"`
-	AddonsUnitTotal int64       `json:"addons_unit_total"`
-	DiscountName    *string     `json:"discount_name"`
-	DiscountAmount  int64       `json:"discount_amount"`
-	ManualDiscount  int64       `json:"manual_discount_amount"`
-	LineTotal       int64       `json:"line_total"`
-	InStock         *int        `json:"in_stock,omitempty"`
+	ItemId           *uuid.UUID  `json:"item_id,omitempty"`
+	RefundedQuantity int         `json:"refunded_quantity"`
+	ProductId        uuid.UUID   `json:"product_id"`
+	ProductName      string      `json:"product_name"`
+	VariantLabel     string      `json:"variant_label"`
+	Sku              string      `json:"sku"`
+	Unit             string      `json:"unit"`
+	Quantity         int         `json:"quantity"`
+	UnitPrice        int64       `json:"unit_price"`
+	IsWholesale      bool        `json:"is_wholesale"`
+	Addons           []AddonView `json:"addons"`
+	AddonsUnitTotal  int64       `json:"addons_unit_total"`
+	DiscountName     *string     `json:"discount_name"`
+	DiscountAmount   int64       `json:"discount_amount"`
+	ManualDiscount   int64       `json:"manual_discount_amount"`
+	LineTotal        int64       `json:"line_total"`
+	InStock          *int        `json:"in_stock,omitempty"`
 }
 
 type TillOptionsView struct {
@@ -121,6 +123,44 @@ type SaleView struct {
 	VoidReason         *string       `json:"void_reason"`
 	VoidedByName       *string       `json:"voided_by_name"`
 	CreditNote         *FiscalView   `json:"credit_note"`
+	Refunds            []RefundView  `json:"refunds"`
+	RefundedTotal      int64         `json:"refunded_total"`
+}
+
+type RefundLineRequest struct {
+	ItemId   string `json:"item_id" validate:"required,uuid"`
+	Quantity int    `json:"quantity" validate:"required,gte=1,lte=100000"`
+}
+
+type RefundRequest struct {
+	ClientRef string              `json:"client_ref" validate:"required,min=8,max=64"`
+	Method    string              `json:"method" validate:"required,oneof=cash card mobile credit"`
+	Restock   bool                `json:"restock"`
+	Reason    string              `json:"reason" validate:"required,min=3,max=200"`
+	Lines     []RefundLineRequest `json:"lines" validate:"required,min=1,max=200,dive"`
+}
+
+type RefundLineView struct {
+	ItemId       uuid.UUID `json:"item_id"`
+	ProductName  string    `json:"product_name"`
+	VariantLabel string    `json:"variant_label"`
+	Sku          string    `json:"sku"`
+	Quantity     int       `json:"quantity"`
+	Amount       int64     `json:"amount"`
+}
+
+type RefundView struct {
+	Id            uuid.UUID        `json:"id"`
+	SaleId        uuid.UUID        `json:"sale_id"`
+	Method        string           `json:"method"`
+	Amount        int64            `json:"amount"`
+	TaxAmount     int64            `json:"tax_amount"`
+	Restocked     bool             `json:"restocked"`
+	Reason        string           `json:"reason"`
+	CreatedByName string           `json:"created_by_name"`
+	CreatedAt     time.Time        `json:"created_at"`
+	Lines         []RefundLineView `json:"lines"`
+	Fiscal        *FiscalView      `json:"fiscal"`
 }
 
 type VoidRequest struct {
@@ -168,6 +208,7 @@ type TotalsView struct {
 	Total         int64 `json:"total"`
 	TaxTotal      int64 `json:"tax_total"`
 	DiscountTotal int64 `json:"discount_total"`
+	RefundTotal   int64 `json:"refund_total"`
 }
 
 type SaleFilter struct {
