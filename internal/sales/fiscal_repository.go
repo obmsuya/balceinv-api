@@ -11,16 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
-type FiscalDocument string
+type FiscalDocument struct {
+	Table     string
+	KeyColumn string
+}
 
-const (
-	FiscalReceipt    FiscalDocument = "fiscal_receipts"
-	FiscalCreditNote FiscalDocument = "fiscal_credit_notes"
+var (
+	FiscalReceipt    = FiscalDocument{Table: "fiscal_receipts", KeyColumn: "sale_id"}
+	FiscalCreditNote = FiscalDocument{Table: "fiscal_credit_notes", KeyColumn: "sale_id"}
+	FiscalRefundNote = FiscalDocument{Table: "fiscal_refund_notes", KeyColumn: "refund_id"}
 )
 
 func (repository *Repository) InsertFiscalPending(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID, createdAt time.Time) error {
 	query := `
-		INSERT INTO ` + string(document) + ` (company_id, sale_id, status, created_at, updated_at)
+		INSERT INTO ` + document.Table + ` (company_id, ` + document.KeyColumn + `, status, created_at, updated_at)
 		VALUES ($1, $2, 'pending', $3, $3)
 	`
 
@@ -33,9 +37,9 @@ func (repository *Repository) InsertFiscalPending(ctx context.Context, querier d
 
 func (repository *Repository) ClaimFiscal(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID, claimedAt time.Time, staleBefore time.Time) (bool, error) {
 	query := `
-		UPDATE ` + string(document) + `
+		UPDATE ` + document.Table + `
 		SET status = 'sending', attempts = attempts + 1, updated_at = $3
-		WHERE company_id = $1 AND sale_id = $2
+		WHERE company_id = $1 AND ` + document.KeyColumn + ` = $2
 		  AND (status IN ('pending', 'failed') OR (status = 'sending' AND updated_at < $4))
 	`
 
@@ -53,8 +57,8 @@ func (repository *Repository) ClaimFiscal(ctx context.Context, querier database.
 func (repository *Repository) FindFiscal(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID) (*FiscalView, error) {
 	query := `
 		SELECT status, attempts, verification_code, verification_url, last_error, sent_at
-		FROM ` + string(document) + `
-		WHERE company_id = $1 AND sale_id = $2
+		FROM ` + document.Table + `
+		WHERE company_id = $1 AND ` + document.KeyColumn + ` = $2
 	`
 
 	fiscalView := FiscalView{}
@@ -77,9 +81,9 @@ func (repository *Repository) FindFiscal(ctx context.Context, querier database.Q
 
 func (repository *Repository) RecordFiscalResult(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID, fiscalResult FiscalResult, recordedAt time.Time) error {
 	query := `
-		UPDATE ` + string(document) + `
+		UPDATE ` + document.Table + `
 		SET status = $3, verification_code = $4, verification_url = $5, last_error = $6, sent_at = $7, updated_at = $8
-		WHERE company_id = $1 AND sale_id = $2
+		WHERE company_id = $1 AND ` + document.KeyColumn + ` = $2
 	`
 
 	_, updateError := querier.ExecContext(ctx, query,
@@ -100,11 +104,11 @@ func (repository *Repository) RecordFiscalResult(ctx context.Context, querier da
 
 func (repository *Repository) ListWaitingFiscal(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID, staleBefore time.Time, limit int) ([]uuid.UUID, error) {
 	query := `
-		SELECT sale_id
-		FROM ` + string(document) + `
+		SELECT ` + document.KeyColumn + `
+		FROM ` + document.Table + `
 		WHERE company_id = $1
 		  AND (status IN ('pending', 'failed') OR (status = 'sending' AND updated_at < $2))
-		ORDER BY created_at, sale_id
+		ORDER BY created_at, ` + document.KeyColumn + `
 		LIMIT $3
 	`
 
@@ -127,7 +131,7 @@ func (repository *Repository) ListWaitingFiscal(ctx context.Context, querier dat
 }
 
 func (repository *Repository) CountWaitingFiscal(ctx context.Context, querier database.Querier, document FiscalDocument, companyId uuid.UUID) (int64, error) {
-	query := `SELECT COUNT(*) FROM ` + string(document) + ` WHERE company_id = $1 AND status <> 'sent'`
+	query := `SELECT COUNT(*) FROM ` + document.Table + ` WHERE company_id = $1 AND status <> 'sent'`
 
 	waitingCount := int64(0)
 	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(&waitingCount)
