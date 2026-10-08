@@ -110,7 +110,7 @@ func TestVoidingASaleTheEfdAcceptedSendsACreditNote(t *testing.T) {
 		lastIdemKey := fake.lastIdemKey
 		fake.mutex.Unlock()
 		if lastPayload.DocumentType != "credit_note" || lastPayload.OriginalReceiptNumber == nil || *lastPayload.OriginalReceiptNumber != sentSale.Data()["receipt_number"] ||
-			lastPayload.Reason == nil || *lastPayload.Reason != "customer returned it" || lastIdemKey != sentSaleId+":credit-note" || lastPayload.OriginalVerification == nil {
+			lastPayload.Reason == nil || *lastPayload.Reason != "customer returned it" || lastIdemKey != sentSaleId+":credit-note" || lastPayload.CreditFor != "void" || lastPayload.OriginalVerification == nil {
 			t.Fatalf("the EFD got %+v with key %s", lastPayload, lastIdemKey)
 		}
 		afterSend := harness.Call(http.MethodGet, "/api/sales/"+sentSaleId, company.OwnerToken, nil).Data()
