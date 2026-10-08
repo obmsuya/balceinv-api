@@ -185,7 +185,7 @@ func (service *FiscalService) sendDocument(ctx context.Context, document FiscalD
 
 func (service *FiscalService) SendWaiting(ctx context.Context, companyId uuid.UUID) (SendWaitingView, error) {
 	sendSummary := SendWaitingView{}
-	for _, document := range []FiscalDocument{FiscalReceipt, FiscalCreditNote} {
+	for _, document := range []FiscalDocument{FiscalReceipt, FiscalCreditNote, FiscalRefundNote} {
 		waitingSaleIds, listError := inTenant(ctx, service.openDatabase, companyId, func(tenantTransaction database.Querier) ([]uuid.UUID, error) {
 			staleBefore := time.Now().UTC().Add(-fiscalStaleAfter)
 			return service.repository.ListWaitingFiscal(ctx, tenantTransaction, document, companyId, staleBefore, fiscalSendWaitingSize)
@@ -217,7 +217,7 @@ func (service *FiscalService) SendWaiting(ctx context.Context, companyId uuid.UU
 	return sendSummary, nil
 }
 
-func (service *FiscalService) claim(ctx context.Context, document FiscalDocument, companyId uuid.UUID, saleId uuid.UUID) (fiscalTarget, bool, error) {
+func (service *FiscalService) claim(ctx context.Context, document FiscalDocument, companyId uuid.UUID, documentId uuid.UUID) (fiscalTarget, bool, error) {
 	claimTransaction, beginError := service.openDatabase.Writer.BeginTx(ctx, nil)
 	if beginError != nil {
 		return fiscalTarget{}, false, fmt.Errorf("failed to begin the EFD claim: %w", beginError)
@@ -240,20 +240,42 @@ func (service *FiscalService) claim(ctx context.Context, document FiscalDocument
 		return fiscalTarget{}, false, ErrEfdNotReady
 	}
 
-	existingFiscal, findError := service.repository.FindFiscal(ctx, claimTransaction, document, companyId, saleId)
+	existingFiscal, findError := service.repository.FindFiscal(ctx, claimTransaction, document, companyId, documentId)
 	if findError != nil {
 		return fiscalTarget{}, false, findError
 	}
 	if existingFiscal == nil {
-		_, saleError := service.salesService.Get(ctx, claimTransaction, companyId, saleId)
+		_, saleError := service.salesService.Get(ctx, claimTransaction, companyId, documentId)
 		if saleError != nil {
 			return fiscalTarget{}, false, saleError
 		}
 		return fiscalTarget{}, false, ErrFiscalNotQueued
 	}
 
+	saleId := documentId
+	refundedLines := []RefundView{}
+	if document == FiscalRefundNote {
+		refunds, refundsError := service.repository.ListRefunds(ctx, claimTransaction, companyId, nil, &documentId)
+		if refundsError != nil {
+			return fiscalTarget{}, false, refundsError
+		}
+		if len(refunds) == 0 {
+			return fiscalTarget{}, false, ErrSaleNotFound
+		}
+		saleId = refunds[0].SaleId
+		refundedLines = refunds
+		originalFiscal, originalError := service.repository.FindFiscal(ctx, claimTransaction, FiscalReceipt, companyId, saleId)
+		if originalError != nil {
+			return fiscalTarget{}, false, originalError
+		}
+		isOriginalAccepted := originalFiscal != nil && originalFiscal.Status == "sent"
+		if !isOriginalAccepted {
+			return fiscalTarget{}, false, nil
+		}
+	}
+
 	claimedAt := time.Now().UTC()
-	isClaimed, claimError := service.repository.ClaimFiscal(ctx, claimTransaction, document, companyId, saleId, claimedAt, claimedAt.Add(-fiscalStaleAfter))
+	isClaimed, claimError := service.repository.ClaimFiscal(ctx, claimTransaction, document, companyId, documentId, claimedAt, claimedAt.Add(-fiscalStaleAfter))
 	if claimError != nil {
 		return fiscalTarget{}, false, claimError
 	}
@@ -283,6 +305,10 @@ func (service *FiscalService) claim(ctx context.Context, document FiscalDocument
 	if document == FiscalCreditNote {
 		fiscalPayload = BuildCreditNotePayload(fiscalPayload, saleView)
 		idempotencyKey += ":credit-note"
+	}
+	if document == FiscalRefundNote {
+		fiscalPayload = BuildRefundNotePayload(fiscalPayload, saleView, refundedLines[0])
+		idempotencyKey = documentId.String() + ":refund-note"
 	}
 	target := fiscalTarget{
 		endpoint:       *companySettings.EfdEndpoint,
@@ -488,6 +514,47 @@ func BuildCreditNotePayload(receiptPayload FiscalPayload, saleView SaleView) Fis
 		creditNotePayload.LocalTime = localVoidedAt.Format("15:04:05")
 	}
 	return creditNotePayload
+}
+
+func BuildRefundNotePayload(receiptPayload FiscalPayload, saleView SaleView, refund RefundView) FiscalPayload {
+	refundNotePayload := BuildCreditNotePayload(receiptPayload, saleView)
+	refundReason := refund.Reason
+	refundNotePayload.Reason = &refundReason
+
+	companyLocation, locationError := time.LoadLocation(receiptPayload.Timezone)
+	if locationError != nil {
+		companyLocation = time.UTC
+	}
+	localRefundedAt := refund.CreatedAt.In(companyLocation)
+	refundNotePayload.IssuedAt = refund.CreatedAt.UTC()
+	refundNotePayload.LocalDate = localRefundedAt.Format("2006-01-02")
+	refundNotePayload.LocalTime = localRefundedAt.Format("15:04:05")
+
+	refundItems := []FiscalPayloadItem{}
+	for _, refundLine := range refund.Lines {
+		description := refundLine.ProductName
+		if refundLine.VariantLabel != "" {
+			description += " " + refundLine.VariantLabel
+		}
+		refundItem := FiscalPayloadItem{
+			Code:               refundLine.Sku,
+			Description:        description,
+			Quantity:           refundLine.Quantity,
+			UnitPrice:          multiplyDivideRoundHalfUp(refundLine.Amount, 1, int64(refundLine.Quantity)),
+			Total:              refundLine.Amount,
+			TaxRateBasisPoints: saleView.TaxRateBasisPoints,
+		}
+		refundItems = append(refundItems, refundItem)
+	}
+	refundNotePayload.Items = refundItems
+	refundNotePayload.Totals = FiscalPayloadTotals{
+		Subtotal:          refund.Amount,
+		Total:             refund.Amount,
+		Tax:               refund.TaxAmount,
+		TotalExcludingTax: refund.Amount - refund.TaxAmount,
+	}
+	refundNotePayload.Payments = []PaymentView{{Method: refund.Method, Amount: refund.Amount}}
+	return refundNotePayload
 }
 
 func failedResult(problem string) FiscalResult {

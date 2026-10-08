@@ -331,6 +331,9 @@ func (service *Service) Void(ctx context.Context, querier database.Querier, prin
 	if saleView.OrderNumber != nil {
 		return SaleView{}, ErrSaleFromOrder
 	}
+	if len(saleView.Refunds) > 0 {
+		return SaleView{}, ErrSaleHasRefunds
+	}
 
 	voidedAt := time.Now().UTC()
 	reason := strings.TrimSpace(request.Reason)
@@ -425,6 +428,20 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 	saleView.Payments = paymentViews
 	saleView.Fiscal = fiscalView
 	saleView.CreditNote = creditNoteView
+
+	refunds, refundsError := service.repository.ListRefunds(ctx, querier, companyId, &saleId, nil)
+	if refundsError != nil {
+		return SaleView{}, refundsError
+	}
+	for refundIndex := range refunds {
+		refundFiscal, refundFiscalError := service.repository.FindFiscal(ctx, querier, FiscalRefundNote, companyId, refunds[refundIndex].Id)
+		if refundFiscalError != nil {
+			return SaleView{}, refundFiscalError
+		}
+		refunds[refundIndex].Fiscal = refundFiscal
+		saleView.RefundedTotal += refunds[refundIndex].Amount
+	}
+	saleView.Refunds = refunds
 	return *saleView, nil
 }
 

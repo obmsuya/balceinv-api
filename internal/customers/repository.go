@@ -19,7 +19,8 @@ const customerColumns = `
 `
 
 const creditOnSales = `
-	SELECT s.customer_id, s.id, s.receipt_number, s.created_at, p.amount
+	SELECT s.customer_id, s.id, s.receipt_number, s.created_at,
+	       p.amount - COALESCE((SELECT SUM(r.amount) FROM sale_refunds r WHERE r.company_id = s.company_id AND r.sale_id = s.id AND r.method = 'credit'), 0)
 	FROM sales s
 	JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit' AND s.voided_at IS NULL
 `
@@ -193,6 +194,11 @@ func (repository *Repository) Balance(ctx context.Context, querier database.Quer
 			- COALESCE((
 				SELECT SUM(cp.amount) FROM customer_payments cp
 				WHERE cp.company_id = c.company_id AND cp.customer_id = c.id AND cp.voided_at IS NULL
+			), 0)
+			- COALESCE((
+				SELECT SUM(r.amount) FROM sale_refunds r
+				JOIN sales s ON s.company_id = r.company_id AND s.id = r.sale_id
+				WHERE r.company_id = c.company_id AND s.customer_id = c.id AND r.method = 'credit'
 			), 0)
 		AS BIGINT)
 		FROM customers c

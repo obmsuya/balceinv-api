@@ -96,6 +96,23 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 		return SummaryView{}, fmt.Errorf("failed to total sold items: %w", itemScanError)
 	}
 
+	refundArguments := &queryArguments{}
+	refundQuery := `
+		SELECT COUNT(*),
+		       CAST(COALESCE(SUM(r.amount), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(r.tax_amount), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(CASE WHEN r.restocked THEN r.cost_amount ELSE 0 END), 0) AS BIGINT)
+		FROM sale_refunds r
+		JOIN sales s ON s.company_id = r.company_id AND s.id = r.sale_id
+		WHERE r.company_id = ` + refundArguments.add(scope.CompanyId) +
+		` AND r.created_at >= ` + refundArguments.add(scope.From) +
+		` AND r.created_at < ` + refundArguments.add(scope.To) +
+		shopCondition("s.shop_id", scope, refundArguments)
+	refundScanError := querier.QueryRowContext(ctx, refundQuery, refundArguments.values...).Scan(&summary.RefundCount, &summary.RefundTotal, &summary.RefundTax, &summary.RefundCost)
+	if refundScanError != nil {
+		return SummaryView{}, fmt.Errorf("failed to total refunds: %w", refundScanError)
+	}
+
 	paymentArguments := &queryArguments{}
 	paymentQuery := `
 		SELECT p.method, CAST(COALESCE(SUM(p.amount), 0) AS BIGINT)

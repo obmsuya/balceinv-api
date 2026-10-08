@@ -95,6 +95,63 @@ type ReversalPosting struct {
 	UserId             *uuid.UUID
 }
 
+type SaleRefundPosting struct {
+	CompanyId  uuid.UUID
+	RefundId   uuid.UUID
+	ShopId     uuid.UUID
+	RefundedAt time.Time
+	Method     string
+	Amount     int64
+	TaxAmount  int64
+	CostAmount int64
+	Restocked  bool
+	CustomerId *uuid.UUID
+	Reference  string
+	UserId     *uuid.UUID
+}
+
+func (ledger *Ledger) PostSaleRefund(ctx context.Context, querier database.Querier, posting SaleRefundPosting) (*PostedEntry, error) {
+	books, booksError := ledger.repository.FindBooks(ctx, querier, posting.CompanyId)
+	if booksError != nil {
+		return nil, booksError
+	}
+	if !books.IsPosting() {
+		return nil, nil
+	}
+
+	shopId := posting.ShopId
+	refundLines, methodError := methodLines(map[string]int64{posting.Method: posting.Amount}, false, &shopId)
+	if methodError != nil {
+		return nil, methodError
+	}
+	vatReturned := int64(0)
+	if books.VatRegistered {
+		vatReturned = posting.TaxAmount
+	}
+	refundLines = append(refundLines,
+		keyedLine{Key: KeySales, Debit: posting.Amount - vatReturned, ShopId: &shopId},
+		keyedLine{Key: KeyVatOutput, Debit: vatReturned, ShopId: &shopId},
+	)
+	if posting.Restocked {
+		refundLines = append(refundLines,
+			keyedLine{Key: KeyInventory, Debit: posting.CostAmount, ShopId: &shopId},
+			keyedLine{Key: KeyCogs, Credit: posting.CostAmount, ShopId: &shopId},
+		)
+	}
+
+	partyType, partyId := partyOf(PartyCustomer, posting.CustomerId)
+	header := Entry{
+		SourceType: SourceSaleVoid,
+		SourceId:   &posting.RefundId,
+		Memo:       textOrNil(posting.Reference),
+		ShopId:     &shopId,
+		PartyType:  partyType,
+		PartyId:    partyId,
+		CreatedBy:  posting.UserId,
+	}
+	return ledger.postEventWithBooks(ctx, querier, books, posting.RefundedAt, header, refundLines)
+}
+
 func (ledger *Ledger) PostSale(ctx context.Context, querier database.Querier, posting SalePosting) (*PostedEntry, error) {
 	books, booksError := ledger.repository.FindBooks(ctx, querier, posting.CompanyId)
 	if booksError != nil {

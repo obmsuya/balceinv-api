@@ -207,7 +207,8 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 func (repository *Repository) ListLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) ([]LineView, error) {
 	query := `
 		SELECT i.id, i.product_id, i.product_name, i.variant_label, i.sku, i.unit, i.quantity, i.unit_price, i.is_wholesale,
-		       i.addons_unit_total, i.discount_name, i.discount_amount, i.manual_discount_amount, i.line_total
+		       i.addons_unit_total, i.discount_name, i.discount_amount, i.manual_discount_amount, i.line_total,
+		       CAST(COALESCE((SELECT SUM(rl.quantity) FROM sale_refund_lines rl WHERE rl.company_id = i.company_id AND rl.sale_item_id = i.id), 0) AS BIGINT)
 		FROM sale_items i
 		WHERE i.company_id = $1 AND i.sale_id = $2
 		ORDER BY i.position
@@ -239,10 +240,13 @@ func (repository *Repository) ListLines(ctx context.Context, querier database.Qu
 			&lineView.DiscountAmount,
 			&lineView.ManualDiscount,
 			&lineView.LineTotal,
+			&lineView.RefundedQuantity,
 		)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan sale item: %w", scanError)
 		}
+		scannedItemId := itemId
+		lineView.ItemId = &scannedItemId
 		lineIndexByItemId[itemId] = len(lineViews)
 		lineViews = append(lineViews, lineView)
 	}
