@@ -92,3 +92,37 @@ func (repository *Repository) InsertMovement(ctx context.Context, querier databa
 
 	return nil
 }
+
+func (repository *Repository) MovementIdsOf(ctx context.Context, querier database.Querier, companyId uuid.UUID, productIds []uuid.UUID) ([]uuid.UUID, error) {
+	query := `SELECT id FROM stock_movements WHERE company_id = $1 AND product_id IN (` + database.Placeholders(2, len(productIds)) + `) ORDER BY created_at, id`
+	queryArguments := append([]any{companyId}, database.ToArguments(productIds)...)
+
+	movementRows, queryError := querier.QueryContext(ctx, query, queryArguments...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list the product's stock movements: %w", queryError)
+	}
+	defer movementRows.Close()
+
+	movementIds := []uuid.UUID{}
+	for movementRows.Next() {
+		movementId := uuid.UUID{}
+		scanError := movementRows.Scan(&movementId)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a stock movement: %w", scanError)
+		}
+		movementIds = append(movementIds, movementId)
+	}
+	return movementIds, movementRows.Err()
+}
+
+func (repository *Repository) DeleteProductStock(ctx context.Context, querier database.Querier, companyId uuid.UUID, productIds []uuid.UUID) error {
+	placeholders := database.Placeholders(2, len(productIds))
+	queryArguments := append([]any{companyId}, database.ToArguments(productIds)...)
+	for _, table := range []string{"stock_movements", "shop_stock"} {
+		_, deleteError := querier.ExecContext(ctx, `DELETE FROM `+table+` WHERE company_id = $1 AND product_id IN (`+placeholders+`)`, queryArguments...)
+		if deleteError != nil {
+			return fmt.Errorf("failed to delete the product's %s: %w", table, deleteError)
+		}
+	}
+	return nil
+}

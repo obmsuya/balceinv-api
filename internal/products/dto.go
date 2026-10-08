@@ -108,3 +108,18 @@ type LookupView struct {
 	Product  ProductView `json:"product"`
 	PackSize int         `json:"pack_size"`
 }
+
+type DeleteManyRequest struct {
+	ProductIds []string `json:"product_ids" validate:"required,min=1,max=500,dive,uuid"`
+}
+
+type SkippedProductView struct {
+	Id     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+	Reason string    `json:"reason"`
+}
+
+type DeleteManyView struct {
+	Deleted []uuid.UUID          `json:"deleted"`
+	Skipped []SkippedProductView `json:"skipped"`
+}

@@ -296,6 +296,54 @@ func (service *Service) Archive(ctx context.Context, querier database.Querier, p
 	return service.repository.SetActive(ctx, querier, principal.CompanyId, productId, false)
 }
 
+func (service *Service) DeletePermanently(ctx context.Context, querier database.Querier, principal *identity.Principal, request DeleteManyRequest) (DeleteManyView, error) {
+	deleteResult := DeleteManyView{Deleted: []uuid.UUID{}, Skipped: []SkippedProductView{}}
+	seenIds := map[uuid.UUID]bool{}
+	for _, rawProductId := range request.ProductIds {
+		productId := uuid.MustParse(rawProductId)
+		if seenIds[productId] {
+			continue
+		}
+		seenIds[productId] = true
+
+		existingProduct, findError := service.repository.Find(ctx, querier, principal.CompanyId, nil, productId)
+		if findError != nil {
+			return DeleteManyView{}, findError
+		}
+		if existingProduct == nil {
+			continue
+		}
+
+		familyIds, familyError := service.repository.FamilyIds(ctx, querier, principal.CompanyId, productId)
+		if familyError != nil {
+			return DeleteManyView{}, familyError
+		}
+		usageReason, usageError := service.repository.UsageReason(ctx, querier, principal.CompanyId, familyIds)
+		if usageError != nil {
+			return DeleteManyView{}, usageError
+		}
+		if usageReason != "" {
+			skippedProduct := SkippedProductView{Id: productId, Name: existingProduct.Name, Reason: usageReason}
+			deleteResult.Skipped = append(deleteResult.Skipped, skippedProduct)
+			continue
+		}
+
+		stockError := service.stockService.RemoveProductStock(ctx, querier, principal.CompanyId, familyIds, principal.UserId)
+		if stockError != nil {
+			return DeleteManyView{}, stockError
+		}
+		deleteError := service.repository.DeleteFamily(ctx, querier, principal.CompanyId, familyIds)
+		if deleteError != nil {
+			return DeleteManyView{}, deleteError
+		}
+		deleteResult.Deleted = append(deleteResult.Deleted, familyIds...)
+		for _, familyId := range familyIds {
+			seenIds[familyId] = true
+		}
+	}
+	return deleteResult, nil
+}
+
 func (service *Service) Restore(ctx context.Context, querier database.Querier, principal *identity.Principal, productId uuid.UUID) (ProductView, error) {
 	existingProduct, findError := service.repository.Find(ctx, querier, principal.CompanyId, nil, productId)
 	if findError != nil {

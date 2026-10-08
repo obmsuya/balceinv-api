@@ -121,3 +121,27 @@ func crossedThreshold(quantityBefore int, quantityAfter int, minimumStock int) s
 
 	return ""
 }
+
+func (service *Service) RemoveProductStock(ctx context.Context, querier database.Querier, companyId uuid.UUID, productIds []uuid.UUID, removedBy uuid.UUID) error {
+	movementIds, listError := service.repository.MovementIdsOf(ctx, querier, companyId, productIds)
+	if listError != nil {
+		return listError
+	}
+	removedAt := time.Now().UTC()
+	for _, movementId := range movementIds {
+		movementReversal := accounting.ReversalPosting{
+			CompanyId:          companyId,
+			OriginalSourceType: accounting.SourceStockAdjustment,
+			OriginalSourceId:   movementId,
+			SourceType:         accounting.SourceReversal,
+			ReversedAt:         removedAt,
+			Reason:             "product deleted",
+			UserId:             &removedBy,
+		}
+		_, reverseError := service.ledger.ReverseSource(ctx, querier, movementReversal)
+		if reverseError != nil {
+			return reverseError
+		}
+	}
+	return service.repository.DeleteProductStock(ctx, querier, companyId, productIds)
+}

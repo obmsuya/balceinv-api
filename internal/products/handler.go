@@ -128,6 +128,20 @@ func (handler *Handler) Archive(c *fiber.Ctx) error {
 	return response.Success(c, "Product archived", nil)
 }
 
+func (handler *Handler) DeletePermanently(c *fiber.Ctx) error {
+	request := DeleteManyRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	deleteResult, deleteError := handler.service.DeletePermanently(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), request)
+	if deleteError != nil {
+		return respondWithServiceError(c, deleteError)
+	}
+	return response.Success(c, "Products deleted", deleteResult)
+}
+
 func (handler *Handler) Restore(c *fiber.Ctx) error {
 	productId, isValidId := httpx.UuidParam(c, "id")
 	if !isValidId {
