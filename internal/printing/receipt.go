@@ -177,6 +177,7 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 	}
 	printer.Write(wrapCentered(footerText, columns))
 	printer.Write(centerText(printedAt.In(companyLocation).Format("02/01/2006 15:04:05"), columns) + "\n")
+	printer.Write(centerText(vendorLine, columns) + "\n")
 	printer.Formfeed()
 	printer.Formfeed()
 	printer.Cut()
@@ -187,6 +188,8 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 
 	return receiptBuffer.Bytes()
 }
+
+const vendorLine = "Faltasi POS - pos.faltasi.com"
 
 func BuildTestReceipt(paperWidthMillimeters int, language string, printedAt time.Time) []byte {
 	columns := columnCount(paperWidthMillimeters)

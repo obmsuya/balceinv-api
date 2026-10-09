@@ -171,7 +171,7 @@ func TestExcelIsStyledTraceableAndPrintable(t *testing.T) {
 	}
 
 	properties, propertiesError := workbook.GetDocProps()
-	if propertiesError != nil || properties.Creator != "Balce" || properties.Title == "" {
+	if propertiesError != nil || properties.Creator != "Faltasi POS" || properties.Title == "" {
 		t.Fatalf("properties were %+v %v", properties, propertiesError)
 	}
 	appProperties, appError := workbook.GetAppProps()

@@ -53,7 +53,7 @@ func TestMoneyAndColumnsFitThermalPaper(t *testing.T) {
 	}
 	darEsSalaam, _ := time.LoadLocation("Africa/Dar_es_Salaam")
 	receiptBytes := printing.BuildReceipt(receiptView, nil, true, time.Now(), darEsSalaam)
-	for _, expected := range []string{"KKO-20260929-0007", "JUMLA", "TZS 11,800", "Chenji", "TZS 8,200", "Inajumuisha VAT 18%", "Risiti ya EFD itafuata", "Maelezo: Deliver after lunch", "Tarehe: 29/09/2026 23:30"} {
+	for _, expected := range []string{"KKO-20260929-0007", "JUMLA", "TZS 11,800", "Chenji", "TZS 8,200", "Inajumuisha VAT 18%", "Risiti ya EFD itafuata", "Maelezo: Deliver after lunch", "Tarehe: 29/09/2026 23:30", "Faltasi POS - pos.faltasi.com"} {
 		if !bytes.Contains(receiptBytes, []byte(expected)) {
 			t.Fatalf("the receipt is missing %q", expected)
 		}
