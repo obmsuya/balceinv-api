@@ -137,7 +137,7 @@ func TestRefundNotesWaitForTheReceiptAndCarryOnlyTheRefund(t *testing.T) {
 		lastPayload := fake.lastPayload
 		lastIdemKey := fake.lastIdemKey
 		fake.mutex.Unlock()
-		if lastPayload.DocumentType != "credit_note" || lastIdemKey != refundId+":refund-note" || lastPayload.Totals.Total != 2360 || lastPayload.Totals.Tax != 360 ||
+		if lastPayload.DocumentType != "credit_note" || lastPayload.CreditFor != "refund" || lastIdemKey != refundId+":refund-note" || lastPayload.Totals.Total != 2360 || lastPayload.Totals.Tax != 360 ||
 			len(lastPayload.Items) != 1 || lastPayload.Items[0].Quantity != 1 || lastPayload.Reason == nil || *lastPayload.Reason != "one was warm" {
 			t.Fatalf("the EFD got %+v with key %s", lastPayload, lastIdemKey)
 		}

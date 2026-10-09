@@ -113,6 +113,7 @@ type FiscalPayload struct {
 	ReceiptNumber         string              `json:"receipt_number"`
 	OriginalReceiptNumber *string             `json:"original_receipt_number,omitempty"`
 	OriginalVerification  *string             `json:"original_verification_code,omitempty"`
+	CreditFor             string              `json:"credit_for,omitempty"`
 	Reason                *string             `json:"reason,omitempty"`
 	IssuedAt              time.Time           `json:"issued_at"`
 	LocalDate             string              `json:"local_date"`
@@ -499,6 +500,7 @@ func BuildCreditNotePayload(receiptPayload FiscalPayload, saleView SaleView) Fis
 	creditNotePayload := receiptPayload
 	creditNotePayload.DocumentType = "credit_note"
 	creditNotePayload.OriginalReceiptNumber = &originalReceiptNumber
+	creditNotePayload.CreditFor = "void"
 	creditNotePayload.Reason = saleView.VoidReason
 	if saleView.Fiscal != nil {
 		creditNotePayload.OriginalVerification = saleView.Fiscal.VerificationCode
@@ -519,6 +521,7 @@ func BuildCreditNotePayload(receiptPayload FiscalPayload, saleView SaleView) Fis
 func BuildRefundNotePayload(receiptPayload FiscalPayload, saleView SaleView, refund RefundView) FiscalPayload {
 	refundNotePayload := BuildCreditNotePayload(receiptPayload, saleView)
 	refundReason := refund.Reason
+	refundNotePayload.CreditFor = "refund"
 	refundNotePayload.Reason = &refundReason
 
 	companyLocation, locationError := time.LoadLocation(receiptPayload.Timezone)
