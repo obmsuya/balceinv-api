@@ -422,6 +422,10 @@ func (service *Service) CheckSaleCustomer(ctx context.Context, querier database.
 	return nil
 }
 
+func (service *Service) Balance(ctx context.Context, querier database.Querier, companyId uuid.UUID, customerId uuid.UUID) (int64, error) {
+	return service.repository.Balance(ctx, querier, companyId, customerId)
+}
+
 func (service *Service) RequireActive(ctx context.Context, querier database.Querier, companyId uuid.UUID, customerId uuid.UUID) error {
 	foundCustomer, findError := service.findCustomer(ctx, querier, companyId, customerId)
 	if findError != nil {

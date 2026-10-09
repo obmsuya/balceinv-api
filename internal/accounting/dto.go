@@ -116,6 +116,7 @@ type EntryView struct {
 	EntryDate         string     `json:"entry_date"`
 	SourceType        string     `json:"source_type"`
 	SourceId          *uuid.UUID `json:"source_id"`
+	SourceSaleId      *uuid.UUID `json:"source_sale_id"`
 	Memo              *string    `json:"memo"`
 	ShopId            *uuid.UUID `json:"shop_id"`
 	ShopName          *string    `json:"shop_name"`

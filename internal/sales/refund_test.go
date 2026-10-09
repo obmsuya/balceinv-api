@@ -76,6 +76,12 @@ func TestRefundsReturnMoneyAndStockAndFollowTheirLimits(t *testing.T) {
 		if harness.QueryIntForCompany(company.Id, `SELECT COUNT(*) FROM journal_entries WHERE source_type = 'sale_void' AND party_type IS NULL`) != 2 {
 			t.Fatal("the two refunds are not both in the books")
 		}
+		refundEntries := harness.Call(http.MethodGet, "/api/accounting/entries?source_type=sale_void", company.OwnerToken, nil).Items()
+		for _, refundEntry := range refundEntries {
+			if refundEntry.(map[string]any)["source_sale_id"] != cashSaleId {
+				t.Fatalf("a refund entry links to %v instead of the sale %s", refundEntry.(map[string]any)["source_sale_id"], cashSaleId)
+			}
+		}
 
 		creditSale := sellTo(harness, cashierToken, "refund-credit-0001", mariamId, []map[string]any{line(oilId, 2)}, []map[string]any{credit(2000)})
 		creditSaleId := creditSale.Data()["id"].(string)
@@ -85,6 +91,11 @@ func TestRefundsReturnMoneyAndStockAndFollowTheirLimits(t *testing.T) {
 		}
 		if balance := harness.Call(http.MethodGet, "/api/customers/"+mariamId, company.OwnerToken, nil).Data()["balance"]; balance != float64(1000) {
 			t.Fatalf("Mariam owes %v after a 1,000 refund to her account, want 1000", balance)
+		}
+		harness.Call(http.MethodPost, "/api/customers/"+mariamId+"/payments", company.OwnerToken, map[string]any{"amount": 1000, "method": "cash"})
+		pastBalance := refundSale(harness, supervisorToken, creditSaleId, map[string]any{"client_ref": "refund-credit-0003", "method": "credit", "reason": "after paying", "lines": []any{map[string]any{"item_id": firstItemId(t, creditSale), "quantity": 1}}})
+		if pastBalance.Code() != "refund_credit_not_possible" {
+			t.Fatalf("a refund to an account that owes nothing returned %d %v", pastBalance.Status, pastBalance.Body)
 		}
 
 		voidedSale := sell(harness, cashierToken, "refund-voided-0001", []map[string]any{line(oilId, 1)}, cash(1000))

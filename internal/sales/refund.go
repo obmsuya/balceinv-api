@@ -18,7 +18,7 @@ var (
 	ErrSaleHasRefunds      = errors.New("this sale already has refunds; refund the rest instead of voiding it")
 	ErrRefundLineUnknown   = errors.New("one of the refunded items is not on this sale")
 	ErrRefundTooMany       = errors.New("you cannot refund more than was sold")
-	ErrRefundCreditTooMuch = errors.New("refunding to the customer's account is only possible up to what is still owed on this sale")
+	ErrRefundCreditTooMuch = errors.New("refunding to the customer's account is only possible up to what is still owed on this sale and by the customer")
 	ErrRefundCreditNoDebt  = errors.New("this sale was not on credit, so it cannot be refunded to the customer's account")
 	ErrRefundRefReused     = errors.New("this refund reference was already used for another sale")
 )
@@ -163,6 +163,16 @@ func (service *Service) checkCreditRefund(ctx context.Context, querier database.
 		return creditError
 	}
 	if amount > saleView.CreditAmount-creditRefunded {
+		return ErrRefundCreditTooMuch
+	}
+	if saleView.CustomerId == nil {
+		return ErrRefundCreditNoDebt
+	}
+	customerBalance, balanceError := service.customersService.Balance(ctx, querier, companyId, *saleView.CustomerId)
+	if balanceError != nil {
+		return balanceError
+	}
+	if amount > customerBalance {
 		return ErrRefundCreditTooMuch
 	}
 	return nil
