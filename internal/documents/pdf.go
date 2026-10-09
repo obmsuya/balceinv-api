@@ -118,7 +118,7 @@ func newPdfWriter(branding Branding, document Document) (*pdfWriter, error) {
 		WithTitle(document.Title, true).
 		WithSubject(document.Subtitle, true).
 		WithAuthor(nameOrBalce(document.GeneratedBy), true).
-		WithCreator("Balce", true).
+		WithCreator("Faltasi POS", true).
 		WithCreationDate(generatedAt).
 		WithCompression(true).
 		Build()

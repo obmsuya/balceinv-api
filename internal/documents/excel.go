@@ -585,7 +585,7 @@ func (writer *excelWriter) writeProperties() error {
 	docPropsError := writer.workbook.SetDocProps(&excelize.DocProperties{
 		Title:          writer.document.Title,
 		Subject:        writer.document.Subtitle,
-		Creator:        "Balce",
+		Creator:        "Faltasi POS",
 		LastModifiedBy: nameOrBalce(writer.document.GeneratedBy),
 		Created:        generatedAt.UTC().Format(time.RFC3339),
 		Modified:       generatedAt.UTC().Format(time.RFC3339),
