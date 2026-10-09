@@ -401,6 +401,7 @@ func statusFor(serviceError error) (int, string, bool) {
 		{ErrAccountNotFound, fiber.StatusNotFound, "not_found"},
 		{ErrShopNotFound, fiber.StatusNotFound, "not_found"},
 		{ErrPaidToNotFound, fiber.StatusNotFound, "not_found"},
+		{ErrPaidToRequired, fiber.StatusBadRequest, "paid_to_required"},
 		{ErrNotReversible, fiber.StatusConflict, "not_reversible"},
 		{ErrAlreadyReversed, fiber.StatusConflict, "already_reversed"},
 		{ErrSameMoneyAccount, fiber.StatusBadRequest, "same_money_account"},

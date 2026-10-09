@@ -182,6 +182,7 @@ var (
 	ErrInvalidFilter     = errors.New("the filter is not valid")
 	ErrRangeTooLong      = errors.New("choose a range of at most 366 days")
 	ErrPaidToNotFound    = errors.New("the person paid was not found among this business's users")
+	ErrPaidToRequired    = errors.New("a salary must say who was paid")
 )
 
 type Books struct {

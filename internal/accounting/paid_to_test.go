@@ -41,6 +41,12 @@ func TestSalaryNamesWhoWasPaidAndEntriesNameTheirCustomerOrSupplier(t *testing.T
 		if salary.Status != http.StatusCreated || salary.Data()["paid_to_user_id"] != jumaId || salary.Data()["paid_to_name"] == nil {
 			t.Fatalf("paying Juma returned %d %v", salary.Status, salary.Body)
 		}
+		nobody := harness.Call(http.MethodPost, "/api/accounting/money", company.OwnerToken, map[string]any{
+			"client_ref": "salary-nobody-0001", "kind": "expense", "amount": 150000, "money_account": "cash", "expense_account_id": salariesId,
+		})
+		if nobody.Code() != "paid_to_required" {
+			t.Fatalf("a salary paid to nobody returned %d %v", nobody.Status, nobody.Body)
+		}
 		outsider := harness.Call(http.MethodPost, "/api/accounting/money", company.OwnerToken, salaryBody("salary-outsider-0001", outsiderId))
 		if outsider.Status != http.StatusNotFound {
 			t.Fatalf("paying someone from another business returned %d %v", outsider.Status, outsider.Body)
