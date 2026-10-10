@@ -18,13 +18,27 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/users"
 )
 
+const usageText = `usage:
+  admin create-company -business-name NAME -owner-name NAME -owner-email EMAIL [-shop-name NAME] [-currency TZS] [-decimals 0]
+  admin create-staff -email EMAIL -name NAME [-role support|admin]`
+
 func main() {
-	hasSubcommand := len(os.Args) > 1 && os.Args[1] == "create-company"
-	if !hasSubcommand {
-		fmt.Fprintln(os.Stderr, "usage: admin create-company -business-name NAME -owner-name NAME -owner-email EMAIL [-shop-name NAME] [-currency TZS] [-decimals 0]")
+	subcommand := ""
+	if len(os.Args) > 1 {
+		subcommand = os.Args[1]
+	}
+	switch subcommand {
+	case "create-company":
+		runCreateCompany()
+	case "create-staff":
+		runCreateStaff()
+	default:
+		fmt.Fprintln(os.Stderr, usageText)
 		os.Exit(2)
 	}
+}
 
+func runCreateCompany() {
 	commandFlags := flag.NewFlagSet("create-company", flag.ExitOnError)
 	businessName := commandFlags.String("business-name", "", "company name shown on receipts")
 	ownerName := commandFlags.String("owner-name", "", "owner full name")
