@@ -1,0 +1,13 @@
+DROP POLICY platform_admin_read ON support_messages;
+DROP POLICY platform_admin_read ON company_subscriptions;
+DROP POLICY platform_admin_read ON sales;
+DROP POLICY platform_admin_read ON shops;
+DROP POLICY platform_admin_read ON roles;
+DROP POLICY platform_admin_read ON users;
+DROP POLICY platform_admin_read ON companies;
+DROP INDEX idx_support_messages_handled_by;
+ALTER TABLE support_messages DROP COLUMN handled_by;
+ALTER TABLE support_messages DROP COLUMN handled_at;
+DROP TABLE platform_audit;
+DROP TABLE platform_sessions;
+DROP TABLE platform_staff;
