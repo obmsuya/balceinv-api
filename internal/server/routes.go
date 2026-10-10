@@ -8,6 +8,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/access"
 	"github.com/chrisostomemataba/balceinv-api/internal/accounting"
+	"github.com/chrisostomemataba/balceinv-api/internal/admin"
 	"github.com/chrisostomemataba/balceinv-api/internal/auth"
 	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/businessmove"
@@ -152,6 +153,10 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Get("/api/license/hardware-id", signedIn(subscriptionsHandler.DeviceId)...)
 		application.Get("/api/license/packages", authenticate, licensing.Packages)
 		application.Post("/api/license/pay", authenticate, subscriptionsHandler.Pay)
+	}
+
+	if isPostgres {
+		registerAdminRoutes(application, admin.NewHandler(admin.NewService(admin.NewRepository(), tenancyService, isPostgres)), requestTransaction)
 	}
 
 	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)
@@ -387,6 +392,37 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	if loadedConfig.StaticDirectory != "" {
 		application.Get("/*", staticApp(loadedConfig.StaticDirectory))
 	}
+}
+
+func registerAdminRoutes(application *fiber.App, adminHandler *admin.Handler, requestTransaction fiber.Handler) {
+	anyStaff := adminHandler.RequireStaff()
+	adminOnly := adminHandler.RequireStaff(admin.RoleAdmin)
+
+	application.Post("/api/admin/sign-in", newLoginAddressLimiter(), newAdminSignInLimiter(), requestTransaction, adminHandler.SignIn)
+	application.Post("/api/admin/sign-out", requestTransaction, adminHandler.SignOut)
+	application.Get("/api/admin/me", requestTransaction, anyStaff, adminHandler.Me)
+	application.Get("/api/admin/shops", requestTransaction, anyStaff, adminHandler.Shops)
+	application.Post("/api/admin/shops", requestTransaction, adminOnly, adminHandler.CreateShop)
+	application.Get("/api/admin/shops/:id", requestTransaction, anyStaff, adminHandler.Shop)
+	application.Post("/api/admin/shops/:id/extend-trial", requestTransaction, anyStaff, adminHandler.ExtendTrial)
+	application.Post("/api/admin/shops/:id/users/:userId/reset-password", requestTransaction, anyStaff, adminHandler.ResetPassword)
+	application.Get("/api/admin/support", requestTransaction, anyStaff, adminHandler.SupportMessages)
+	application.Post("/api/admin/support/:id/handled", requestTransaction, anyStaff, adminHandler.MarkHandled)
+	application.Get("/api/admin/audit", requestTransaction, adminOnly, adminHandler.Audit)
+}
+
+func newAdminSignInLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:                    5,
+		Expiration:             15 * time.Minute,
+		SkipSuccessfulRequests: true,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return "admin|" + c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many sign-in attempts. Try again in 15 minutes")
+		},
+	})
 }
 
 func newPhoneUploadLimiter() fiber.Handler {
