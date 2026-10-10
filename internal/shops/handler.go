@@ -88,12 +88,32 @@ func (handler *Handler) Close(c *fiber.Ctx) error {
 	return response.Success(c, "Shop closed", shopView)
 }
 
+func (handler *Handler) DeletePermanently(c *fiber.Ctx) error {
+	shopId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrShopNotFound)
+	}
+
+	principal := httpx.CurrentPrincipal(c)
+	deleteError := handler.service.DeletePermanently(c.UserContext(), httpx.RequestQuerier(c), principal.CompanyId, principal.ShopId, shopId)
+	if deleteError != nil {
+		return respondWithServiceError(c, deleteError)
+	}
+	return response.Success(c, "Shop deleted", fiber.Map{"id": shopId})
+}
+
 func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrShopNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrShopNameTaken):
 		return response.Error(c, fiber.StatusConflict, "shop_name_taken", serviceError.Error())
+	case errors.Is(serviceError, ErrShopInUse):
+		return response.Error(c, fiber.StatusConflict, "shop_in_use", serviceError.Error())
+	case errors.Is(serviceError, ErrShopHasStaff):
+		return response.Error(c, fiber.StatusConflict, "shop_has_staff", serviceError.Error())
+	case errors.Is(serviceError, ErrShopIsCurrent):
+		return response.Error(c, fiber.StatusConflict, "shop_is_current", serviceError.Error())
 	case errors.Is(serviceError, ErrLastActiveShop):
 		return response.Error(c, fiber.StatusConflict, "last_active_shop", serviceError.Error())
 	default:
