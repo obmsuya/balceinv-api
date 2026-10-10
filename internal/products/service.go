@@ -34,6 +34,7 @@ var (
 	ErrDuplicateBarcode     = errors.New("the same barcode is listed twice")
 	ErrInvalidMetadata      = errors.New("metadata must be up to 50 short text, number or yes/no values")
 	ErrNoActiveShop         = errors.New("choose a shop before adding opening stock")
+	ErrStockShopNotAllowed  = errors.New("opening stock can only go to an open shop you work in")
 	ErrAddonNotFound        = errors.New("add-on not found")
 	ErrAddonNameTaken       = errors.New("this product already has an add-on with that name")
 	ErrSupplierNotFound     = errors.New("the usual supplier was not found or is turned off")
@@ -165,9 +166,13 @@ func (service *Service) createProduct(ctx context.Context, querier database.Quer
 		parentId = &parsedParentId
 	}
 
+	stockShopId, shopError := service.stockShop(ctx, querier, principal, request.ShopId)
+	if shopError != nil {
+		return uuid.Nil, shopError
+	}
 	hasOpeningStock := request.OpeningQuantity > 0
-	hasActiveShop := principal.ShopId != nil
-	if hasOpeningStock && !hasActiveShop {
+	hasStockShop := stockShopId != nil
+	if hasOpeningStock && !hasStockShop {
 		return uuid.Nil, ErrNoActiveShop
 	}
 
@@ -202,8 +207,8 @@ func (service *Service) createProduct(ctx context.Context, querier database.Quer
 		return uuid.Nil, barcodeError
 	}
 
-	if hasActiveShop {
-		stockError := service.prepareStock(ctx, querier, principal, newProduct.Id, request.MinStock, request.OpeningQuantity)
+	if hasStockShop {
+		stockError := service.prepareStock(ctx, querier, principal, *stockShopId, newProduct.Id, request.MinStock, request.OpeningQuantity)
 		if stockError != nil {
 			return uuid.Nil, stockError
 		}
@@ -275,7 +280,7 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 
 	hasMinimumStockChange := request.MinStock != nil && principal.ShopId != nil
 	if hasMinimumStockChange {
-		stockError := service.prepareStock(ctx, querier, principal, productId, request.MinStock, 0)
+		stockError := service.prepareStock(ctx, querier, principal, *principal.ShopId, productId, request.MinStock, 0)
 		if stockError != nil {
 			return ProductView{}, stockError
 		}
@@ -465,8 +470,22 @@ func (service *Service) saveBarcodes(ctx context.Context, querier database.Queri
 	return nil
 }
 
-func (service *Service) prepareStock(ctx context.Context, querier database.Querier, principal *identity.Principal, productId uuid.UUID, minimumStock *int, openingQuantity int) error {
-	shopId := *principal.ShopId
+func (service *Service) stockShop(ctx context.Context, querier database.Querier, principal *identity.Principal, requestedShopId *string) (*uuid.UUID, error) {
+	if requestedShopId == nil {
+		return principal.ShopId, nil
+	}
+	shopId := uuid.MustParse(*requestedShopId)
+	canStock, checkError := service.repository.CanStockShop(ctx, querier, principal.CompanyId, principal.UserId, principal.IsOwner, shopId)
+	if checkError != nil {
+		return nil, checkError
+	}
+	if !canStock {
+		return nil, ErrStockShopNotAllowed
+	}
+	return &shopId, nil
+}
+
+func (service *Service) prepareStock(ctx context.Context, querier database.Querier, principal *identity.Principal, shopId uuid.UUID, productId uuid.UUID, minimumStock *int, openingQuantity int) error {
 	chosenMinimum := stock.DefaultMinimumStock
 	if minimumStock != nil {
 		chosenMinimum = *minimumStock

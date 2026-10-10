@@ -308,6 +308,8 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "sku_taken", serviceError.Error())
 	case errors.Is(serviceError, ErrBarcodeTaken):
 		return response.Error(c, fiber.StatusConflict, "barcode_taken", serviceError.Error())
+	case errors.Is(serviceError, ErrStockShopNotAllowed):
+		return response.Error(c, fiber.StatusForbidden, "shop_not_assigned", serviceError.Error())
 	case errors.Is(serviceError, ErrAddonNameTaken):
 		return response.Error(c, fiber.StatusConflict, "addon_name_taken", serviceError.Error())
 	case errors.Is(serviceError, ErrNestedVariant), errors.Is(serviceError, ErrVariantLabelRequired),
