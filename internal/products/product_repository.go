@@ -434,3 +434,18 @@ func filterArguments(companyId uuid.UUID, filter ListFilter) []any {
 	likePattern := "%" + strings.ToLower(searchText) + "%"
 	return []any{companyId, searchText, likePattern, strings.TrimSpace(filter.Category), filter.IncludeArchived}
 }
+
+func (repository *Repository) CanStockShop(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID, isOwner bool, shopId uuid.UUID) (bool, error) {
+	query := `
+		SELECT COUNT(*) FROM shops s
+		WHERE s.company_id = $1 AND s.id = $2 AND s.is_active
+		  AND ($3 OR EXISTS (SELECT 1 FROM user_shops us WHERE us.company_id = s.company_id AND us.shop_id = s.id AND us.user_id = $4))
+	`
+
+	matchCount := 0
+	scanError := querier.QueryRowContext(ctx, query, companyId, shopId, isOwner, userId).Scan(&matchCount)
+	if scanError != nil {
+		return false, fmt.Errorf("failed to check the opening stock shop: %w", scanError)
+	}
+	return matchCount > 0, nil
+}

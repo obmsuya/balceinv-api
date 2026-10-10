@@ -72,6 +72,7 @@ type CreateProductRequest struct {
 	ProductFields
 	ParentId        *string `json:"parent_id" validate:"omitnil,uuid"`
 	OpeningQuantity int     `json:"opening_quantity" validate:"gte=0,lte=1000000000"`
+	ShopId          *string `json:"shop_id" validate:"omitnil,uuid"`
 }
 
 type UpdateProductRequest struct {
