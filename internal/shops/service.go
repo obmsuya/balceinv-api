@@ -17,6 +17,9 @@ var (
 	ErrShopNotFound   = errors.New("shop not found")
 	ErrShopNameTaken  = errors.New("another shop already has this name")
 	ErrLastActiveShop = errors.New("keep at least one shop open; open another shop before closing this one")
+	ErrShopInUse      = errors.New("this shop has sales, stock or other records, so it can only be closed")
+	ErrShopHasStaff   = errors.New("some staff work only in this shop; give them another shop first")
+	ErrShopIsCurrent  = errors.New("switch to another shop before deleting this one")
 )
 
 type Service struct {
@@ -127,6 +130,46 @@ func (service *Service) Close(ctx context.Context, querier database.Querier, com
 	closedShop.UpdatedAt = time.Now().UTC()
 
 	return service.save(ctx, querier, *existingShop, closedShop)
+}
+
+func (service *Service) DeletePermanently(ctx context.Context, querier database.Querier, companyId uuid.UUID, currentShopId *uuid.UUID, shopId uuid.UUID) error {
+	existingShop, findError := service.repository.Find(ctx, querier, companyId, shopId)
+	if findError != nil {
+		return findError
+	}
+	if existingShop == nil {
+		return ErrShopNotFound
+	}
+	isCurrentShop := currentShopId != nil && *currentShopId == shopId
+	if isCurrentShop {
+		return ErrShopIsCurrent
+	}
+	if existingShop.IsActive {
+		activeCount, countError := service.repository.CountActive(ctx, querier, companyId)
+		if countError != nil {
+			return countError
+		}
+		if activeCount <= 1 {
+			return ErrLastActiveShop
+		}
+	}
+
+	isUsed, usedError := service.repository.IsUsed(ctx, querier, companyId, shopId)
+	if usedError != nil {
+		return usedError
+	}
+	if isUsed {
+		return ErrShopInUse
+	}
+	hasStaffOnlyHere, staffError := service.repository.HasStaffOnlyHere(ctx, querier, companyId, shopId)
+	if staffError != nil {
+		return staffError
+	}
+	if hasStaffOnlyHere {
+		return ErrShopHasStaff
+	}
+
+	return service.repository.Delete(ctx, querier, companyId, shopId)
 }
 
 func (service *Service) save(ctx context.Context, querier database.Querier, existingShop Shop, changedShop Shop) (ShopView, error) {
