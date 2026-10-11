@@ -326,3 +326,39 @@ func (repository *Repository) MarkSupportHandled(ctx context.Context, querier da
 func daysText(days int) string {
 	return strconv.Itoa(days) + " days"
 }
+
+func (repository *Repository) SaveWapangajiTokens(ctx context.Context, querier database.Querier, tokenHash string, accessToken string, refreshToken string, name string) error {
+	query := `UPDATE platform_sessions SET wapangaji_access = $2, wapangaji_refresh = $3, wapangaji_name = $4 WHERE token_hash = $1`
+	_, saveError := querier.ExecContext(ctx, query, tokenHash, accessToken, refreshToken, name)
+	if saveError != nil {
+		return fmt.Errorf("failed to save the Wapangaji sign-in: %w", saveError)
+	}
+	return nil
+}
+
+func (repository *Repository) ClearWapangajiTokens(ctx context.Context, querier database.Querier, tokenHash string) error {
+	query := `UPDATE platform_sessions SET wapangaji_access = NULL, wapangaji_refresh = NULL, wapangaji_name = NULL WHERE token_hash = $1`
+	_, clearError := querier.ExecContext(ctx, query, tokenHash)
+	if clearError != nil {
+		return fmt.Errorf("failed to forget the Wapangaji sign-in: %w", clearError)
+	}
+	return nil
+}
+
+func (repository *Repository) FindWapangajiTokens(ctx context.Context, querier database.Querier, tokenHash string) (*wapangajiTokens, error) {
+	accessToken := sql.NullString{}
+	refreshToken := sql.NullString{}
+	name := sql.NullString{}
+	query := `SELECT wapangaji_access, wapangaji_refresh, wapangaji_name FROM platform_sessions WHERE token_hash = $1`
+	scanError := querier.QueryRowContext(ctx, query, tokenHash).Scan(&accessToken, &refreshToken, &name)
+	if errors.Is(scanError, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if scanError != nil {
+		return nil, fmt.Errorf("failed to read the Wapangaji sign-in: %w", scanError)
+	}
+	if !accessToken.Valid || accessToken.String == "" {
+		return nil, nil
+	}
+	return &wapangajiTokens{Access: accessToken.String, Refresh: refreshToken.String, Name: name.String}, nil
+}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/security"
+	"github.com/chrisostomemataba/balceinv-api/internal/subscriptions"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/google/uuid"
 )
@@ -34,13 +35,21 @@ var (
 )
 
 type Service struct {
-	repository     *Repository
-	tenancyService *tenancy.Service
-	isPostgres     bool
+	repository           *Repository
+	tenancyService       *tenancy.Service
+	subscriptionsService *subscriptions.Service
+	wapangaji            *wapangajiClient
+	isPostgres           bool
 }
 
-func NewService(repository *Repository, tenancyService *tenancy.Service, isPostgres bool) *Service {
-	return &Service{repository: repository, tenancyService: tenancyService, isPostgres: isPostgres}
+func NewService(repository *Repository, tenancyService *tenancy.Service, subscriptionsService *subscriptions.Service, isPostgres bool) *Service {
+	return &Service{
+		repository:           repository,
+		tenancyService:       tenancyService,
+		subscriptionsService: subscriptionsService,
+		wapangaji:            newWapangajiClient(),
+		isPostgres:           isPostgres,
+	}
 }
 
 func NewOneTimePassword() (string, error) {
