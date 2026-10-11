@@ -29,7 +29,7 @@ var (
 	ErrBadSignIn        = errors.New("the email, password or code is wrong")
 	ErrShopNotFound     = errors.New("shop not found")
 	ErrUserNotFound     = errors.New("user not found in this business")
-	ErrNotOnTrial       = errors.New("this business has a paid plan; renew it with the sales tool instead of extending a trial")
+	ErrNotOnTrial       = errors.New("this business has a paid plan; renew it on the Licences page instead of extending a trial")
 	ErrMessageNotFound  = errors.New("support message not found")
 	ErrEmailAlreadyUsed = errors.New("this email is already in use")
 )
