@@ -156,7 +156,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 
 	if isPostgres {
-		registerAdminRoutes(application, admin.NewHandler(admin.NewService(admin.NewRepository(), tenancyService, isPostgres)), requestTransaction)
+		registerAdminRoutes(application, admin.NewHandler(admin.NewService(admin.NewRepository(), tenancyService, subscriptions.NewService(subscriptions.NewRepository(), openDatabase), isPostgres)), requestTransaction)
 	}
 
 	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)
@@ -409,6 +409,15 @@ func registerAdminRoutes(application *fiber.App, adminHandler *admin.Handler, re
 	application.Get("/api/admin/support", requestTransaction, anyStaff, adminHandler.SupportMessages)
 	application.Post("/api/admin/support/:id/handled", requestTransaction, anyStaff, adminHandler.MarkHandled)
 	application.Get("/api/admin/audit", requestTransaction, adminOnly, adminHandler.Audit)
+	application.Get("/api/admin/wapangaji", requestTransaction, anyStaff, adminHandler.WapangajiStatus)
+	application.Post("/api/admin/wapangaji/connect", newAdminSignInLimiter(), requestTransaction, anyStaff, adminHandler.ConnectWapangaji)
+	application.Post("/api/admin/wapangaji/disconnect", requestTransaction, anyStaff, adminHandler.DisconnectWapangaji)
+	application.Get("/api/admin/licences/packages", requestTransaction, anyStaff, adminHandler.LicencePackages)
+	application.Post("/api/admin/licences/lookup", requestTransaction, anyStaff, adminHandler.LookupLicence)
+	application.Post("/api/admin/licences/payments", requestTransaction, anyStaff, adminHandler.LicencePayments)
+	application.Post("/api/admin/licences/record-payment", requestTransaction, anyStaff, adminHandler.RecordPayment)
+	application.Post("/api/admin/licences/devices", requestTransaction, anyStaff, adminHandler.LicenceDevices)
+	application.Post("/api/admin/licences/remove-device", requestTransaction, anyStaff, adminHandler.RemoveDevice)
 }
 
 func newAdminSignInLimiter() fiber.Handler {

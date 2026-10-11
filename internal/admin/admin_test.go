@@ -21,7 +21,7 @@ type teamMember struct {
 
 func saveTeamMember(t *testing.T, harness *apptest.Harness, email string, role string) teamMember {
 	t.Helper()
-	adminService := admin.NewService(admin.NewRepository(), nil, harness.Database.IsPostgres())
+	adminService := admin.NewService(admin.NewRepository(), nil, nil, harness.Database.IsPostgres())
 	password, totpSecret, saveError := adminService.SaveStaff(context.Background(), harness.Database.Writer, email, "Team "+role, role)
 	if saveError != nil {
 		t.Fatalf("save team member: %v", saveError)

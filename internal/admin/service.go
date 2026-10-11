@@ -11,6 +11,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/security"
+	"github.com/chrisostomemataba/balceinv-api/internal/subscriptions"
 	"github.com/chrisostomemataba/balceinv-api/internal/tenancy"
 	"github.com/google/uuid"
 )
@@ -28,19 +29,27 @@ var (
 	ErrBadSignIn        = errors.New("the email, password or code is wrong")
 	ErrShopNotFound     = errors.New("shop not found")
 	ErrUserNotFound     = errors.New("user not found in this business")
-	ErrNotOnTrial       = errors.New("this business has a paid plan; renew it with the sales tool instead of extending a trial")
+	ErrNotOnTrial       = errors.New("this business has a paid plan; renew it on the Licences page instead of extending a trial")
 	ErrMessageNotFound  = errors.New("support message not found")
 	ErrEmailAlreadyUsed = errors.New("this email is already in use")
 )
 
 type Service struct {
-	repository     *Repository
-	tenancyService *tenancy.Service
-	isPostgres     bool
+	repository           *Repository
+	tenancyService       *tenancy.Service
+	subscriptionsService *subscriptions.Service
+	wapangaji            *wapangajiClient
+	isPostgres           bool
 }
 
-func NewService(repository *Repository, tenancyService *tenancy.Service, isPostgres bool) *Service {
-	return &Service{repository: repository, tenancyService: tenancyService, isPostgres: isPostgres}
+func NewService(repository *Repository, tenancyService *tenancy.Service, subscriptionsService *subscriptions.Service, isPostgres bool) *Service {
+	return &Service{
+		repository:           repository,
+		tenancyService:       tenancyService,
+		subscriptionsService: subscriptionsService,
+		wapangaji:            newWapangajiClient(),
+		isPostgres:           isPostgres,
+	}
 }
 
 func NewOneTimePassword() (string, error) {

@@ -125,3 +125,73 @@ type AuditView struct {
 	Details     string     `json:"details"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
+
+type WapangajiConnectRequest struct {
+	Phone    string `json:"phone" validate:"required,max=20"`
+	Password string `json:"password" validate:"required,max=200"`
+}
+
+type WapangajiStatusView struct {
+	Connected bool   `json:"connected"`
+	Name      string `json:"name"`
+}
+
+type LicenceLookupRequest struct {
+	HardwareId string `json:"hardware_id" validate:"required_without=Phone,max=128"`
+	Phone      string `json:"phone" validate:"required_without=HardwareId,max=20"`
+}
+
+type LicenceView struct {
+	LicenseKey  string  `json:"license_key"`
+	Phone       string  `json:"phone"`
+	Package     *string `json:"package"`
+	ExpiresAt   string  `json:"expires_at"`
+	DaysGranted int     `json:"days_granted"`
+	MaxDevices  int     `json:"max_devices"`
+	DeviceCount int     `json:"device_count"`
+}
+
+type LicenceLookupView struct {
+	Found       bool         `json:"found"`
+	Licence     *LicenceView `json:"licence"`
+	CompanyId   *uuid.UUID   `json:"company_id"`
+	CompanyName *string      `json:"company_name"`
+}
+
+type LicencePackageView struct {
+	Id          int    `json:"id"`
+	Name        string `json:"name"`
+	Price       string `json:"price"`
+	DaysGranted int    `json:"days_granted"`
+	MaxDevices  int    `json:"max_devices"`
+}
+
+type LicencePaymentView struct {
+	Phone       string  `json:"phone"`
+	Package     *string `json:"package"`
+	Amount      string  `json:"amount"`
+	Method      string  `json:"method"`
+	Reference   string  `json:"reference"`
+	ProcessedBy *string `json:"processed_by"`
+	CreatedAt   string  `json:"created_at"`
+}
+
+type RecordPaymentRequest struct {
+	HardwareId string  `json:"hardware_id" validate:"required,max=128"`
+	Phone      string  `json:"phone" validate:"required,max=20"`
+	PackageId  int     `json:"package_id" validate:"required,gte=1"`
+	Amount     float64 `json:"amount" validate:"required,gt=0"`
+	Method     string  `json:"method" validate:"required,oneof=cash mobile_money bank_transfer"`
+	Reference  string  `json:"reference" validate:"max=255"`
+}
+
+type LicenceDevicesView struct {
+	LicenseKey  string   `json:"license_key"`
+	HardwareIds []string `json:"hardware_ids"`
+	MaxDevices  int      `json:"max_devices"`
+}
+
+type RemoveDeviceRequest struct {
+	HardwareId       string `json:"hardware_id" validate:"required,max=128"`
+	RemoveHardwareId string `json:"remove_hardware_id" validate:"required,max=128"`
+}

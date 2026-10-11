@@ -52,7 +52,7 @@ func runCreateStaff() {
 	}
 	defer staffTransaction.Rollback()
 
-	adminService := admin.NewService(admin.NewRepository(), nil, openDatabase.IsPostgres())
+	adminService := admin.NewService(admin.NewRepository(), nil, nil, openDatabase.IsPostgres())
 	oneTimePassword, totpSecret, saveError := adminService.SaveStaff(commandContext, staffTransaction, *email, *name, *role)
 	if saveError != nil {
 		exitWith(saveError)
