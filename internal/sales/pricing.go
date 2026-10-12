@@ -26,6 +26,7 @@ type PricingProduct struct {
 	WholesalePrice *int64
 	WholesaleMin   int
 	InStock        int
+	IsListed       bool
 }
 
 type PricingAddon struct {
