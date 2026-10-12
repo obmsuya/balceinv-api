@@ -205,6 +205,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Put("/api/products/:id", permitted("products:edit", productsHandler.Update)...)
 	application.Delete("/api/products/:id", permitted("products:delete", productsHandler.Archive)...)
 	application.Post("/api/products/delete", permitted("products:delete", productsHandler.DeletePermanently)...)
+	application.Post("/api/products/shops", permitted("products:edit", productsHandler.SetShopAvailability)...)
 	application.Post("/api/products/:id/restore", permitted("products:edit", productsHandler.Restore)...)
 	application.Post("/api/products/:id/image", permitted("products:edit", productsHandler.UploadImage)...)
 	application.Get("/api/products/:id/addons", permitted("products:view", productsHandler.ListAddons)...)

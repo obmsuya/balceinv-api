@@ -29,6 +29,7 @@ type Product struct {
 	Quantity            *int
 	MinimumStock        *int
 	VariantCount        int
+	IsInShop            bool
 }
 
 type Barcode struct {

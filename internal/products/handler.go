@@ -26,9 +26,10 @@ func NewHandler(service *Service) *Handler {
 func (handler *Handler) List(c *fiber.Ctx) error {
 	pagination := httpx.ParsePagination(c)
 	listFilter := ListFilter{
-		SearchText:      c.Query("q"),
-		Category:        c.Query("category"),
-		IncludeArchived: c.QueryBool("include_archived", false),
+		SearchText:        c.Query("q"),
+		Category:          c.Query("category"),
+		IncludeArchived:   c.QueryBool("include_archived", false),
+		IncludeOtherShops: c.QueryBool("include_other_shops", false),
 	}
 
 	productPage, listError := handler.service.List(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), listFilter, pagination.Limit, pagination.Offset)
@@ -140,6 +141,20 @@ func (handler *Handler) DeletePermanently(c *fiber.Ctx) error {
 		return respondWithServiceError(c, deleteError)
 	}
 	return response.Success(c, "Products deleted", deleteResult)
+}
+
+func (handler *Handler) SetShopAvailability(c *fiber.Ctx) error {
+	request := ShopAvailabilityRequest{}
+	isValid, bindResponseError := httpx.BindAndValidate(c, &request)
+	if !isValid {
+		return bindResponseError
+	}
+
+	availabilityView, availabilityError := handler.service.SetShopAvailability(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), request)
+	if availabilityError != nil {
+		return respondWithServiceError(c, availabilityError)
+	}
+	return response.Success(c, "Shop products saved", availabilityView)
 }
 
 func (handler *Handler) Restore(c *fiber.Ctx) error {
@@ -302,6 +317,12 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrProductNotFound), errors.Is(serviceError, ErrParentNotFound), errors.Is(serviceError, ErrAddonNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
+	case errors.Is(serviceError, ErrProductNotInShop):
+		return response.Error(c, fiber.StatusConflict, "product_not_in_shop", serviceError.Error())
+	case errors.Is(serviceError, ErrShopNotInBusiness):
+		return response.Error(c, fiber.StatusNotFound, "shop_not_found", serviceError.Error())
+	case errors.Is(serviceError, ErrShopStillHasStock):
+		return response.Error(c, fiber.StatusConflict, "shop_has_stock", serviceError.Error())
 	case errors.Is(serviceError, ErrSupplierNotFound):
 		return response.Error(c, fiber.StatusBadRequest, "supplier_not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrSkuTaken):

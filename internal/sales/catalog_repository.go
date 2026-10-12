@@ -19,7 +19,7 @@ func NewRepository() *Repository {
 func (repository *Repository) LoadProducts(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productIds []uuid.UUID) (map[uuid.UUID]PricingProduct, error) {
 	query := `
 		SELECT p.id, p.name, p.variant_label, p.sku, p.unit, p.price, p.cost_price, p.wholesale_price, p.wholesale_min,
-		       COALESCE(ss.quantity, 0)
+		       COALESCE(ss.quantity, 0), COALESCE(ss.is_listed, TRUE)
 		FROM products p
 		LEFT JOIN shop_stock ss ON ss.company_id = p.company_id AND ss.product_id = p.id AND ss.shop_id = $2
 		WHERE p.company_id = $1 AND p.is_active AND p.id IN (` + database.Placeholders(3, len(productIds)) + `)
@@ -46,6 +46,7 @@ func (repository *Repository) LoadProducts(ctx context.Context, querier database
 			&pricingProduct.WholesalePrice,
 			&pricingProduct.WholesaleMin,
 			&pricingProduct.InStock,
+			&pricingProduct.IsListed,
 		)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan sale product: %w", scanError)

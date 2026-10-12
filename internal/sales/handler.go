@@ -208,6 +208,8 @@ func parseSaleFilter(c *fiber.Ctx) (SaleFilter, bool) {
 
 func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
+	case errors.Is(serviceError, ErrProductNotInShop):
+		return response.Error(c, fiber.StatusConflict, "product_not_in_shop", serviceError.Error())
 	case errors.Is(serviceError, ErrSaleNotFound), errors.Is(serviceError, ErrProductNotFound), errors.Is(serviceError, ErrAddonNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrClientRefReused):

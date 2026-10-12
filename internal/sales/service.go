@@ -25,6 +25,7 @@ var (
 	ErrNoActiveShop       = errors.New("choose a shop first")
 	ErrShopClosed         = errors.New("this shop is closed; reopen it or switch shops to sell")
 	ErrProductNotFound    = errors.New("one of the products is not for sale")
+	ErrProductNotInShop   = errors.New("one of the products is not sold in this shop")
 	ErrAddonNotFound      = errors.New("one of the add-ons is not available for that product")
 	ErrSaleNotFound       = errors.New("sale not found")
 	ErrClientRefReused    = errors.New("this checkout reference was already used for a different sale")
@@ -462,6 +463,9 @@ func (service *Service) price(ctx context.Context, querier database.Querier, pri
 		pricingProduct, isKnownProduct := productsById[uuid.MustParse(lineRequest.ProductId)]
 		if !isKnownProduct {
 			return PricedSale{}, ErrProductNotFound
+		}
+		if !pricingProduct.IsListed {
+			return PricedSale{}, ErrProductNotInShop
 		}
 
 		lineAddons := make([]PricingAddon, 0, len(lineRequest.AddonIds))

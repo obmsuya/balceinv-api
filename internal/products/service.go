@@ -57,7 +57,7 @@ func NewService(repository *Repository, stockService *stock.Service, objectStore
 func (service *Service) List(ctx context.Context, querier database.Querier, principal *identity.Principal, filter ListFilter, limit int, offset int) (response.Page[ProductView], error) {
 	emptyPage := response.Page[ProductView]{}
 
-	totalProducts, countError := service.repository.Count(ctx, querier, principal.CompanyId, filter)
+	totalProducts, countError := service.repository.Count(ctx, querier, principal.CompanyId, principal.ShopId, filter)
 	if countError != nil {
 		return emptyPage, countError
 	}
@@ -95,6 +95,11 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, princ
 	if viewError != nil {
 		return ProductView{}, viewError
 	}
+	hiddenShopIds, hiddenError := service.repository.HiddenShopIds(ctx, querier, principal.CompanyId, productId)
+	if hiddenError != nil {
+		return ProductView{}, hiddenError
+	}
+	productViews[0].HiddenShopIds = hiddenShopIds
 
 	return productViews[0], nil
 }
@@ -116,6 +121,9 @@ func (service *Service) Lookup(ctx context.Context, querier database.Querier, pr
 	productView, getError := service.Get(ctx, querier, principal, *productId)
 	if getError != nil {
 		return LookupView{}, getError
+	}
+	if !productView.InShop {
+		return LookupView{}, ErrProductNotInShop
 	}
 
 	lookupView := LookupView{
@@ -207,6 +215,18 @@ func (service *Service) createProduct(ctx context.Context, querier database.Quer
 		return uuid.Nil, barcodeError
 	}
 
+	if parentId != nil {
+		inheritError := service.inheritHiddenShops(ctx, querier, principal.CompanyId, *parentId, newProduct.Id)
+		if inheritError != nil {
+			return uuid.Nil, inheritError
+		}
+	} else if len(request.ShopIds) > 0 {
+		shopsError := service.applyShopIds(ctx, querier, principal.CompanyId, newProduct.Id, request.ShopIds)
+		if shopsError != nil {
+			return uuid.Nil, shopsError
+		}
+	}
+
 	if hasStockShop {
 		stockError := service.prepareStock(ctx, querier, principal, *stockShopId, newProduct.Id, request.MinStock, request.OpeningQuantity)
 		if stockError != nil {
@@ -275,6 +295,14 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 		barcodeError := service.saveBarcodes(ctx, querier, principal.CompanyId, productId, request.Barcodes)
 		if barcodeError != nil {
 			return ProductView{}, barcodeError
+		}
+	}
+
+	hasShopChanges := len(request.ShopIds) > 0 && !isVariant
+	if hasShopChanges {
+		shopsError := service.applyShopIds(ctx, querier, principal.CompanyId, productId, request.ShopIds)
+		if shopsError != nil {
+			return ProductView{}, shopsError
 		}
 	}
 
