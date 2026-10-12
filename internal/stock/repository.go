@@ -50,7 +50,7 @@ func (repository *Repository) SetMinimumStock(ctx context.Context, querier datab
 func (repository *Repository) ChangeQuantity(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productId uuid.UUID, change int) (int, int, bool, error) {
 	query := `
 		UPDATE shop_stock
-		SET quantity = quantity + $4, updated_at = $5
+		SET quantity = quantity + $4, updated_at = $5, is_listed = CASE WHEN $4 > 0 THEN TRUE ELSE is_listed END
 		WHERE company_id = $1 AND shop_id = $2 AND product_id = $3 AND quantity + $4 >= 0
 		RETURNING quantity, min_stock
 	`
@@ -122,6 +122,22 @@ func (repository *Repository) DeleteProductStock(ctx context.Context, querier da
 		_, deleteError := querier.ExecContext(ctx, `DELETE FROM `+table+` WHERE company_id = $1 AND product_id IN (`+placeholders+`)`, queryArguments...)
 		if deleteError != nil {
 			return fmt.Errorf("failed to delete the product's %s: %w", table, deleteError)
+		}
+	}
+	return nil
+}
+
+func (repository *Repository) SetListed(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productIds []uuid.UUID, isListed bool) error {
+	query := `
+		INSERT INTO shop_stock (company_id, shop_id, product_id, quantity, min_stock, updated_at, is_listed)
+		VALUES ($1, $2, $3, 0, $4, $5, $6)
+		ON CONFLICT (shop_id, product_id) DO UPDATE SET is_listed = excluded.is_listed, updated_at = excluded.updated_at
+	`
+	now := time.Now().UTC()
+	for _, productId := range productIds {
+		_, upsertError := querier.ExecContext(ctx, query, companyId, shopId, productId, DefaultMinimumStock, now, isListed)
+		if upsertError != nil {
+			return fmt.Errorf("failed to set where the product is sold: %w", upsertError)
 		}
 	}
 	return nil
