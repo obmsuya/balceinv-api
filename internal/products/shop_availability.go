@@ -34,7 +34,7 @@ type ShopAvailabilityView struct {
 
 func (service *Service) SetShopAvailability(ctx context.Context, querier database.Querier, principal *identity.Principal, request ShopAvailabilityRequest) (ShopAvailabilityView, error) {
 	shopId := uuid.MustParse(request.ShopId)
-	companyShopIds, shopsError := service.repository.CompanyShopIds(ctx, querier, principal.CompanyId)
+	companyShopIds, shopsError := service.repository.OpenShopIds(ctx, querier, principal.CompanyId)
 	if shopsError != nil {
 		return ShopAvailabilityView{}, shopsError
 	}
@@ -74,7 +74,7 @@ func (service *Service) SetShopAvailability(ctx context.Context, querier databas
 }
 
 func (service *Service) applyShopIds(ctx context.Context, querier database.Querier, companyId uuid.UUID, productId uuid.UUID, requestedShopIds []string) error {
-	companyShopIds, shopsError := service.repository.CompanyShopIds(ctx, querier, companyId)
+	companyShopIds, shopsError := service.repository.OpenShopIds(ctx, querier, companyId)
 	if shopsError != nil {
 		return shopsError
 	}

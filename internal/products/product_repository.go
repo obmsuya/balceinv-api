@@ -455,8 +455,8 @@ func (repository *Repository) CanStockShop(ctx context.Context, querier database
 	return matchCount > 0, nil
 }
 
-func (repository *Repository) CompanyShopIds(ctx context.Context, querier database.Querier, companyId uuid.UUID) (map[uuid.UUID]bool, error) {
-	shopRows, queryError := querier.QueryContext(ctx, `SELECT id FROM shops WHERE company_id = $1`, companyId)
+func (repository *Repository) OpenShopIds(ctx context.Context, querier database.Querier, companyId uuid.UUID) (map[uuid.UUID]bool, error) {
+	shopRows, queryError := querier.QueryContext(ctx, `SELECT id FROM shops WHERE company_id = $1 AND is_active`, companyId)
 	if queryError != nil {
 		return nil, fmt.Errorf("failed to list the business's shops: %w", queryError)
 	}
