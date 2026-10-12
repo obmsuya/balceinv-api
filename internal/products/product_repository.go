@@ -22,7 +22,8 @@ const productColumns = `
 	p.id, p.company_id, p.parent_id, p.sku, p.name, p.variant_label, p.price, p.cost_price,
 	p.wholesale_price, p.wholesale_min, p.category, p.unit, p.pieces_per_unit, p.image_key,
 	p.metadata, p.preferred_supplier_id, p.is_active, p.created_at, p.updated_at, ss.quantity, ss.min_stock,
-	(SELECT COUNT(*) FROM products v WHERE v.company_id = p.company_id AND v.parent_id = p.id AND v.is_active)
+	(SELECT COUNT(*) FROM products v WHERE v.company_id = p.company_id AND v.parent_id = p.id AND v.is_active),
+	COALESCE(ss.is_listed, TRUE)
 `
 
 const productFilter = `
@@ -32,13 +33,16 @@ const productFilter = `
 	))
 	AND ($4 = '' OR p.category = $4)
 	AND (p.is_active OR $5)
+	AND (NOT EXISTS (
+		SELECT 1 FROM shop_stock hs WHERE hs.company_id = p.company_id AND hs.product_id = p.id AND hs.shop_id = $6 AND NOT hs.is_listed
+	) OR $7 OR $6 IS NULL)
 `
 
-func (repository *Repository) Count(ctx context.Context, querier database.Querier, companyId uuid.UUID, filter ListFilter) (int64, error) {
+func (repository *Repository) Count(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId *uuid.UUID, filter ListFilter) (int64, error) {
 	query := `SELECT COUNT(*) FROM products p WHERE p.parent_id IS NULL AND ` + productFilter
 
 	productCount := int64(0)
-	scanError := querier.QueryRowContext(ctx, query, filterArguments(companyId, filter)...).Scan(&productCount)
+	scanError := querier.QueryRowContext(ctx, query, filterArguments(companyId, shopId, filter)...).Scan(&productCount)
 	if scanError != nil {
 		return 0, fmt.Errorf("failed to count products: %w", scanError)
 	}
@@ -53,10 +57,10 @@ func (repository *Repository) List(ctx context.Context, querier database.Querier
 		LEFT JOIN shop_stock ss ON ss.company_id = p.company_id AND ss.product_id = p.id AND ss.shop_id = $6
 		WHERE p.parent_id IS NULL AND ` + productFilter + `
 		ORDER BY p.is_active DESC, p.name, p.id
-		LIMIT $7 OFFSET $8
+		LIMIT $8 OFFSET $9
 	`
 
-	queryArguments := append(filterArguments(companyId, filter), shopId, limit, offset)
+	queryArguments := append(filterArguments(companyId, shopId, filter), limit, offset)
 	return repository.queryProducts(ctx, querier, query, queryArguments...)
 }
 
@@ -415,6 +419,7 @@ func (repository *Repository) queryProducts(ctx context.Context, querier databas
 			&foundProduct.Quantity,
 			&foundProduct.MinimumStock,
 			&foundProduct.VariantCount,
+			&foundProduct.IsInShop,
 		)
 		if scanError != nil {
 			if errors.Is(scanError, sql.ErrNoRows) {
@@ -429,10 +434,10 @@ func (repository *Repository) queryProducts(ctx context.Context, querier databas
 	return foundProducts, productRows.Err()
 }
 
-func filterArguments(companyId uuid.UUID, filter ListFilter) []any {
+func filterArguments(companyId uuid.UUID, shopId *uuid.UUID, filter ListFilter) []any {
 	searchText := strings.TrimSpace(filter.SearchText)
 	likePattern := "%" + strings.ToLower(searchText) + "%"
-	return []any{companyId, searchText, likePattern, strings.TrimSpace(filter.Category), filter.IncludeArchived}
+	return []any{companyId, searchText, likePattern, strings.TrimSpace(filter.Category), filter.IncludeArchived, shopId, filter.IncludeOtherShops}
 }
 
 func (repository *Repository) CanStockShop(ctx context.Context, querier database.Querier, companyId uuid.UUID, userId uuid.UUID, isOwner bool, shopId uuid.UUID) (bool, error) {
@@ -448,4 +453,74 @@ func (repository *Repository) CanStockShop(ctx context.Context, querier database
 		return false, fmt.Errorf("failed to check the opening stock shop: %w", scanError)
 	}
 	return matchCount > 0, nil
+}
+
+func (repository *Repository) CompanyShopIds(ctx context.Context, querier database.Querier, companyId uuid.UUID) (map[uuid.UUID]bool, error) {
+	shopRows, queryError := querier.QueryContext(ctx, `SELECT id FROM shops WHERE company_id = $1`, companyId)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list the business's shops: %w", queryError)
+	}
+	defer shopRows.Close()
+	shopIds := map[uuid.UUID]bool{}
+	for shopRows.Next() {
+		shopId := uuid.UUID{}
+		scanError := shopRows.Scan(&shopId)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a shop: %w", scanError)
+		}
+		shopIds[shopId] = true
+	}
+	return shopIds, shopRows.Err()
+}
+
+func (repository *Repository) HiddenShopIds(ctx context.Context, querier database.Querier, companyId uuid.UUID, productId uuid.UUID) ([]uuid.UUID, error) {
+	query := `SELECT shop_id FROM shop_stock WHERE company_id = $1 AND product_id = $2 AND NOT is_listed ORDER BY shop_id`
+	shopRows, queryError := querier.QueryContext(ctx, query, companyId, productId)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list where the product is not sold: %w", queryError)
+	}
+	defer shopRows.Close()
+	hiddenShopIds := []uuid.UUID{}
+	for shopRows.Next() {
+		shopId := uuid.UUID{}
+		scanError := shopRows.Scan(&shopId)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a shop: %w", scanError)
+		}
+		hiddenShopIds = append(hiddenShopIds, shopId)
+	}
+	return hiddenShopIds, shopRows.Err()
+}
+
+type stockedProduct struct {
+	Id   uuid.UUID
+	Name string
+}
+
+func (repository *Repository) StockedInShop(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, productIds []uuid.UUID) ([]stockedProduct, error) {
+	if len(productIds) == 0 {
+		return []stockedProduct{}, nil
+	}
+	query := `
+		SELECT p.id, p.name FROM shop_stock ss
+		JOIN products p ON p.company_id = ss.company_id AND p.id = ss.product_id
+		WHERE ss.company_id = $1 AND ss.shop_id = $2 AND ss.quantity > 0 AND ss.product_id IN (` + database.Placeholders(3, len(productIds)) + `)
+		ORDER BY p.name
+	`
+	queryArguments := append([]any{companyId, shopId}, database.ToArguments(productIds)...)
+	stockedRows, queryError := querier.QueryContext(ctx, query, queryArguments...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to check stock in the shop: %w", queryError)
+	}
+	defer stockedRows.Close()
+	stockedProducts := []stockedProduct{}
+	for stockedRows.Next() {
+		stocked := stockedProduct{}
+		scanError := stockedRows.Scan(&stocked.Id, &stocked.Name)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a stocked product: %w", scanError)
+		}
+		stockedProducts = append(stockedProducts, stocked)
+	}
+	return stockedProducts, stockedRows.Err()
 }

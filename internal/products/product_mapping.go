@@ -112,6 +112,7 @@ func toProductView(foundProduct Product, productBarcodes []Barcode) ProductView 
 		Quantity:            foundProduct.Quantity,
 		MinStock:            foundProduct.MinimumStock,
 		VariantCount:        foundProduct.VariantCount,
+		InShop:              foundProduct.IsInShop,
 		Barcodes:            barcodeViews,
 		CreatedAt:           foundProduct.CreatedAt,
 		UpdatedAt:           foundProduct.UpdatedAt,

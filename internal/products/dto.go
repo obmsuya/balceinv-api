@@ -31,6 +31,8 @@ type ProductView struct {
 	Quantity            *int           `json:"quantity"`
 	MinStock            *int           `json:"min_stock"`
 	VariantCount        int            `json:"variant_count"`
+	InShop              bool           `json:"in_shop"`
+	HiddenShopIds       []uuid.UUID    `json:"hidden_shop_ids,omitempty"`
 	Barcodes            []BarcodeView  `json:"barcodes"`
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
@@ -70,14 +72,16 @@ type ProductFields struct {
 
 type CreateProductRequest struct {
 	ProductFields
-	ParentId        *string `json:"parent_id" validate:"omitnil,uuid"`
-	OpeningQuantity int     `json:"opening_quantity" validate:"gte=0,lte=1000000000"`
-	ShopId          *string `json:"shop_id" validate:"omitnil,uuid"`
+	ParentId        *string  `json:"parent_id" validate:"omitnil,uuid"`
+	OpeningQuantity int      `json:"opening_quantity" validate:"gte=0,lte=1000000000"`
+	ShopId          *string  `json:"shop_id" validate:"omitnil,uuid"`
+	ShopIds         []string `json:"shop_ids" validate:"omitempty,max=200,dive,uuid"`
 }
 
 type UpdateProductRequest struct {
 	ProductFields
-	IsActive *bool `json:"is_active"`
+	IsActive *bool    `json:"is_active"`
+	ShopIds  []string `json:"shop_ids" validate:"omitempty,max=200,dive,uuid"`
 }
 
 type AddonRequest struct {
@@ -87,9 +91,10 @@ type AddonRequest struct {
 }
 
 type ListFilter struct {
-	SearchText      string
-	Category        string
-	IncludeArchived bool
+	SearchText        string
+	Category          string
+	IncludeArchived   bool
+	IncludeOtherShops bool
 }
 
 type ImportProblem struct {
