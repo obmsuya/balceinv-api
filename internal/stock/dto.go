@@ -63,6 +63,8 @@ type MovementView struct {
 	Reference     *string    `json:"reference"`
 	UserId        *uuid.UUID `json:"user_id"`
 	UserName      *string    `json:"user_name"`
+	ShopId        uuid.UUID  `json:"shop_id"`
+	ShopName      string     `json:"shop_name"`
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
@@ -74,6 +76,7 @@ type LevelFilter struct {
 }
 
 type MovementFilter struct {
+	Shop      string
 	ProductId *uuid.UUID
 	Reason    string
 	From      *time.Time

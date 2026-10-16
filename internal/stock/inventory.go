@@ -86,20 +86,21 @@ func (service *Service) Summary(ctx context.Context, querier database.Querier, p
 }
 
 func (service *Service) Movements(ctx context.Context, querier database.Querier, principal *identity.Principal, filter MovementFilter, limit int, offset int) (response.Page[MovementView], error) {
-	if principal.ShopId == nil {
-		return response.Page[MovementView]{}, ErrNoActiveShop
-	}
 	isKnownReason := filter.Reason == "" || knownMovementReasons[filter.Reason]
 	if !isKnownReason {
 		return response.Page[MovementView]{}, ErrInvalidFilter
 	}
+	scope, scopeError := shopscope.Resolve(ctx, querier, principal, filter.Shop)
+	if scopeError != nil {
+		return response.Page[MovementView]{}, scopeError
+	}
 
-	totalMovements, countError := service.repository.CountMovements(ctx, querier, principal.CompanyId, *principal.ShopId, filter)
+	totalMovements, countError := service.repository.CountMovements(ctx, querier, principal.CompanyId, scope, filter)
 	if countError != nil {
 		return response.Page[MovementView]{}, countError
 	}
 
-	movementViews, listError := service.repository.ListMovements(ctx, querier, principal.CompanyId, *principal.ShopId, filter, limit, offset)
+	movementViews, listError := service.repository.ListMovements(ctx, querier, principal.CompanyId, scope, filter, limit, offset)
 	if listError != nil {
 		return response.Page[MovementView]{}, listError
 	}
@@ -151,7 +152,8 @@ func (service *Service) Adjust(ctx context.Context, querier database.Querier, pr
 	movementFilter := MovementFilter{
 		ProductId: &productId,
 	}
-	latestMovements, listError := service.repository.ListMovements(ctx, querier, principal.CompanyId, *principal.ShopId, movementFilter, 1, 0)
+	currentShop := shopscope.Scope{ShopIds: []uuid.UUID{*principal.ShopId}}
+	latestMovements, listError := service.repository.ListMovements(ctx, querier, principal.CompanyId, currentShop, movementFilter, 1, 0)
 	if listError != nil {
 		return MovementView{}, listError
 	}

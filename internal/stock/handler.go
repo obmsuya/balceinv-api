@@ -76,6 +76,7 @@ func (handler *Handler) Adjust(c *fiber.Ctx) error {
 
 func parseMovementFilter(c *fiber.Ctx) (MovementFilter, bool) {
 	movementFilter := MovementFilter{
+		Shop:   c.Query("shop"),
 		Reason: c.Query("reason"),
 	}
 
