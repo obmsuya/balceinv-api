@@ -9,6 +9,8 @@ import (
 type NotificationView struct {
 	Id              uuid.UUID  `json:"id"`
 	Kind            string     `json:"kind"`
+	ShopId          uuid.UUID  `json:"shop_id"`
+	ShopName        string     `json:"shop_name"`
 	ProductId       uuid.UUID  `json:"product_id"`
 	ProductName     string     `json:"product_name"`
 	VariantLabel    string     `json:"variant_label"`
