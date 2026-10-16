@@ -8,6 +8,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/google/uuid"
 )
 
@@ -23,22 +24,29 @@ var (
 )
 
 func (service *Service) Levels(ctx context.Context, querier database.Querier, principal *identity.Principal, filter LevelFilter, limit int, offset int) (response.Page[LevelView], error) {
-	if principal.ShopId == nil {
-		return response.Page[LevelView]{}, ErrNoActiveShop
-	}
 	isKnownStatus := filter.Status == "" || filter.Status == StatusLow || filter.Status == StatusOut
 	if !isKnownStatus {
 		return response.Page[LevelView]{}, ErrInvalidFilter
 	}
+	scope, scopeError := shopscope.Resolve(ctx, querier, principal, filter.Shop)
+	if scopeError != nil {
+		return response.Page[LevelView]{}, scopeError
+	}
 
-	totalLevels, countError := service.repository.CountLevels(ctx, querier, principal.CompanyId, *principal.ShopId, filter)
+	totalLevels, countError := service.repository.CountLevels(ctx, querier, principal.CompanyId, scope, filter)
 	if countError != nil {
 		return response.Page[LevelView]{}, countError
 	}
 
-	levelViews, listError := service.repository.ListLevels(ctx, querier, principal.CompanyId, *principal.ShopId, filter, limit, offset)
+	levelViews, listError := service.repository.ListLevels(ctx, querier, principal.CompanyId, scope, filter, limit, offset)
 	if listError != nil {
 		return response.Page[LevelView]{}, listError
+	}
+	if !scope.IsSingleShop() {
+		shopsError := service.attachShopLevels(ctx, querier, principal.CompanyId, scope, levelViews)
+		if shopsError != nil {
+			return response.Page[LevelView]{}, shopsError
+		}
 	}
 
 	levelPage := response.Page[LevelView]{
@@ -50,11 +58,31 @@ func (service *Service) Levels(ctx context.Context, querier database.Querier, pr
 	return levelPage, nil
 }
 
-func (service *Service) Summary(ctx context.Context, querier database.Querier, principal *identity.Principal) (SummaryView, error) {
-	if principal.ShopId == nil {
-		return SummaryView{}, ErrNoActiveShop
+func (service *Service) attachShopLevels(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, levelViews []LevelView) error {
+	productIds := make([]uuid.UUID, 0, len(levelViews))
+	levelIndexByProduct := map[uuid.UUID]int{}
+	for levelIndex, levelView := range levelViews {
+		productIds = append(productIds, levelView.ProductId)
+		levelIndexByProduct[levelView.ProductId] = levelIndex
 	}
-	return service.repository.Summarize(ctx, querier, principal.CompanyId, *principal.ShopId)
+
+	shopLevels, shopLevelsError := service.repository.ListShopLevels(ctx, querier, companyId, scope, productIds)
+	if shopLevelsError != nil {
+		return shopLevelsError
+	}
+	for _, shopLevel := range shopLevels {
+		levelIndex := levelIndexByProduct[shopLevel.ProductId]
+		levelViews[levelIndex].Shops = append(levelViews[levelIndex].Shops, shopLevel.Level)
+	}
+	return nil
+}
+
+func (service *Service) Summary(ctx context.Context, querier database.Querier, principal *identity.Principal, requestedShop string) (SummaryView, error) {
+	scope, scopeError := shopscope.Resolve(ctx, querier, principal, requestedShop)
+	if scopeError != nil {
+		return SummaryView{}, scopeError
+	}
+	return service.repository.Summarize(ctx, querier, principal.CompanyId, scope)
 }
 
 func (service *Service) Movements(ctx context.Context, querier database.Querier, principal *identity.Principal, filter MovementFilter, limit int, offset int) (response.Page[MovementView], error) {

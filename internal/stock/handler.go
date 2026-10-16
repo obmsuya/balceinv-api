@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
@@ -23,8 +24,10 @@ func NewHandler(service *Service) *Handler {
 func (handler *Handler) Levels(c *fiber.Ctx) error {
 	pagination := httpx.ParsePagination(c)
 	levelFilter := LevelFilter{
+		Shop:       c.Query("shop"),
 		SearchText: c.Query("q"),
 		Status:     c.Query("status"),
+		ProductId:  c.Query("product_id"),
 	}
 
 	levelPage, listError := handler.service.Levels(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), levelFilter, pagination.Limit, pagination.Offset)
@@ -35,7 +38,7 @@ func (handler *Handler) Levels(c *fiber.Ctx) error {
 }
 
 func (handler *Handler) Summary(c *fiber.Ctx) error {
-	summary, summaryError := handler.service.Summary(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c))
+	summary, summaryError := handler.service.Summary(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), c.Query("shop"))
 	if summaryError != nil {
 		return RespondWithServiceError(c, summaryError)
 	}
@@ -112,8 +115,12 @@ func RespondWithServiceError(c *fiber.Ctx, serviceError error) error {
 	switch {
 	case errors.Is(serviceError, ErrProductNotFound):
 		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
-	case errors.Is(serviceError, ErrNoActiveShop):
+	case errors.Is(serviceError, ErrNoActiveShop), errors.Is(serviceError, shopscope.ErrNoActiveShop):
 		return response.Error(c, fiber.StatusBadRequest, "no_active_shop", serviceError.Error())
+	case errors.Is(serviceError, shopscope.ErrShopNotAssigned):
+		return response.Error(c, fiber.StatusForbidden, "shop_not_assigned", serviceError.Error())
+	case errors.Is(serviceError, shopscope.ErrShopNotFound):
+		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrWrongDirection):
 		return response.Error(c, fiber.StatusBadRequest, "wrong_direction", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidFilter):
