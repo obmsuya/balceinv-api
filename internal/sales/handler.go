@@ -6,6 +6,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/gofiber/fiber/v2"
@@ -181,6 +182,7 @@ func parseSaleFilter(c *fiber.Ctx) (SaleFilter, bool) {
 		return SaleFilter{}, false
 	}
 	saleFilter := SaleFilter{
+		Shop:          c.Query("shop"),
 		SearchText:    c.Query("q"),
 		FiscalWaiting: fiscalFilter == "waiting",
 	}
@@ -236,8 +238,12 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusConflict, "efd_busy", serviceError.Error())
 	case errors.Is(serviceError, ErrDiscountNotAllowed):
 		return response.Error(c, fiber.StatusForbidden, "till_discount_not_allowed", serviceError.Error())
-	case errors.Is(serviceError, ErrNoActiveShop):
+	case errors.Is(serviceError, ErrNoActiveShop), errors.Is(serviceError, shopscope.ErrNoActiveShop):
 		return response.Error(c, fiber.StatusBadRequest, "no_active_shop", serviceError.Error())
+	case errors.Is(serviceError, shopscope.ErrShopNotAssigned):
+		return response.Error(c, fiber.StatusForbidden, "shop_not_assigned", serviceError.Error())
+	case errors.Is(serviceError, shopscope.ErrShopNotFound):
+		return response.Error(c, fiber.StatusNotFound, "not_found", serviceError.Error())
 	case errors.Is(serviceError, ErrEfdOff), errors.Is(serviceError, ErrEfdNotReady), errors.Is(serviceError, ErrFiscalNotQueued):
 		return response.Error(c, fiber.StatusConflict, "efd_unavailable", serviceError.Error())
 	case errors.Is(serviceError, ErrInvalidFilter):

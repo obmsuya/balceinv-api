@@ -6,21 +6,23 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/google/uuid"
 )
 
 func (service *Service) List(ctx context.Context, querier database.Querier, principal *identity.Principal, filter SaleFilter, limit int, offset int) (response.Page[SaleSummaryView], error) {
-	if principal.ShopId == nil {
-		return response.Page[SaleSummaryView]{}, ErrNoActiveShop
+	scope, scopeError := shopscope.Resolve(ctx, querier, principal, filter.Shop)
+	if scopeError != nil {
+		return response.Page[SaleSummaryView]{}, scopeError
 	}
 
-	totals, totalsError := service.repository.Totals(ctx, querier, principal.CompanyId, *principal.ShopId, filter)
+	totals, totalsError := service.repository.Totals(ctx, querier, principal.CompanyId, scope, filter)
 	if totalsError != nil {
 		return response.Page[SaleSummaryView]{}, totalsError
 	}
 
-	summaries, listError := service.repository.ListSummaries(ctx, querier, principal.CompanyId, *principal.ShopId, filter, limit, offset)
+	summaries, listError := service.repository.ListSummaries(ctx, querier, principal.CompanyId, scope, filter, limit, offset)
 	if listError != nil {
 		return response.Page[SaleSummaryView]{}, listError
 	}
@@ -35,10 +37,11 @@ func (service *Service) List(ctx context.Context, querier database.Querier, prin
 }
 
 func (service *Service) Totals(ctx context.Context, querier database.Querier, principal *identity.Principal, filter SaleFilter) (TotalsView, error) {
-	if principal.ShopId == nil {
-		return TotalsView{}, ErrNoActiveShop
+	scope, scopeError := shopscope.Resolve(ctx, querier, principal, filter.Shop)
+	if scopeError != nil {
+		return TotalsView{}, scopeError
 	}
-	return service.repository.Totals(ctx, querier, principal.CompanyId, *principal.ShopId, filter)
+	return service.repository.Totals(ctx, querier, principal.CompanyId, scope, filter)
 }
 
 func (service *Service) Receipt(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) (ReceiptView, error) {
