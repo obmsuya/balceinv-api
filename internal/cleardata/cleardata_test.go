@@ -9,6 +9,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/cleardata"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
+	"github.com/chrisostomemataba/balceinv-api/internal/licensing"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit/apptest"
 	"github.com/google/uuid"
@@ -166,4 +167,10 @@ func mustCall(t *testing.T, harness *apptest.Harness, method string, path string
 		t.Fatalf("%s %s returned %d, want %d: %v", method, path, called.Status, wantStatus, called.Body)
 	}
 	return called
+}
+
+func TestClearingStaysOpenWhenTheDesktopTrialHasEnded(t *testing.T) {
+	if !licensing.IsSkippedPath("/api/business/clear-data") {
+		t.Fatal("a locked desktop cannot clear its test data")
+	}
 }
