@@ -13,6 +13,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/backup"
 	"github.com/chrisostomemataba/balceinv-api/internal/businessmove"
 	"github.com/chrisostomemataba/balceinv-api/internal/catalog"
+	"github.com/chrisostomemataba/balceinv-api/internal/cleardata"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
@@ -132,6 +133,8 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	application.Get("/api/platform", platformHandler.Describe)
 
 	businessMoveHandler := businessmove.NewHandler(businessmove.NewService(openDatabase, objectStore))
+	clearDataHandler := cleardata.NewHandler(cleardata.NewService(openDatabase, cleardata.NewRepository(), objectStore))
+	application.Post("/api/business/clear-data", authenticate, clearDataHandler.Clear)
 
 	application.Get("/api/setup/status", requestTransaction, tenancyHandler.Status)
 	if loadedConfig.IsDesktop() {

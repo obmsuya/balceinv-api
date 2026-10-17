@@ -33,6 +33,7 @@ var skippedPathPrefixes = []string{
 	"/api/platform",
 	"/api/license/",
 	"/api/support",
+	"/api/business/clear-data",
 }
 
 func Enforce() fiber.Handler {
