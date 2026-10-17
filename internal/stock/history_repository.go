@@ -7,18 +7,24 @@ import (
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/google/uuid"
 )
 
 const movementJoins = `
 	FROM stock_movements m
 	JOIN products p ON p.company_id = m.company_id AND p.id = m.product_id
+	JOIN shops sh ON sh.company_id = m.company_id AND sh.id = m.shop_id
 	LEFT JOIN users u ON u.company_id = m.company_id AND u.id = m.user_id
 `
 
-func movementWhere(companyId uuid.UUID, shopId uuid.UUID, filter MovementFilter) (string, []any) {
-	conditions := []string{"m.company_id = $1", "m.shop_id = $2"}
-	arguments := []any{companyId, shopId}
+func movementWhere(companyId uuid.UUID, scope shopscope.Scope, filter MovementFilter) (string, []any) {
+	conditions := []string{"m.company_id = $1"}
+	arguments := []any{companyId}
+	shopCondition := scope.Condition("m.shop_id", &arguments)
+	if shopCondition != "" {
+		conditions = append(conditions, strings.TrimPrefix(shopCondition, " AND "))
+	}
 
 	addCondition := func(condition string, argument any) {
 		arguments = append(arguments, argument)
@@ -40,8 +46,8 @@ func movementWhere(companyId uuid.UUID, shopId uuid.UUID, filter MovementFilter)
 	return " WHERE " + strings.Join(conditions, " AND "), arguments
 }
 
-func (repository *Repository) CountMovements(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, filter MovementFilter) (int64, error) {
-	whereClause, whereArguments := movementWhere(companyId, shopId, filter)
+func (repository *Repository) CountMovements(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, filter MovementFilter) (int64, error) {
+	whereClause, whereArguments := movementWhere(companyId, scope, filter)
 	query := `SELECT COUNT(*) ` + movementJoins + whereClause
 
 	movementCount := int64(0)
@@ -53,13 +59,13 @@ func (repository *Repository) CountMovements(ctx context.Context, querier databa
 	return movementCount, nil
 }
 
-func (repository *Repository) ListMovements(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, filter MovementFilter, limit int, offset int) ([]MovementView, error) {
-	whereClause, whereArguments := movementWhere(companyId, shopId, filter)
+func (repository *Repository) ListMovements(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, filter MovementFilter, limit int, offset int) ([]MovementView, error) {
+	whereClause, whereArguments := movementWhere(companyId, scope, filter)
 	limitPosition := strconv.Itoa(len(whereArguments) + 1)
 	offsetPosition := strconv.Itoa(len(whereArguments) + 2)
 	query := `
 		SELECT m.id, m.product_id, p.name, p.variant_label, p.sku, p.unit, m.change, m.quantity_after,
-		       m.reason, m.reference, m.user_id, u.name, m.created_at
+		       m.reason, m.reference, m.user_id, u.name, m.shop_id, sh.name, m.created_at
 		` + movementJoins + whereClause + `
 		ORDER BY m.created_at DESC, m.id DESC
 		LIMIT $` + limitPosition + ` OFFSET $` + offsetPosition
@@ -87,6 +93,8 @@ func (repository *Repository) ListMovements(ctx context.Context, querier databas
 			&movementView.Reference,
 			&movementView.UserId,
 			&movementView.UserName,
+			&movementView.ShopId,
+			&movementView.ShopName,
 			&movementView.CreatedAt,
 		)
 		if scanError != nil {

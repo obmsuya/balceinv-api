@@ -13,18 +13,32 @@ const (
 )
 
 type LevelView struct {
-	ProductId    uuid.UUID  `json:"product_id"`
-	ParentId     *uuid.UUID `json:"parent_id"`
-	Name         string     `json:"name"`
-	VariantLabel string     `json:"variant_label"`
-	Sku          string     `json:"sku"`
-	Unit         string     `json:"unit"`
-	Category     *string    `json:"category"`
-	Price        int64      `json:"price"`
-	CostPrice    int64      `json:"cost_price"`
-	Quantity     int        `json:"quantity"`
-	MinStock     int        `json:"min_stock"`
-	Status       string     `json:"status"`
+	ProductId    uuid.UUID       `json:"product_id"`
+	ParentId     *uuid.UUID      `json:"parent_id"`
+	Name         string          `json:"name"`
+	VariantLabel string          `json:"variant_label"`
+	Sku          string          `json:"sku"`
+	Unit         string          `json:"unit"`
+	Category     *string         `json:"category"`
+	Price        int64           `json:"price"`
+	CostPrice    int64           `json:"cost_price"`
+	Quantity     int             `json:"quantity"`
+	MinStock     int             `json:"min_stock"`
+	Status       string          `json:"status"`
+	Shops        []ShopLevelView `json:"shops,omitempty"`
+}
+
+type ShopLevelView struct {
+	ShopId   uuid.UUID `json:"shop_id"`
+	ShopName string    `json:"shop_name"`
+	Quantity int       `json:"quantity"`
+	MinStock int       `json:"min_stock"`
+	Status   string    `json:"status"`
+}
+
+type ProductShopLevel struct {
+	ProductId uuid.UUID
+	Level     ShopLevelView
 }
 
 type SummaryView struct {
@@ -49,15 +63,20 @@ type MovementView struct {
 	Reference     *string    `json:"reference"`
 	UserId        *uuid.UUID `json:"user_id"`
 	UserName      *string    `json:"user_name"`
+	ShopId        uuid.UUID  `json:"shop_id"`
+	ShopName      string     `json:"shop_name"`
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
 type LevelFilter struct {
+	Shop       string
 	SearchText string
 	Status     string
+	ProductId  string
 }
 
 type MovementFilter struct {
+	Shop      string
 	ProductId *uuid.UUID
 	Reason    string
 	From      *time.Time
