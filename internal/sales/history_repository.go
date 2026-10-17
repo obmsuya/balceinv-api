@@ -7,12 +7,17 @@ import (
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/google/uuid"
 )
 
-func saleWhere(companyId uuid.UUID, shopId uuid.UUID, filter SaleFilter) (string, []any) {
-	conditions := []string{"s.company_id = $1", "s.shop_id = $2"}
-	arguments := []any{companyId, shopId}
+func saleWhere(companyId uuid.UUID, scope shopscope.Scope, filter SaleFilter) (string, []any) {
+	conditions := []string{"s.company_id = $1"}
+	arguments := []any{companyId}
+	shopCondition := scope.Condition("s.shop_id", &arguments)
+	if shopCondition != "" {
+		conditions = append(conditions, strings.TrimPrefix(shopCondition, " AND "))
+	}
 
 	addCondition := func(condition string, argument any) {
 		arguments = append(arguments, argument)
@@ -35,8 +40,8 @@ func saleWhere(companyId uuid.UUID, shopId uuid.UUID, filter SaleFilter) (string
 	return " WHERE " + strings.Join(conditions, " AND "), arguments
 }
 
-func (repository *Repository) Totals(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, filter SaleFilter) (TotalsView, error) {
-	whereClause, whereArguments := saleWhere(companyId, shopId, filter)
+func (repository *Repository) Totals(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, filter SaleFilter) (TotalsView, error) {
+	whereClause, whereArguments := saleWhere(companyId, scope, filter)
 	query := `
 		SELECT COUNT(*),
 		       CAST(COALESCE(SUM(s.total), 0) AS BIGINT),
@@ -54,17 +59,18 @@ func (repository *Repository) Totals(ctx context.Context, querier database.Queri
 	return totals, nil
 }
 
-func (repository *Repository) ListSummaries(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, filter SaleFilter, limit int, offset int) ([]SaleSummaryView, error) {
-	whereClause, whereArguments := saleWhere(companyId, shopId, filter)
+func (repository *Repository) ListSummaries(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, filter SaleFilter, limit int, offset int) ([]SaleSummaryView, error) {
+	whereClause, whereArguments := saleWhere(companyId, scope, filter)
 	limitPosition := strconv.Itoa(len(whereArguments) + 1)
 	offsetPosition := strconv.Itoa(len(whereArguments) + 2)
 	query := `
-		SELECT s.id, s.receipt_number, s.total, s.discount_total, u.name, s.created_at,
+		SELECT s.id, s.receipt_number, s.total, s.discount_total, u.name, s.shop_id, sh.name, s.created_at,
 		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id),
 		       (SELECT f.status FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id),
 		       s.voided_at
 		FROM sales s
-		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id` + whereClause + `
+		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
+		JOIN shops sh ON sh.company_id = s.company_id AND sh.id = s.shop_id` + whereClause + `
 		ORDER BY s.created_at DESC, s.id DESC
 		LIMIT $` + limitPosition + ` OFFSET $` + offsetPosition
 
@@ -85,6 +91,8 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 			&summary.Total,
 			&summary.DiscountTotal,
 			&summary.CashierName,
+			&summary.ShopId,
+			&summary.ShopName,
 			&summary.CreatedAt,
 			&summary.UnitCount,
 			&summary.FiscalStatus,

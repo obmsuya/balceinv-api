@@ -198,6 +198,8 @@ type SaleSummaryView struct {
 	UnitCount      int64      `json:"unit_count"`
 	PaymentMethods []string   `json:"payment_methods"`
 	CashierName    string     `json:"cashier_name"`
+	ShopId         uuid.UUID  `json:"shop_id"`
+	ShopName       string     `json:"shop_name"`
 	FiscalStatus   *string    `json:"fiscal_status"`
 	VoidedAt       *time.Time `json:"voided_at"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -212,6 +214,7 @@ type TotalsView struct {
 }
 
 type SaleFilter struct {
+	Shop          string
 	SearchText    string
 	From          *time.Time
 	To            *time.Time
