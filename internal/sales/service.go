@@ -322,7 +322,7 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 }
 
 func (service *Service) Void(ctx context.Context, querier database.Querier, principal *identity.Principal, saleId uuid.UUID, request VoidRequest) (SaleView, error) {
-	saleView, getError := service.Get(ctx, querier, principal.CompanyId, saleId)
+	saleView, getError := service.View(ctx, querier, principal, saleId)
 	if getError != nil {
 		return SaleView{}, getError
 	}

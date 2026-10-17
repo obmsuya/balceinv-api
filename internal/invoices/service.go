@@ -116,7 +116,7 @@ func (service *Service) SaleDocument(ctx context.Context, querier database.Queri
 		return documents.File{}, ErrUnknownKind
 	}
 
-	receiptView, receiptError := service.salesService.Receipt(ctx, querier, principal.CompanyId, saleId)
+	receiptView, receiptError := service.salesService.ViewReceipt(ctx, querier, principal, saleId)
 	if receiptError != nil {
 		return documents.File{}, receiptError
 	}

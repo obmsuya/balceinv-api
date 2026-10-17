@@ -116,7 +116,7 @@ func (handler *Handler) Get(c *fiber.Ctx) error {
 		return respondWithServiceError(c, ErrSaleNotFound)
 	}
 
-	saleView, getError := handler.service.Get(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c).CompanyId, saleId)
+	saleView, getError := handler.service.View(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), saleId)
 	if getError != nil {
 		return respondWithServiceError(c, getError)
 	}
@@ -168,7 +168,7 @@ func (handler *Handler) Receipt(c *fiber.Ctx) error {
 		return respondWithServiceError(c, ErrSaleNotFound)
 	}
 
-	receiptView, receiptError := handler.service.Receipt(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c).CompanyId, saleId)
+	receiptView, receiptError := handler.service.ViewReceipt(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), saleId)
 	if receiptError != nil {
 		return respondWithServiceError(c, receiptError)
 	}

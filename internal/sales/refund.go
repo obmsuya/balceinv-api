@@ -36,7 +36,7 @@ func (service *Service) Refund(ctx context.Context, querier database.Querier, pr
 		return replayedSale, false, replayError
 	}
 
-	saleView, getError := service.Get(ctx, querier, principal.CompanyId, saleId)
+	saleView, getError := service.View(ctx, querier, principal, saleId)
 	if getError != nil {
 		return SaleView{}, false, getError
 	}
