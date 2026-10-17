@@ -3,12 +3,14 @@ package products
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/httpx"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/response"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 const spreadsheetContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -209,13 +211,18 @@ func (handler *Handler) Import(c *fiber.Ctx) error {
 		return response.Error(c, fiber.StatusRequestEntityTooLarge, "file_too_large", "The file must be 5 MB or smaller")
 	}
 
+	requestedShopId, isValidShop := optionalUuidForm(c, "shop_id")
+	if !isValidShop {
+		return response.Error(c, fiber.StatusBadRequest, "bad_request", "The shop is not valid")
+	}
+
 	openedFile, openError := uploadedFile.Open()
 	if openError != nil {
 		return response.Error(c, fiber.StatusBadRequest, "bad_request", "The file could not be read")
 	}
 	defer openedFile.Close()
 
-	importResult, importError := handler.service.ImportProducts(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), uploadedFile.Filename, openedFile)
+	importResult, importError := handler.service.ImportProducts(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), requestedShopId, uploadedFile.Filename, openedFile)
 	if errors.Is(importError, ErrImportRejected) {
 		return response.ErrorWithDetails(c, fiber.StatusUnprocessableEntity, "import_rejected", importError.Error(), importResult)
 	}
@@ -223,6 +230,18 @@ func (handler *Handler) Import(c *fiber.Ctx) error {
 		return respondWithServiceError(c, importError)
 	}
 	return response.Created(c, "Products imported", importResult)
+}
+
+func optionalUuidForm(c *fiber.Ctx, fieldName string) (*string, bool) {
+	rawValue := strings.TrimSpace(c.FormValue(fieldName))
+	if rawValue == "" {
+		return nil, true
+	}
+	_, parseError := uuid.Parse(rawValue)
+	if parseError != nil {
+		return nil, false
+	}
+	return &rawValue, true
 }
 
 func (handler *Handler) ListAddons(c *fiber.Ctx) error {

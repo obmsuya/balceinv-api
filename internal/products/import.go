@@ -68,10 +68,17 @@ type importRow struct {
 	request   CreateProductRequest
 }
 
-func (service *Service) ImportProducts(ctx context.Context, querier database.Querier, principal *identity.Principal, fileName string, fileReader io.Reader) (ImportResultView, error) {
+func (service *Service) ImportProducts(ctx context.Context, querier database.Querier, principal *identity.Principal, requestedShopId *string, fileName string, fileReader io.Reader) (ImportResultView, error) {
 	emptyResult := ImportResultView{
 		Problems: []ImportProblem{},
 	}
+
+	stockShopId, stockShopError := service.stockShop(ctx, querier, principal, requestedShopId)
+	if stockShopError != nil {
+		return emptyResult, stockShopError
+	}
+	importPrincipal := *principal
+	importPrincipal.ShopId = stockShopId
 
 	fileRows, readError := spreadsheet.ReadRows(fileName, fileReader)
 	if errors.Is(readError, spreadsheet.ErrUnsupportedFileType) {
@@ -86,7 +93,7 @@ func (service *Service) ImportProducts(ctx context.Context, querier database.Que
 		return emptyResult, decimalsError
 	}
 
-	parsedRows, rowProblems, parseError := parseImportRows(fileRows, currencyDecimals, principal.ShopId != nil)
+	parsedRows, rowProblems, parseError := parseImportRows(fileRows, currencyDecimals, stockShopId != nil)
 	if parseError != nil {
 		return emptyResult, parseError
 	}
@@ -112,7 +119,7 @@ func (service *Service) ImportProducts(ctx context.Context, querier database.Que
 	}
 
 	for _, parsedRow := range parsedRows {
-		_, createError := service.createProduct(ctx, querier, principal, parsedRow.request)
+		_, createError := service.createProduct(ctx, querier, &importPrincipal, parsedRow.request)
 		if createError != nil {
 			importResult.Problems = []ImportProblem{
 				{
