@@ -9,6 +9,16 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/spreadsheet"
 )
 
+func countFilledRows(dataRows [][]string) int {
+	filledRows := 0
+	for _, dataRow := range dataRows {
+		if !spreadsheet.IsBlankRow(dataRow) {
+			filledRows++
+		}
+	}
+	return filledRows
+}
+
 func parseImportRows(fileRows [][]string, currencyDecimals int, hasActiveShop bool) ([]importRow, []ImportProblem, error) {
 	headerRowIndex := -1
 	for rowIndex, fileRow := range fileRows {
@@ -35,7 +45,7 @@ func parseImportRows(fileRows [][]string, currencyDecimals int, hasActiveShop bo
 	}
 
 	dataRows := fileRows[headerRowIndex+1:]
-	if len(dataRows) > maximumImportRows {
+	if countFilledRows(dataRows) > maximumImportRows {
 		return nil, nil, ErrImportTooManyRows
 	}
 
