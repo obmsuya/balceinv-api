@@ -3,9 +3,11 @@ package notifications
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/google/uuid"
 )
 
@@ -39,15 +41,15 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 	return nil
 }
 
-func (repository *Repository) Count(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, unreadOnly bool) (int64, error) {
+func (repository *Repository) Count(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, unreadOnly bool) (int64, error) {
+	arguments := []any{companyId, unreadOnly}
 	query := `
 		SELECT COUNT(*)
-		FROM notifications
-		WHERE company_id = $1 AND shop_id = $2 AND (NOT is_read OR NOT $3)
-	`
+		FROM notifications n
+		WHERE n.company_id = $1 AND (NOT n.is_read OR NOT $2)` + scope.Condition("n.shop_id", &arguments)
 
 	notificationCount := int64(0)
-	scanError := querier.QueryRowContext(ctx, query, companyId, shopId, unreadOnly).Scan(&notificationCount)
+	scanError := querier.QueryRowContext(ctx, query, arguments...).Scan(&notificationCount)
 	if scanError != nil {
 		return 0, fmt.Errorf("failed to count notifications: %w", scanError)
 	}
@@ -55,19 +57,22 @@ func (repository *Repository) Count(ctx context.Context, querier database.Querie
 	return notificationCount, nil
 }
 
-func (repository *Repository) List(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, unreadOnly bool, limit int, offset int) ([]NotificationView, error) {
+func (repository *Repository) List(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, unreadOnly bool, limit int, offset int) ([]NotificationView, error) {
+	arguments := []any{companyId, unreadOnly}
+	shopCondition := scope.Condition("n.shop_id", &arguments)
+	arguments = append(arguments, limit, offset)
 	query := `
-		SELECT n.id, n.kind, n.product_id, p.name, p.variant_label, p.sku, p.unit, n.quantity, n.min_stock,
+		SELECT n.id, n.kind, n.shop_id, sh.name, n.product_id, p.name, p.variant_label, p.sku, p.unit, n.quantity, n.min_stock,
 		       COALESCE(ss.quantity, 0), n.is_read, n.created_at, n.read_at
 		FROM notifications n
+		JOIN shops sh ON sh.company_id = n.company_id AND sh.id = n.shop_id
 		JOIN products p ON p.company_id = n.company_id AND p.id = n.product_id
 		LEFT JOIN shop_stock ss ON ss.company_id = n.company_id AND ss.shop_id = n.shop_id AND ss.product_id = n.product_id
-		WHERE n.company_id = $1 AND n.shop_id = $2 AND (NOT n.is_read OR NOT $3)
+		WHERE n.company_id = $1 AND (NOT n.is_read OR NOT $2)` + shopCondition + `
 		ORDER BY n.created_at DESC, n.id DESC
-		LIMIT $4 OFFSET $5
-	`
+		LIMIT $` + strconv.Itoa(len(arguments)-1) + ` OFFSET $` + strconv.Itoa(len(arguments))
 
-	notificationRows, queryError := querier.QueryContext(ctx, query, companyId, shopId, unreadOnly, limit, offset)
+	notificationRows, queryError := querier.QueryContext(ctx, query, arguments...)
 	if queryError != nil {
 		return nil, fmt.Errorf("failed to list notifications: %w", queryError)
 	}
@@ -79,6 +84,8 @@ func (repository *Repository) List(ctx context.Context, querier database.Querier
 		scanError := notificationRows.Scan(
 			&notificationView.Id,
 			&notificationView.Kind,
+			&notificationView.ShopId,
+			&notificationView.ShopName,
 			&notificationView.ProductId,
 			&notificationView.ProductName,
 			&notificationView.VariantLabel,
@@ -100,31 +107,32 @@ func (repository *Repository) List(ctx context.Context, querier database.Querier
 	return notificationViews, notificationRows.Err()
 }
 
-func (repository *Repository) MarkRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, notificationId uuid.UUID) (int64, error) {
-	query := `
-		UPDATE notifications
-		SET is_read = TRUE, read_at = $4
-		WHERE company_id = $1 AND shop_id = $2 AND id = $3 AND NOT is_read
-	`
-
-	return execCount(ctx, querier, "mark notification read", query, companyId, shopId, notificationId, time.Now().UTC())
-}
-
-func (repository *Repository) MarkAllRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID) (int64, error) {
+func (repository *Repository) MarkRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, notificationId uuid.UUID) (int64, error) {
+	arguments := []any{companyId, notificationId, time.Now().UTC()}
 	query := `
 		UPDATE notifications
 		SET is_read = TRUE, read_at = $3
-		WHERE company_id = $1 AND shop_id = $2 AND NOT is_read
-	`
+		WHERE company_id = $1 AND id = $2 AND NOT is_read` + scope.Condition("shop_id", &arguments)
 
-	return execCount(ctx, querier, "mark notifications read", query, companyId, shopId, time.Now().UTC())
+	return execCount(ctx, querier, "mark notification read", query, arguments...)
 }
 
-func (repository *Repository) Exists(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID, notificationId uuid.UUID) (bool, error) {
-	query := `SELECT COUNT(*) FROM notifications WHERE company_id = $1 AND shop_id = $2 AND id = $3`
+func (repository *Repository) MarkAllRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope) (int64, error) {
+	arguments := []any{companyId, time.Now().UTC()}
+	query := `
+		UPDATE notifications
+		SET is_read = TRUE, read_at = $2
+		WHERE company_id = $1 AND NOT is_read` + scope.Condition("shop_id", &arguments)
+
+	return execCount(ctx, querier, "mark notifications read", query, arguments...)
+}
+
+func (repository *Repository) Exists(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope, notificationId uuid.UUID) (bool, error) {
+	arguments := []any{companyId, notificationId}
+	query := `SELECT COUNT(*) FROM notifications WHERE company_id = $1 AND id = $2` + scope.Condition("shop_id", &arguments)
 
 	matchCount := 0
-	scanError := querier.QueryRowContext(ctx, query, companyId, shopId, notificationId).Scan(&matchCount)
+	scanError := querier.QueryRowContext(ctx, query, arguments...).Scan(&matchCount)
 	if scanError != nil {
 		return false, fmt.Errorf("failed to find notification: %w", scanError)
 	}
@@ -132,10 +140,11 @@ func (repository *Repository) Exists(ctx context.Context, querier database.Queri
 	return matchCount > 0, nil
 }
 
-func (repository *Repository) DeleteRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, shopId uuid.UUID) (int64, error) {
-	query := `DELETE FROM notifications WHERE company_id = $1 AND shop_id = $2 AND is_read`
+func (repository *Repository) DeleteRead(ctx context.Context, querier database.Querier, companyId uuid.UUID, scope shopscope.Scope) (int64, error) {
+	arguments := []any{companyId}
+	query := `DELETE FROM notifications WHERE company_id = $1 AND is_read` + scope.Condition("shop_id", &arguments)
 
-	return execCount(ctx, querier, "clear read notifications", query, companyId, shopId)
+	return execCount(ctx, querier, "clear read notifications", query, arguments...)
 }
 
 func execCount(ctx context.Context, querier database.Querier, action string, query string, arguments ...any) (int64, error) {
