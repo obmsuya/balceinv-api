@@ -365,6 +365,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 
 	application.Get("/api/purchase-orders", permitted("purchases:view", suppliersHandler.ListOrders)...)
 	application.Get("/api/purchase-orders/:id", permitted("purchases:view", suppliersHandler.GetOrder)...)
+	application.Get("/api/purchase-orders/:id/document", permitted("purchases:view", suppliersHandler.OrderDocument)...)
 	application.Post("/api/purchase-orders", permitted("purchases:edit", suppliersHandler.CreateOrder)...)
 	application.Post("/api/purchase-orders/:id/send", permitted("purchases:edit", suppliersHandler.SendOrder)...)
 	application.Post("/api/purchase-orders/:id/cancel", permitted("purchases:delete", suppliersHandler.CancelOrder)...)
