@@ -255,6 +255,13 @@ func TestQuotationsBecomeInvoicesAndInvoicesGiveDeliveryNotes(t *testing.T) {
 		if len(listed.Items()) != 1 {
 			t.Fatalf("listing invoices gave %d", len(listed.Items()))
 		}
+		offers := shop.call(t, http.MethodGet, "/api/invoices?kind=quotation,proforma", nil, http.StatusOK)
+		if len(offers.Items()) != 1 || offers.Items()[0].(map[string]any)["kind"] != "quotation" {
+			t.Fatalf("listing quotations and proforma gave %v", offers.Items())
+		}
+		if refused := shop.harness.Call(http.MethodGet, "/api/invoices?kind=invoice,receipt", shop.company.OwnerToken, nil); refused.Code() != "invalid_filter" {
+			t.Fatalf("an unknown kind in the list returned %d", refused.Status)
+		}
 		searched := shop.call(t, http.MethodGet, "/api/invoices?q=juma", nil, http.StatusOK)
 		if len(searched.Items()) != 3 {
 			t.Fatalf("searching by customer gave %d", len(searched.Items()))

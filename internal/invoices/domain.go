@@ -85,7 +85,7 @@ type Payment struct {
 }
 
 type Filter struct {
-	Kind          string
+	Kinds         []string
 	Status        string
 	PaymentStatus string
 	CustomerId    *uuid.UUID

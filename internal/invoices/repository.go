@@ -143,8 +143,12 @@ func (repository *Repository) List(ctx context.Context, querier database.Querier
 		return fmt.Sprintf("$%d", len(arguments))
 	}
 	conditions := []string{"i.company_id = $1" + scope.Condition("i.shop_id", &arguments)}
-	if filter.Kind != "" {
-		conditions = append(conditions, "i.kind = "+addArgument(filter.Kind))
+	if len(filter.Kinds) > 0 {
+		kindPlaceholders := []string{}
+		for _, kind := range filter.Kinds {
+			kindPlaceholders = append(kindPlaceholders, addArgument(kind))
+		}
+		conditions = append(conditions, "i.kind IN ("+strings.Join(kindPlaceholders, ", ")+")")
 	}
 	if filter.Status != "" {
 		conditions = append(conditions, "i.status = "+addArgument(filter.Status))
