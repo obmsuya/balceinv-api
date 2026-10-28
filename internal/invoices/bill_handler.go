@@ -3,6 +3,7 @@ package invoices
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
@@ -30,10 +31,14 @@ func NewBillHandler(service *BillService) *BillHandler {
 func (handler *BillHandler) List(c *fiber.Ctx) error {
 	pagination := httpx.ParsePagination(c)
 	filter := Filter{
-		Kind:          c.Query("kind"),
 		Status:        c.Query("status"),
 		PaymentStatus: c.Query("payment"),
 		SearchText:    c.Query("q"),
+	}
+	for _, kind := range strings.Split(c.Query("kind"), ",") {
+		if strings.TrimSpace(kind) != "" {
+			filter.Kinds = append(filter.Kinds, strings.TrimSpace(kind))
+		}
 	}
 	for queryName, target := range map[string]**uuid.UUID{"customer_id": &filter.CustomerId, "supplier_id": &filter.SupplierId} {
 		if c.Query(queryName) == "" {

@@ -130,7 +130,10 @@ func (service *BillService) List(ctx context.Context, querier database.Querier, 
 	if !company.features.InvoicesEnabled {
 		return response.Page[InvoiceView]{}, ErrInvoicesOff
 	}
-	isKnownKind := filter.Kind == "" || kindPrefixes[filter.Kind] != ""
+	isKnownKind := true
+	for _, kind := range filter.Kinds {
+		isKnownKind = isKnownKind && kindPrefixes[kind] != ""
+	}
 	isKnownStatus := filter.Status == "" || filter.Status == StatusDraft || filter.Status == StatusIssued || filter.Status == StatusAccepted || filter.Status == StatusCancelled
 	isKnownPaymentStatus := filter.PaymentStatus == "" || filter.PaymentStatus == PaymentUnpaid || filter.PaymentStatus == PaymentPartPaid || filter.PaymentStatus == PaymentPaid || filter.PaymentStatus == "overdue"
 	if !isKnownKind || !isKnownStatus || !isKnownPaymentStatus {
