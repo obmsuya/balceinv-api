@@ -55,6 +55,7 @@ func InvoicePdf(branding Branding, invoice InvoiceDocument) ([]byte, error) {
 	baseWriter, writerError := newPdfWriter(branding, Document{
 		Language:    invoice.Language,
 		Title:       invoice.Title + " " + invoice.Number,
+		Subtitle:    invoice.Party.Name,
 		GeneratedBy: invoice.GeneratedBy,
 		GeneratedAt: invoice.GeneratedAt,
 	})
