@@ -44,6 +44,12 @@ type invoicePdfWriter struct {
 	invoice InvoiceDocument
 }
 
+type invoiceLeftLine struct {
+	text   string
+	style  props.Text
+	height float64
+}
+
 type invoiceColumn struct {
 	title  string
 	size   int
@@ -321,24 +327,37 @@ func (writer *invoicePdfWriter) addTotalsBlock() {
 	leftColumns := pdfGridSize - invoiceTotalsColumns - invoiceGapColumns
 	leftWidth := writer.columnWidth(leftColumns) - 2*invoiceBoxPadding
 
-	leftComponents := []core.Component{}
-	leftTop := 0.0
+	leftLines := []invoiceLeftLine{}
 	addLeftSection := func(heading string, body string, bodyStyle fontstyle.Type) {
 		if strings.TrimSpace(body) == "" {
 			return
 		}
-		leftComponents = append(leftComponents, text.New(strings.ToUpper(heading), props.Text{Size: invoiceSmallFontSize, Style: fontstyle.Bold, Color: writer.brandColor, Top: leftTop}))
-		leftTop += 4.4
+		leftLines = append(leftLines, invoiceLeftLine{text: strings.ToUpper(heading), style: props.Text{Size: invoiceSmallFontSize, Style: fontstyle.Bold, Color: writer.brandColor}, height: 4.4})
 		for _, paragraph := range strings.Split(body, "\n") {
 			for _, bodyLine := range wrapText(paragraph, leftWidth, invoiceBodyFontSize, pdfAverageCharEm) {
-				leftComponents = append(leftComponents, text.New(bodyLine, props.Text{Size: invoiceBodyFontSize, Style: bodyStyle, Top: leftTop}))
-				leftTop += invoiceLineHeight
+				leftLines = append(leftLines, invoiceLeftLine{text: bodyLine, style: props.Text{Size: invoiceBodyFontSize, Style: bodyStyle}, height: invoiceLineHeight})
 			}
 		}
-		leftTop += 3
+		leftLines[len(leftLines)-1].height += 3
 	}
 	addLeftSection(Label(writer.language, "amountInWords"), writer.invoice.AmountInWords, fontstyle.Italic)
 	addLeftSection(Label(writer.language, "paymentDetails"), writer.invoice.PaymentDetails, fontstyle.Normal)
+	leftTop := 0.0
+	for _, leftLine := range leftLines {
+		leftTop += leftLine.height
+	}
+	takeLeftLines := func(rowHeight float64) []core.Component {
+		components := []core.Component{}
+		usedHeight := 0.0
+		for len(leftLines) > 0 && usedHeight+leftLines[0].height <= rowHeight+0.01 {
+			lineStyle := leftLines[0].style
+			lineStyle.Top = usedHeight
+			components = append(components, text.New(leftLines[0].text, lineStyle))
+			usedHeight += leftLines[0].height
+			leftLines = leftLines[1:]
+		}
+		return components
+	}
 
 	highlightIndex := -1
 	for totalIndex, total := range totals {
@@ -375,7 +394,7 @@ func (writer *invoicePdfWriter) addTotalsBlock() {
 
 	if highlightIndex < 0 {
 		writer.add(row.New(blockHeight).Add(
-			col.New(leftColumns).Add(leftComponents...),
+			col.New(leftColumns).Add(takeLeftLines(blockHeight)...),
 			col.New(invoiceGapColumns),
 			col.New(invoiceTotalsColumns).Add(rightComponents...),
 		))
@@ -384,23 +403,22 @@ func (writer *invoicePdfWriter) addTotalsBlock() {
 	}
 
 	highlight := totals[highlightIndex]
-	leftHeightOnFirstRow := max(rightTop, 0.1)
-	writer.add(row.New(leftHeightOnFirstRow).Add(
-		col.New(leftColumns).Add(leftComponents...),
+	writer.add(row.New(rightTop).Add(
+		col.New(leftColumns).Add(takeLeftLines(rightTop)...),
 		col.New(invoiceGapColumns),
 		col.New(invoiceTotalsColumns).Add(rightComponents...),
 	))
 	writer.add(row.New(highlightHeight).Add(
-		col.New(leftColumns),
+		col.New(leftColumns).Add(takeLeftLines(highlightHeight)...),
 		col.New(invoiceGapColumns),
 		col.New(invoiceTotalsColumns).Add(
 			text.New(highlight.Label, props.Text{Size: 9.5, Style: fontstyle.Bold, Color: pdfWhite, Top: 3, Left: invoiceBoxPadding}),
 			text.New(writer.formatTotal(highlight), props.Text{Size: 12, Style: fontstyle.Bold, Color: pdfWhite, Top: 2.4, Align: align.Right, Right: invoiceBoxPadding}),
 		).WithStyle(&props.Cell{BackgroundColor: writer.brandColor}),
 	))
-	remainingLeftHeight := leftTop - leftHeightOnFirstRow - highlightHeight
-	if remainingLeftHeight > 0 {
-		writer.add(row.New(remainingLeftHeight))
+	for len(leftLines) > 0 {
+		lineRowHeight := leftLines[0].height
+		writer.add(row.New(lineRowHeight).Add(col.New(leftColumns).Add(takeLeftLines(lineRowHeight)...)))
 	}
 	writer.add(row.New(6))
 }
