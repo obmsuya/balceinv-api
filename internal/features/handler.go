@@ -35,7 +35,7 @@ func (handler *Handler) Update(c *fiber.Ctx) error {
 
 	featuresView, updateError := handler.service.Update(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), request)
 	if updateError != nil {
-		isRuleError := errors.Is(updateError, ErrNeedsCustomers) || errors.Is(updateError, ErrNeedsSuppliers) || errors.Is(updateError, ErrNeedsVatNumber)
+		isRuleError := errors.Is(updateError, ErrNeedsCustomers) || errors.Is(updateError, ErrNeedsSuppliers) || errors.Is(updateError, ErrNeedsVatNumber) || errors.Is(updateError, ErrNeedsAParty)
 		if isRuleError {
 			return response.Error(c, fiber.StatusBadRequest, "invalid_features", updateError.Error())
 		}

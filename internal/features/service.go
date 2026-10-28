@@ -14,6 +14,7 @@ var (
 	ErrNeedsCustomers = errors.New("turn on customers before credit sales or customer orders")
 	ErrNeedsSuppliers = errors.New("turn on suppliers before purchase orders")
 	ErrNeedsVatNumber = errors.New("add the VAT registration number (VRN) before turning VAT on")
+	ErrNeedsAParty    = errors.New("turn on customers or suppliers before invoices")
 )
 
 type Service struct {
@@ -49,6 +50,9 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 	if changedFeatures.PurchaseOrdersEnabled && !changedFeatures.SuppliersEnabled {
 		return FeaturesView{}, ErrNeedsSuppliers
 	}
+	if changedFeatures.InvoicesEnabled && !changedFeatures.CustomersEnabled && !changedFeatures.SuppliersEnabled {
+		return FeaturesView{}, ErrNeedsAParty
+	}
 	hasVatNumber := changedFeatures.VatNumber != nil && *changedFeatures.VatNumber != ""
 	if changedFeatures.VatRegistered && !hasVatNumber {
 		return FeaturesView{}, ErrNeedsVatNumber
@@ -82,6 +86,9 @@ func applyChanges(companyFeatures Features, request UpdateFeaturesRequest) Featu
 	}
 	if request.CustomerOrdersEnabled != nil {
 		changedFeatures.CustomerOrdersEnabled = *request.CustomerOrdersEnabled
+	}
+	if request.InvoicesEnabled != nil {
+		changedFeatures.InvoicesEnabled = *request.InvoicesEnabled
 	}
 	if request.AccountingMode != nil {
 		changedFeatures.AccountingMode = *request.AccountingMode
