@@ -14,6 +14,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit/apptest"
+	"github.com/google/uuid"
 )
 
 func TestFirstSetupRunsOnceOnDesktopAndIsOpenToEveryBusinessInCloud(t *testing.T) {
@@ -58,8 +59,9 @@ func TestFirstSetupRunsOnceOnDesktopAndIsOpenToEveryBusinessInCloud(t *testing.T
 			t.Fatalf("owner should start in the Main Shop, got %v", meData)
 		}
 		ownerPermissions, _ := meData["permissions"].([]any)
-		if len(ownerPermissions) != 61 {
-			t.Fatalf("owner has %d permissions, want all 61", len(ownerPermissions))
+		allPermissions := harness.QueryIntForCompany(uuid.MustParse(meData["company_id"].(string)), `SELECT COUNT(*) FROM permissions`)
+		if int64(len(ownerPermissions)) != allPermissions {
+			t.Fatalf("owner has %d permissions, want all %d", len(ownerPermissions), allPermissions)
 		}
 	})
 }
