@@ -53,6 +53,7 @@ func StandingOf(debts []Debt, paidTotal int64, asOf time.Time, companyLocation *
 		}
 	}
 
+	standing.Balance -= paymentLeft
 	return standing
 }
 

@@ -99,6 +99,7 @@ type StatementEntryView struct {
 	At        time.Time  `json:"at"`
 	Kind      string     `json:"kind"`
 	SaleId    *uuid.UUID `json:"sale_id"`
+	InvoiceId *uuid.UUID `json:"invoice_id"`
 	PaymentId *uuid.UUID `json:"payment_id"`
 	Reference string     `json:"reference"`
 	Debit     int64      `json:"debit"`

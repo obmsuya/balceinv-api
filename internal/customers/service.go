@@ -265,7 +265,18 @@ func (service *Service) RecordPayment(ctx context.Context, querier database.Quer
 	if request.Amount > currentBalance {
 		return PaymentView{}, ErrOverpayment
 	}
+	return service.insertPayment(ctx, querier, principal, customerId, request)
+}
 
+func (service *Service) RecordInvoicePayment(ctx context.Context, querier database.Querier, principal *identity.Principal, customerId uuid.UUID, request PaymentRequest) (PaymentView, error) {
+	lockError := service.lock(ctx, querier, principal.CompanyId, customerId)
+	if lockError != nil {
+		return PaymentView{}, lockError
+	}
+	return service.insertPayment(ctx, querier, principal, customerId, request)
+}
+
+func (service *Service) insertPayment(ctx context.Context, querier database.Querier, principal *identity.Principal, customerId uuid.UUID, request PaymentRequest) (PaymentView, error) {
 	newPayment := Payment{
 		Id:         uuid.Must(uuid.NewV7()),
 		CompanyId:  principal.CompanyId,
@@ -363,6 +374,7 @@ func (service *Service) Statement(ctx context.Context, querier database.Querier,
 			At:        statementEntry.At,
 			Kind:      statementEntry.Kind,
 			SaleId:    statementEntry.SaleId,
+			InvoiceId: statementEntry.InvoiceId,
 			PaymentId: statementEntry.PaymentId,
 			Reference: statementEntry.Reference,
 			Debit:     statementEntry.Debit,
