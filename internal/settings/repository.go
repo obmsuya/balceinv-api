@@ -142,7 +142,8 @@ func (repository *Repository) SaveSettings(ctx context.Context, querier database
 func (repository *Repository) FindCompanyProfile(ctx context.Context, querier database.Querier, companyId uuid.UUID) (*CompanyProfile, error) {
 	query := `
 		SELECT id, name, business_type, phone, address, tin, logo_key, primary_color, currency_code,
-		       currency_decimals, timezone, default_locale, receipt_header, receipt_footer, updated_at
+		       currency_decimals, timezone, default_locale, receipt_header, receipt_footer,
+		       email, invoice_payment_details, invoice_terms, invoice_due_days, updated_at
 		FROM companies
 		WHERE id = $1
 	`
@@ -163,6 +164,10 @@ func (repository *Repository) FindCompanyProfile(ctx context.Context, querier da
 		&foundProfile.DefaultLocale,
 		&foundProfile.ReceiptHeader,
 		&foundProfile.ReceiptFooter,
+		&foundProfile.Email,
+		&foundProfile.PaymentDetails,
+		&foundProfile.InvoiceTerms,
+		&foundProfile.InvoiceDueDays,
 		&foundProfile.UpdatedAt,
 	)
 	if scanError != nil {
@@ -180,7 +185,8 @@ func (repository *Repository) SaveCompanyProfile(ctx context.Context, querier da
 		UPDATE companies
 		SET name = $2, business_type = $3, phone = $4, address = $5, tin = $6, primary_color = $7,
 		    currency_code = $8, currency_decimals = $9, timezone = $10, default_locale = $11,
-		    receipt_header = $12, receipt_footer = $13, updated_at = $14
+		    receipt_header = $12, receipt_footer = $13, email = $14, invoice_payment_details = $15,
+		    invoice_terms = $16, invoice_due_days = $17, updated_at = $18
 		WHERE id = $1
 	`
 
@@ -198,6 +204,10 @@ func (repository *Repository) SaveCompanyProfile(ctx context.Context, querier da
 		changedProfile.DefaultLocale,
 		changedProfile.ReceiptHeader,
 		changedProfile.ReceiptFooter,
+		changedProfile.Email,
+		changedProfile.PaymentDetails,
+		changedProfile.InvoiceTerms,
+		changedProfile.InvoiceDueDays,
 		time.Now().UTC(),
 	)
 	if updateError != nil {

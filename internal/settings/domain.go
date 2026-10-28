@@ -56,5 +56,9 @@ type CompanyProfile struct {
 	DefaultLocale    string
 	ReceiptHeader    *string
 	ReceiptFooter    *string
+	Email            *string
+	PaymentDetails   *string
+	InvoiceTerms     *string
+	InvoiceDueDays   int
 	UpdatedAt        time.Time
 }

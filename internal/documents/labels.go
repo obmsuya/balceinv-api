@@ -31,6 +31,18 @@ var labelsByLanguage = map[string]map[string]string{
 		"statementPreparedBy": "Prepared by",
 		"statementCheckedBy":  "Checked and approved by",
 		"statementDate":       "Date",
+
+		"invoiceDetails": "Details",
+		"description":    "Description",
+		"quantity":       "Qty",
+		"unit":           "Unit",
+		"unitPrice":      "Unit price",
+		"discount":       "Discount",
+		"amount":         "Amount",
+		"received":       "Received",
+		"amountInWords":  "Amount in words",
+		"paymentDetails": "How to pay",
+		"terms":          "Terms",
 	},
 	Swahili: {
 		"tin":           "TIN",
@@ -57,6 +69,18 @@ var labelsByLanguage = map[string]map[string]string{
 		"statementPreparedBy": "Imeandaliwa na",
 		"statementCheckedBy":  "Imekaguliwa na kuidhinishwa na",
 		"statementDate":       "Tarehe",
+
+		"invoiceDetails": "Maelezo",
+		"description":    "Bidhaa / huduma",
+		"quantity":       "Idadi",
+		"unit":           "Kipimo",
+		"unitPrice":      "Bei",
+		"discount":       "Punguzo",
+		"amount":         "Kiasi",
+		"received":       "Imepokelewa",
+		"amountInWords":  "Kiasi kwa maneno",
+		"paymentDetails": "Jinsi ya kulipa",
+		"terms":          "Masharti",
 	},
 }
 

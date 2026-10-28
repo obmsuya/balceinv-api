@@ -21,6 +21,10 @@ type CompanyView struct {
 	DefaultLocale    string    `json:"default_locale"`
 	ReceiptHeader    *string   `json:"receipt_header"`
 	ReceiptFooter    *string   `json:"receipt_footer"`
+	Email            *string   `json:"email"`
+	PaymentDetails   *string   `json:"invoice_payment_details"`
+	InvoiceTerms     *string   `json:"invoice_terms"`
+	InvoiceDueDays   int       `json:"invoice_due_days"`
 }
 
 type SettingsView struct {
@@ -62,6 +66,10 @@ type UpdateSettingsRequest struct {
 	BusinessTin               *string  `json:"business_tin" validate:"omitnil,max=40"`
 	ReceiptHeader             *string  `json:"receipt_header" validate:"omitnil,max=300"`
 	ReceiptFooter             *string  `json:"receipt_footer" validate:"omitnil,max=300"`
+	BusinessEmail             *string  `json:"business_email" validate:"omitnil,max=254"`
+	InvoicePaymentDetails     *string  `json:"invoice_payment_details" validate:"omitnil,max=600"`
+	InvoiceTerms              *string  `json:"invoice_terms" validate:"omitnil,max=1000"`
+	InvoiceDueDays            *int     `json:"invoice_due_days" validate:"omitnil,gte=0,lte=365"`
 	PrimaryColor              *string  `json:"primary_color" validate:"omitnil,len=7,hexcolor"`
 	CurrencyCode              *string  `json:"currency_code" validate:"omitnil,len=3,uppercase,alpha"`
 	CurrencyDecimals          *int     `json:"currency_decimals" validate:"omitnil,oneof=0 2"`

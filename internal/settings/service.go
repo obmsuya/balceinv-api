@@ -19,13 +19,14 @@ import (
 const MaximumLogoBytes = 1 << 20
 
 var (
-	ErrSettingsNotFound   = errors.New("settings not found")
-	ErrInvalidEfdEndpoint = errors.New("EFD endpoint must be an https:// address")
-	ErrInvalidEmail       = errors.New("notification email is not a valid address")
-	ErrCurrencyLocked     = errors.New("the currency can't change after the first sale; totals already recorded would stop making sense")
-	ErrReceiptFormat      = errors.New("the receipt number format must contain {COUNTER} so every receipt number is different")
-	ErrEfdIncomplete      = errors.New("add the EFD address and key before turning EFD on")
-	ErrInvalidPrinterPort = errors.New("the printer port must be a COM port, a serial or USB printer device, or a printer shared on this computer")
+	ErrSettingsNotFound     = errors.New("settings not found")
+	ErrInvalidEfdEndpoint   = errors.New("EFD endpoint must be an https:// address")
+	ErrInvalidEmail         = errors.New("notification email is not a valid address")
+	ErrInvalidBusinessEmail = errors.New("the business email is not a valid address")
+	ErrCurrencyLocked       = errors.New("the currency can't change after the first sale; totals already recorded would stop making sense")
+	ErrReceiptFormat        = errors.New("the receipt number format must contain {COUNTER} so every receipt number is different")
+	ErrEfdIncomplete        = errors.New("add the EFD address and key before turning EFD on")
+	ErrInvalidPrinterPort   = errors.New("the printer port must be a COM port, a serial or USB printer device, or a printer shared on this computer")
 )
 
 type Service struct {
@@ -73,6 +74,12 @@ func (service *Service) Update(ctx context.Context, querier database.Querier, pr
 	}
 
 	changedProfile := applyProfileChanges(*companyProfile, request)
+	if changedProfile.Email != nil {
+		_, emailParseError := mail.ParseAddress(*changedProfile.Email)
+		if emailParseError != nil {
+			return SettingsView{}, ErrInvalidBusinessEmail
+		}
+	}
 	changedSettings, applyError := applySettingsChanges(*companySettings, request)
 	if applyError != nil {
 		return SettingsView{}, applyError
@@ -137,6 +144,18 @@ func applyProfileChanges(companyProfile CompanyProfile, request UpdateSettingsRe
 	}
 	if request.ReceiptFooter != nil {
 		companyProfile.ReceiptFooter = optionalText(*request.ReceiptFooter)
+	}
+	if request.BusinessEmail != nil {
+		companyProfile.Email = optionalText(*request.BusinessEmail)
+	}
+	if request.InvoicePaymentDetails != nil {
+		companyProfile.PaymentDetails = optionalText(*request.InvoicePaymentDetails)
+	}
+	if request.InvoiceTerms != nil {
+		companyProfile.InvoiceTerms = optionalText(*request.InvoiceTerms)
+	}
+	if request.InvoiceDueDays != nil {
+		companyProfile.InvoiceDueDays = *request.InvoiceDueDays
 	}
 	if request.PrimaryColor != nil {
 		companyProfile.PrimaryColor = strings.ToLower(*request.PrimaryColor)
@@ -300,6 +319,10 @@ func toSettingsView(companySettings Settings, companyProfile CompanyProfile) Set
 			DefaultLocale:    companyProfile.DefaultLocale,
 			ReceiptHeader:    companyProfile.ReceiptHeader,
 			ReceiptFooter:    companyProfile.ReceiptFooter,
+			Email:            companyProfile.Email,
+			PaymentDetails:   companyProfile.PaymentDetails,
+			InvoiceTerms:     companyProfile.InvoiceTerms,
+			InvoiceDueDays:   companyProfile.InvoiceDueDays,
 		},
 		TaxRate:                   float64(companySettings.TaxRateBasisPoints) / 100,
 		DateFormat:                companySettings.DateFormat,
