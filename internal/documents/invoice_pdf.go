@@ -408,12 +408,19 @@ func (writer *invoicePdfWriter) addTotalsBlock() {
 		col.New(invoiceGapColumns),
 		col.New(invoiceTotalsColumns).Add(rightComponents...),
 	))
+	remainingLeftHeight := 0.0
+	for _, leftLine := range leftLines {
+		remainingLeftHeight += leftLine.height
+	}
+	if remainingLeftHeight <= 16 {
+		highlightHeight = max(highlightHeight, remainingLeftHeight)
+	}
 	writer.add(row.New(highlightHeight).Add(
 		col.New(leftColumns).Add(takeLeftLines(highlightHeight)...),
 		col.New(invoiceGapColumns),
 		col.New(invoiceTotalsColumns).Add(
-			text.New(highlight.Label, props.Text{Size: 9.5, Style: fontstyle.Bold, Color: pdfWhite, Top: 3, Left: invoiceBoxPadding}),
-			text.New(writer.formatTotal(highlight), props.Text{Size: 12, Style: fontstyle.Bold, Color: pdfWhite, Top: 2.4, Align: align.Right, Right: invoiceBoxPadding}),
+			text.New(highlight.Label, props.Text{Size: 9.5, Style: fontstyle.Bold, Color: pdfWhite, Top: (highlightHeight-10)/2 + 3, Left: invoiceBoxPadding}),
+			text.New(writer.formatTotal(highlight), props.Text{Size: 12, Style: fontstyle.Bold, Color: pdfWhite, Top: (highlightHeight-10)/2 + 2.4, Align: align.Right, Right: invoiceBoxPadding}),
 		).WithStyle(&props.Cell{BackgroundColor: writer.brandColor}),
 	))
 	for len(leftLines) > 0 {
