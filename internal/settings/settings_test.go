@@ -89,12 +89,33 @@ func TestSettingsDefaultsPartialUpdatesAndValidation(t *testing.T) {
 			{"notification_email": "not-an-email"},
 			{"printer_paper_width": 70},
 			{"business_name": ""},
+			{"business_email": "not-an-email"},
+			{"invoice_due_days": 400},
+			{"invoice_due_days": -1},
 		}
 		for _, rejectedBody := range rejectedBodies {
 			rejected := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, rejectedBody)
 			if rejected.Status != http.StatusBadRequest {
 				t.Fatalf("%v returned %d, want 400", rejectedBody, rejected.Status)
 			}
+		}
+
+		if defaultCompany["invoice_due_days"] != float64(30) || defaultCompany["email"] != nil || defaultCompany["invoice_payment_details"] != nil {
+			t.Fatalf("unexpected invoice defaults: %v", defaultCompany)
+		}
+		invoiceUpdate := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{
+			"business_email":          " mauzo@shop.test ",
+			"invoice_payment_details": "CRDB 0150 1234\nLipa 5566778",
+			"invoice_terms":           "Pay within 14 days",
+			"invoice_due_days":        14,
+		})
+		invoiceCompany := invoiceUpdate.Data()["company"].(map[string]any)
+		if invoiceUpdate.Status != http.StatusOK || invoiceCompany["email"] != "mauzo@shop.test" || invoiceCompany["invoice_payment_details"] != "CRDB 0150 1234\nLipa 5566778" || invoiceCompany["invoice_terms"] != "Pay within 14 days" || invoiceCompany["invoice_due_days"] != float64(14) {
+			t.Fatalf("invoice details were not saved: %d %v", invoiceUpdate.Status, invoiceUpdate.Body)
+		}
+		clearedEmail := harness.Call(http.MethodPut, "/api/settings", company.OwnerToken, map[string]any{"business_email": ""})
+		if clearedEmail.Data()["company"].(map[string]any)["email"] != nil {
+			t.Fatalf("the business email could not be cleared: %v", clearedEmail.Body)
 		}
 
 		meResponse := harness.Call(http.MethodGet, "/api/auth/me", company.OwnerToken, nil)
