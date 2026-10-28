@@ -61,6 +61,7 @@ type StatementEntry struct {
 	At        time.Time
 	Kind      string
 	SaleId    *uuid.UUID
+	InvoiceId *uuid.UUID
 	PaymentId *uuid.UUID
 	Reference string
 	Debit     int64

@@ -18,12 +18,21 @@ const customerColumns = `
 	(SELECT MAX(s.created_at) FROM sales s WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL) AS last_visit_at
 `
 
-const creditOnSales = `
-	SELECT s.customer_id, s.id, s.receipt_number, s.created_at,
-	       p.amount - COALESCE((SELECT SUM(r.amount) FROM sale_refunds r WHERE r.company_id = s.company_id AND r.sale_id = s.id AND r.method = 'credit'), 0)
-	FROM sales s
-	JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit' AND s.voided_at IS NULL
+const customerDebts = `
+	SELECT d.customer_id, d.id, d.reference, d.occurred_at, d.amount, d.kind FROM (
+		SELECT s.company_id, s.customer_id, s.id, s.receipt_number AS reference, s.created_at AS occurred_at,
+		       p.amount - COALESCE((SELECT SUM(r.amount) FROM sale_refunds r WHERE r.company_id = s.company_id AND r.sale_id = s.id AND r.method = 'credit'), 0) AS amount,
+		       'credit_sale' AS kind
+		FROM sales s
+		JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit' AND s.voided_at IS NULL
+		UNION ALL
+		SELECT i.company_id, i.customer_id, i.id, i.number, i.delivered_at, i.total, 'invoice'
+		FROM invoices i
+		WHERE i.kind = 'invoice' AND i.delivered_at IS NOT NULL AND i.status <> 'cancelled'
+	) d
 `
+
+const deliveredInvoices = `SELECT 1 FROM invoices i WHERE i.company_id = c.company_id AND i.customer_id = c.id AND i.kind = 'invoice' AND i.delivered_at IS NOT NULL AND i.status <> 'cancelled'`
 
 type Repository struct{}
 
@@ -171,7 +180,7 @@ func (repository *Repository) ListOwing(ctx context.Context, querier database.Qu
 				SELECT 1 FROM sales s
 				JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'
 				WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL
-			)
+			) OR EXISTS (` + deliveredInvoices + `)
 		)
 	`
 
@@ -190,6 +199,10 @@ func (repository *Repository) Balance(ctx context.Context, querier database.Quer
 				SELECT SUM(p.amount) FROM sales s
 				JOIN sale_payments p ON p.company_id = s.company_id AND p.sale_id = s.id AND p.method = 'credit'
 				WHERE s.company_id = c.company_id AND s.customer_id = c.id AND s.voided_at IS NULL
+			), 0)
+			+ COALESCE((
+				SELECT SUM(i.total) FROM invoices i
+				WHERE i.company_id = c.company_id AND i.customer_id = c.id AND i.kind = 'invoice' AND i.delivered_at IS NOT NULL AND i.status <> 'cancelled'
 			), 0)
 			- COALESCE((
 				SELECT SUM(cp.amount) FROM customer_payments cp
@@ -218,7 +231,7 @@ func (repository *Repository) CreditDebts(ctx context.Context, querier database.
 		return []Debt{}, nil
 	}
 
-	query := creditOnSales + ` WHERE s.company_id = $1 AND s.customer_id IN (` + database.Placeholders(2, len(customerIds)) + `)`
+	query := customerDebts + ` WHERE d.company_id = $1 AND d.customer_id IN (` + database.Placeholders(2, len(customerIds)) + `)`
 	queryArguments := append([]any{companyId}, database.ToArguments(customerIds)...)
 	debtRows, queryError := querier.QueryContext(ctx, query, queryArguments...)
 	if queryError != nil {
@@ -229,9 +242,10 @@ func (repository *Repository) CreditDebts(ctx context.Context, querier database.
 	debts := []Debt{}
 	for debtRows.Next() {
 		debt := Debt{}
-		saleId := uuid.UUID{}
-		receiptNumber := ""
-		scanError := debtRows.Scan(&debt.CustomerId, &saleId, &receiptNumber, &debt.OccurredAt, &debt.Amount)
+		documentId := uuid.UUID{}
+		reference := ""
+		kind := ""
+		scanError := debtRows.Scan(&debt.CustomerId, &documentId, &reference, &debt.OccurredAt, &debt.Amount, &kind)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a credit sale: %w", scanError)
 		}
@@ -388,7 +402,7 @@ func (repository *Repository) ListSales(ctx context.Context, querier database.Qu
 }
 
 func (repository *Repository) StatementEntries(ctx context.Context, querier database.Querier, companyId uuid.UUID, customerId uuid.UUID, endsAt time.Time) ([]StatementEntry, error) {
-	creditQuery := creditOnSales + ` WHERE s.company_id = $1 AND s.customer_id = $2 AND s.created_at < $3`
+	creditQuery := customerDebts + ` WHERE d.company_id = $1 AND d.customer_id = $2 AND d.occurred_at < $3`
 	creditRows, creditQueryError := querier.QueryContext(ctx, creditQuery, companyId, customerId, endsAt)
 	if creditQueryError != nil {
 		return nil, fmt.Errorf("failed to load credit sales for the statement: %w", creditQueryError)
@@ -397,14 +411,17 @@ func (repository *Repository) StatementEntries(ctx context.Context, querier data
 
 	entries := []StatementEntry{}
 	for creditRows.Next() {
-		entry := StatementEntry{Kind: "credit_sale"}
-		saleCustomerId := uuid.UUID{}
-		saleId := uuid.UUID{}
-		scanError := creditRows.Scan(&saleCustomerId, &saleId, &entry.Reference, &entry.At, &entry.Debit)
+		entry := StatementEntry{}
+		debtCustomerId := uuid.UUID{}
+		documentId := uuid.UUID{}
+		scanError := creditRows.Scan(&debtCustomerId, &documentId, &entry.Reference, &entry.At, &entry.Debit, &entry.Kind)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a statement sale: %w", scanError)
 		}
-		entry.SaleId = &saleId
+		entry.SaleId = &documentId
+		if entry.Kind == "invoice" {
+			entry.SaleId, entry.InvoiceId = nil, &documentId
+		}
 		entries = append(entries, entry)
 	}
 	creditRowsError := creditRows.Err()

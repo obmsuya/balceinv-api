@@ -19,6 +19,7 @@ type Features struct {
 	CustomersEnabled      bool
 	CreditSalesEnabled    bool
 	CustomerOrdersEnabled bool
+	InvoicesEnabled       bool
 	AccountingMode        string
 	VatRegistered         bool
 	VatNumber             *string

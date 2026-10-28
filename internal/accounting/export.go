@@ -96,6 +96,10 @@ var exportLabels = map[string]map[string]string{
 		"source.customer_payment_void": "Customer payment cancelled",
 		"source.order_deposit":         "Order deposit",
 		"source.order_refund":          "Order deposit refunded",
+		"source.invoice":               "Invoice delivered",
+		"source.invoice_cancel":        "Invoice cancelled",
+		"source.supplier_receipt":      "Money from a supplier",
+		"source.supplier_receipt_void": "Money from a supplier cancelled",
 	},
 	documents.Swahili: {
 		"title.profit-and-loss":        "Faida na hasara",
@@ -162,6 +166,10 @@ var exportLabels = map[string]map[string]string{
 		"source.customer_payment_void": "Malipo ya mteja yaliyoghairiwa",
 		"source.order_deposit":         "Malipo ya awali ya oda",
 		"source.order_refund":          "Malipo ya awali yaliyorudishwa",
+		"source.invoice":               "Ankara imekabidhiwa",
+		"source.invoice_cancel":        "Ankara imeghairiwa",
+		"source.supplier_receipt":      "Pesa kutoka kwa msambazaji",
+		"source.supplier_receipt_void": "Pesa kutoka kwa msambazaji imeghairiwa",
 	},
 }
 

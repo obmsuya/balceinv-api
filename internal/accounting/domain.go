@@ -81,6 +81,10 @@ const (
 	SourceCustomerPaymentVoid = "customer_payment_void"
 	SourceOrderDeposit        = "order_deposit"
 	SourceOrderRefund         = "order_refund"
+	SourceInvoice             = "invoice"
+	SourceInvoiceCancel       = "invoice_cancel"
+	SourceSupplierReceipt     = "supplier_receipt"
+	SourceSupplierReceiptVoid = "supplier_receipt_void"
 )
 
 const (

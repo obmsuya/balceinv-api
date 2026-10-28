@@ -105,6 +105,8 @@ func (ledger *Ledger) pendingLoaders() []pendingLoader {
 		ledger.pendingCustomerPayments,
 		ledger.pendingCustomerPaymentVoids,
 		ledger.pendingOrderMoney,
+		ledger.pendingInvoices,
+		ledger.pendingInvoiceCancels,
 	}
 }
 

@@ -10,6 +10,11 @@ var (
 )
 
 var ClearedTables = []string{
+	"invoice_payments",
+	"invoice_lines",
+	"invoices",
+	"invoice_counters",
+	"supplier_receipts",
 	"fiscal_refund_notes",
 	"sale_refund_lines",
 	"sale_refunds",
