@@ -47,6 +47,10 @@ type Branding struct {
 	ReceiptLanguage  string
 	ReceiptHeader    string
 	ReceiptFooter    string
+	Email            string
+	PaymentDetails   string
+	InvoiceTerms     string
+	InvoiceDueDays   int
 	ShowTaxOnReceipt bool
 	VatRegistered    bool
 }
@@ -87,6 +91,10 @@ func LoadBranding(ctx context.Context, querier database.Querier, objectStore sto
 		ReceiptLanguage:  companySettings.ReceiptLanguage,
 		ReceiptHeader:    textOf(companyProfile.ReceiptHeader),
 		ReceiptFooter:    textOf(companyProfile.ReceiptFooter),
+		Email:            textOf(companyProfile.Email),
+		PaymentDetails:   textOf(companyProfile.PaymentDetails),
+		InvoiceTerms:     textOf(companyProfile.InvoiceTerms),
+		InvoiceDueDays:   companyProfile.InvoiceDueDays,
 		ShowTaxOnReceipt: companySettings.ShowTaxOnReceipt,
 		VatRegistered:    companyFeatures.VatRegistered,
 	}
