@@ -23,16 +23,20 @@ func TestInvoiceDetailsNameTheCustomerAndTheAmountOnCredit(t *testing.T) {
 	}
 
 	for language, wanted := range map[string][3]string{
-		documents.English: {"Customer", "Order", "Balance owed (pay later)"},
-		documents.Swahili: {"Mteja", "Oda", "Deni (lipa baadaye)"},
+		documents.English: {"Bill to", "Order", "Balance owed (pay later)"},
+		documents.Swahili: {"Kwa", "Oda", "Deni (lipa baadaye)"},
 	} {
 		label := func(key string) string { return invoiceLabels[language][key] }
 
+		party := saleParty(saleView, label)
+		if party.Heading != wanted[0] || party.Name != "Mama Rehema" || len(party.Lines) != 1 || party.Lines[0] != "0713222333" {
+			t.Fatalf("%s bill-to was %+v", language, party)
+		}
 		detailLabels := map[string]any{}
 		for _, detail := range saleDetails(saleView, "Main Shop", label) {
 			detailLabels[detail.Label] = detail.Value
 		}
-		if detailLabels[wanted[0]] != "Mama Rehema · 0713222333" || detailLabels[wanted[1]] != "ORD-000004" {
+		if detailLabels[wanted[1]] != "ORD-000004" {
 			t.Fatalf("%s details were %v", language, detailLabels)
 		}
 

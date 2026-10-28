@@ -51,13 +51,16 @@ var invoiceLabels = map[string]map[string]string{
 		"cash":            "Cash",
 		"card":            "Card",
 		"mobile":          "Mobile money",
-		"customer":        "Customer",
 		"order":           "Order",
 		"credit":          "Balance owed (pay later)",
 		"wholesale":       "wholesale",
 		"efd":             "EFD verification",
 		"efdPending":      "EFD receipt to follow",
 		"thanks":          "Thank you for shopping with us",
+		"billTo":          "Bill to",
+		"walkIn":          "Walk-in customer",
+		"paidStatus":      "Paid",
+		"owedStatus":      "Balance owed",
 	},
 	documents.Swahili: {
 		"invoice":         "Ankara",
@@ -81,13 +84,16 @@ var invoiceLabels = map[string]map[string]string{
 		"cash":            "Taslimu",
 		"card":            "Kadi",
 		"mobile":          "Pesa ya simu",
-		"customer":        "Mteja",
 		"order":           "Oda",
 		"credit":          "Deni (lipa baadaye)",
 		"wholesale":       "jumla",
 		"efd":             "Uthibitisho wa EFD",
 		"efdPending":      "Risiti ya EFD itafuata",
 		"thanks":          "Asante kwa kununua kwetu",
+		"billTo":          "Kwa",
+		"walkIn":          "Mteja wa papo hapo",
+		"paidStatus":      "Imelipwa",
+		"owedStatus":      "Ana deni",
 	},
 }
 
@@ -144,28 +150,38 @@ func (service *Service) SaleDocument(ctx context.Context, querier database.Queri
 		return invoiceLabels[language][key]
 	}
 
-	saleDocument := documents.Document{
-		Language:    language,
-		Title:       label(documentKind),
-		Number:      saleView.ReceiptNumber,
-		Subtitle:    joinLines(branding.ReceiptHeader),
-		GeneratedBy: viewer.Name,
-		GeneratedAt: time.Now(),
-		Details:     saleDetails(saleView, receiptView.Shop.Name, label),
-		Tables: []documents.Table{{
-			Title: label("items"),
-			Columns: []documents.Column{
-				{Title: label("item"), Kind: documents.Text},
-				{Title: label("quantity"), Kind: documents.Integer},
-				{Title: label("unitPrice"), Kind: documents.Money},
-				{Title: label("amount"), Kind: documents.Money},
-			},
-			Rows: lineRows(saleView.Items, label),
-		}},
-		Totals: totalFields(saleView, receiptView.ShowTax || branding.VatRegistered, label),
+	totals := totalFields(saleView, receiptView.ShowTax || branding.VatRegistered, label)
+	isOnCredit := false
+	for _, payment := range saleView.Payments {
+		isOnCredit = isOnCredit || payment.Method == sales.PaymentCredit
+	}
+	statusText, statusTone := label("paidStatus"), documents.ToneGood
+	if isOnCredit {
+		statusText, statusTone = label("owedStatus"), documents.ToneWarning
+	}
+
+	saleDocument := documents.InvoiceDocument{
+		Language:      language,
+		Title:         label(documentKind),
+		Number:        saleView.ReceiptNumber,
+		Status:        statusText,
+		StatusTone:    statusTone,
+		Party:         saleParty(saleView, label),
+		Facts:         saleDetails(saleView, receiptView.Shop.Name, label),
+		Lines:         invoiceLines(saleView.Items, label),
+		Totals:        totals,
+		AmountInWords: documents.AmountInWords(language, saleView.Total, branding),
+		GeneratedBy:   viewer.Name,
+		GeneratedAt:   time.Now(),
+	}
+	if isOnCredit {
+		saleDocument.PaymentDetails = branding.PaymentDetails
+	}
+	if headerText := joinLines(branding.ReceiptHeader); headerText != "" {
+		saleDocument.Notes = append(saleDocument.Notes, headerText)
 	}
 	if saleView.Note != nil && strings.TrimSpace(*saleView.Note) != "" {
-		saleDocument.Details = append(saleDocument.Details, documents.Field{Label: label("note"), Value: strings.TrimSpace(*saleView.Note)})
+		saleDocument.Notes = append(saleDocument.Notes, strings.TrimSpace(*saleView.Note))
 	}
 
 	if saleView.Fiscal != nil {
@@ -188,37 +204,58 @@ func (service *Service) SaleDocument(ctx context.Context, querier database.Queri
 	}
 	saleDocument.Notes = append(saleDocument.Notes, footerText)
 
-	return documents.Render(branding, saleDocument, documents.FormatPdf, documents.SafeFileName(documentKind+"-"+saleView.ReceiptNumber))
+	return documents.RenderInvoice(branding, saleDocument, documentKind+"-"+saleView.ReceiptNumber)
 }
 
-func lineRows(saleLines []sales.LineView, label func(string) string) [][]any {
-	rows := [][]any{}
+func saleParty(saleView sales.SaleView, label func(string) string) documents.InvoiceParty {
+	party := documents.InvoiceParty{Heading: label("billTo"), Name: label("walkIn")}
+	if saleView.CustomerName != nil {
+		party.Name = *saleView.CustomerName
+	}
+	if saleView.CustomerPhone != nil && *saleView.CustomerPhone != "" {
+		party.Lines = append(party.Lines, *saleView.CustomerPhone)
+	}
+	return party
+}
+
+func invoiceLines(saleLines []sales.LineView, label func(string) string) []documents.InvoiceLine {
+	lines := []documents.InvoiceLine{}
 	for _, saleLine := range saleLines {
 		itemName := saleLine.ProductName
 		if saleLine.VariantLabel != "" {
 			itemName += " · " + saleLine.VariantLabel
 		}
+		detailParts := []string{}
 		if saleLine.IsWholesale {
-			itemName += " (" + label("wholesale") + ")"
+			detailParts = append(detailParts, label("wholesale"))
 		}
-		quantity := int64(saleLine.Quantity)
-		rows = append(rows, []any{itemName, quantity, saleLine.UnitPrice, quantity * saleLine.UnitPrice})
-		for _, addon := range saleLine.Addons {
-			rows = append(rows, []any{"  + " + addon.Name, quantity, addon.UnitPrice, quantity * addon.UnitPrice})
-		}
-		automaticDiscount := saleLine.DiscountAmount - saleLine.ManualDiscount
-		if automaticDiscount != 0 {
-			automaticDiscountName := label("discounts")
-			if saleLine.DiscountName != nil {
-				automaticDiscountName = *saleLine.DiscountName
-			}
-			rows = append(rows, []any{"  − " + automaticDiscountName, nil, nil, -automaticDiscount})
+		if saleLine.DiscountName != nil && saleLine.DiscountAmount != saleLine.ManualDiscount {
+			detailParts = append(detailParts, *saleLine.DiscountName)
 		}
 		if saleLine.ManualDiscount != 0 {
-			rows = append(rows, []any{"  − " + label("cashierDiscount"), nil, nil, -saleLine.ManualDiscount})
+			detailParts = append(detailParts, label("cashierDiscount"))
+		}
+		quantity := int64(saleLine.Quantity)
+		lines = append(lines, documents.InvoiceLine{
+			Description: itemName,
+			Detail:      strings.Join(detailParts, " · "),
+			Quantity:    quantity,
+			Unit:        saleLine.Unit,
+			UnitPrice:   saleLine.UnitPrice,
+			Discount:    saleLine.DiscountAmount,
+			Amount:      quantity*saleLine.UnitPrice - saleLine.DiscountAmount,
+		})
+		for _, addon := range saleLine.Addons {
+			lines = append(lines, documents.InvoiceLine{
+				Description: "+ " + addon.Name,
+				Quantity:    quantity,
+				Unit:        saleLine.Unit,
+				UnitPrice:   addon.UnitPrice,
+				Amount:      quantity * addon.UnitPrice,
+			})
 		}
 	}
-	return rows
+	return lines
 }
 
 func totalFields(saleView sales.SaleView, showsTax bool, label func(string) string) []documents.Field {
@@ -257,13 +294,6 @@ func saleDetails(saleView sales.SaleView, shopName string, label func(string) st
 		{Label: label("date"), Value: saleView.CreatedAt, Kind: documents.DateTime},
 		{Label: label("servedBy"), Value: saleView.CashierName},
 		{Label: label("shop"), Value: shopName},
-	}
-	if saleView.CustomerName != nil {
-		customerText := *saleView.CustomerName
-		if saleView.CustomerPhone != nil && *saleView.CustomerPhone != "" {
-			customerText = customerText + " · " + *saleView.CustomerPhone
-		}
-		details = append(details, documents.Field{Label: label("customer"), Value: customerText})
 	}
 	if saleView.OrderNumber != nil {
 		details = append(details, documents.Field{Label: label("order"), Value: *saleView.OrderNumber})
