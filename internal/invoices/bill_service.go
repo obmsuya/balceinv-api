@@ -22,32 +22,31 @@ import (
 )
 
 var (
-	ErrInvoiceNotFound       = errors.New("invoice not found")
-	ErrNoActiveShop          = errors.New("choose a shop first")
-	ErrInvoicesOff           = errors.New("invoices are switched off; turn them on in Settings, Features")
-	ErrCustomersOff          = errors.New("customer invoices need Customers switched on")
-	ErrSuppliersOff          = errors.New("supplier invoices need Suppliers switched on")
-	ErrPartyRequired         = errors.New("choose who the document is for")
-	ErrProductNotFound       = errors.New("a product on this document was not found")
-	ErrDescriptionRequired   = errors.New("write what each typed line is for")
-	ErrPriceRequired         = errors.New("give each typed line a price")
-	ErrDiscountTooHigh       = errors.New("a line discount cannot be more than the line")
-	ErrInvalidDate           = errors.New("a date is not valid")
-	ErrDueBeforeIssue        = errors.New("the due date cannot be before the issue date")
-	ErrNotDraft              = errors.New("only a draft can be changed")
-	ErrInvalidStatus         = errors.New("this document cannot do that in its current state")
-	ErrNotABill              = errors.New("only invoices can be delivered or paid")
-	ErrAlreadyDelivered      = errors.New("this invoice was already delivered")
-	ErrPaymentTooHigh        = errors.New("the payment is more than what is still owed")
-	ErrWrongMethod           = errors.New("this way of paying does not fit this document")
-	ErrPaymentNotFound       = errors.New("payment not found")
-	ErrPaymentAlreadyVoided  = errors.New("this payment was already cancelled")
-	ErrHasPayments           = errors.New("cancel the payments on this invoice first")
-	ErrInvalidReason         = errors.New("write why")
-	ErrCannotConvert         = errors.New("this document cannot be turned into that")
-	ErrNumberInFlight        = errors.New("another document was saved at the same moment; try again")
-	ErrInvalidFilter         = errors.New("a filter is not valid")
-	ErrSupplierReceiptsLater = errors.New("money received from suppliers is not available yet")
+	ErrInvoiceNotFound      = errors.New("invoice not found")
+	ErrNoActiveShop         = errors.New("choose a shop first")
+	ErrInvoicesOff          = errors.New("invoices are switched off; turn them on in Settings, Features")
+	ErrCustomersOff         = errors.New("customer invoices need Customers switched on")
+	ErrSuppliersOff         = errors.New("supplier invoices need Suppliers switched on")
+	ErrPartyRequired        = errors.New("choose who the document is for")
+	ErrProductNotFound      = errors.New("a product on this document was not found")
+	ErrDescriptionRequired  = errors.New("write what each typed line is for")
+	ErrPriceRequired        = errors.New("give each typed line a price")
+	ErrDiscountTooHigh      = errors.New("a line discount cannot be more than the line")
+	ErrInvalidDate          = errors.New("a date is not valid")
+	ErrDueBeforeIssue       = errors.New("the due date cannot be before the issue date")
+	ErrNotDraft             = errors.New("only a draft can be changed")
+	ErrInvalidStatus        = errors.New("this document cannot do that in its current state")
+	ErrNotABill             = errors.New("only invoices can be delivered or paid")
+	ErrAlreadyDelivered     = errors.New("this invoice was already delivered")
+	ErrPaymentTooHigh       = errors.New("the payment is more than what is still owed")
+	ErrWrongMethod          = errors.New("this way of paying does not fit this document")
+	ErrPaymentNotFound      = errors.New("payment not found")
+	ErrPaymentAlreadyVoided = errors.New("this payment was already cancelled")
+	ErrHasPayments          = errors.New("cancel the payments on this invoice first")
+	ErrInvalidReason        = errors.New("write why")
+	ErrCannotConvert        = errors.New("this document cannot be turned into that")
+	ErrNumberInFlight       = errors.New("another document was saved at the same moment; try again")
+	ErrInvalidFilter        = errors.New("a filter is not valid")
 )
 
 type BillService struct {
@@ -599,13 +598,6 @@ func (service *BillService) RecordPayment(ctx context.Context, querier database.
 	return service.get(ctx, querier, principal, company, invoiceId)
 }
 
-func (service *BillService) recordSupplierMoney(ctx context.Context, querier database.Querier, principal *identity.Principal, foundInvoice *InvoiceView, request PaymentRequest, newPayment *Payment) error {
-	if request.Method == MethodOffset {
-		return nil
-	}
-	return ErrSupplierReceiptsLater
-}
-
 func (service *BillService) VoidPayment(ctx context.Context, querier database.Querier, principal *identity.Principal, invoiceId uuid.UUID, paymentId uuid.UUID, request ReasonRequest) (InvoiceView, error) {
 	company, foundInvoice, lockError := service.lockInvoice(ctx, querier, principal, invoiceId)
 	if lockError != nil {
@@ -648,10 +640,6 @@ func (service *BillService) VoidPayment(ctx context.Context, querier database.Qu
 		return InvoiceView{}, voidError
 	}
 	return service.get(ctx, querier, principal, company, invoiceId)
-}
-
-func (service *BillService) voidSupplierReceipt(ctx context.Context, querier database.Querier, principal *identity.Principal, receiptId uuid.UUID, reason string) error {
-	return ErrSupplierReceiptsLater
 }
 
 func (service *BillService) Convert(ctx context.Context, querier database.Querier, principal *identity.Principal, invoiceId uuid.UUID, request ConvertRequest) (InvoiceView, error) {

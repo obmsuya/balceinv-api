@@ -25,6 +25,8 @@ const (
 	EntryPurchase       = "purchase"
 	EntryPayment        = "payment"
 	EntryReturn         = "return"
+	EntryInvoice        = "invoice"
+	EntryReceipt        = "receipt"
 
 	documentPurchase       = "purchase"
 	documentOrder          = "purchase_order"

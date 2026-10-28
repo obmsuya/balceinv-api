@@ -386,6 +386,23 @@ func (handler *Handler) GetOrder(c *fiber.Ctx) error {
 	return response.Success(c, "Order to supplier", orderView)
 }
 
+func (handler *Handler) OrderDocument(c *fiber.Ctx) error {
+	orderId, isValidId := httpx.UuidParam(c, "id")
+	if !isValidId {
+		return respondWithServiceError(c, ErrOrderNotFound)
+	}
+
+	documentRequest := OrderDocumentRequest{Format: c.Query("format"), Language: c.Query("lang")}
+	orderFile, documentError := handler.service.OrderDocument(c.UserContext(), httpx.RequestQuerier(c), httpx.CurrentPrincipal(c), orderId, documentRequest)
+	if documentError != nil {
+		if errors.Is(documentError, documents.ErrUnknownFormat) {
+			return response.Error(c, fiber.StatusBadRequest, "invalid_format", documentError.Error())
+		}
+		return respondWithServiceError(c, documentError)
+	}
+	return httpx.SendFile(c, orderFile.Name, orderFile.ContentType, orderFile.Bytes)
+}
+
 func (handler *Handler) CreateOrder(c *fiber.Ctx) error {
 	request := OrderRequest{}
 	isValid, bindResponseError := httpx.BindAndValidate(c, &request)

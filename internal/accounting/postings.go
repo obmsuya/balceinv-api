@@ -376,6 +376,7 @@ var paymentShapes = map[string]paymentShape{
 	SourceCustomerPayment: {PartyCustomer, KeyReceivable, true},
 	SourceOrderDeposit:    {PartyCustomer, KeyCustomerDeposits, true},
 	SourceOrderRefund:     {PartyCustomer, KeyCustomerDeposits, false},
+	SourceSupplierReceipt: {PartySupplier, KeyPayable, true},
 }
 
 func (ledger *Ledger) postPayment(ctx context.Context, querier database.Querier, posting PaymentPosting, sourceType string) (*PostedEntry, error) {

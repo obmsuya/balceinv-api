@@ -13,7 +13,7 @@ import (
 var (
 	tanzanianNumberPattern     = regexp.MustCompile(`^[2-7]\d{8}$`)
 	internationalNumberPattern = regexp.MustCompile(`^\d{8,15}$`)
-	entryKindOrder             = map[string]int{EntryOpeningBalance: 0, EntryPurchase: 1, EntryReturn: 2, EntryPayment: 3}
+	entryKindOrder             = map[string]int{EntryOpeningBalance: 0, EntryPurchase: 1, EntryReceipt: 2, EntryReturn: 3, EntryInvoice: 4, EntryPayment: 5}
 )
 
 func mulDivRound(firstFactor int64, secondFactor int64, divisor int64) int64 {

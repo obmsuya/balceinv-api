@@ -240,6 +240,8 @@ func (repository *Repository) LoadLedgers(ctx context.Context, querier database.
 		{EntryPurchase, `SELECT supplier_id, id, purchase_number, received_at, total, NULL FROM purchases WHERE company_id = $1 AND status = 'received' AND supplier_id IS NOT NULL`},
 		{EntryPayment, `SELECT supplier_id, id, payment_number, paid_at, amount, purchase_id FROM supplier_payments WHERE company_id = $1 AND voided_at IS NULL AND supplier_id IS NOT NULL`},
 		{EntryReturn, `SELECT supplier_id, id, return_number, returned_at, total, NULL FROM supplier_returns WHERE company_id = $1`},
+		{EntryInvoice, `SELECT supplier_id, id, number, delivered_at, total, NULL FROM invoices WHERE company_id = $1 AND kind = 'supplier_invoice' AND delivered_at IS NOT NULL AND status <> 'cancelled'`},
+		{EntryReceipt, `SELECT supplier_id, id, COALESCE(reference, ''), received_at, amount, NULL FROM supplier_receipts WHERE company_id = $1 AND voided_at IS NULL`},
 	}
 	for _, ledgerQuery := range ledgerQueries {
 		entryRows, queryError := querier.QueryContext(ctx, ledgerQuery.query+supplierScope(2, supplierIds), scopeArguments...)
@@ -260,7 +262,7 @@ func (repository *Repository) LoadLedgers(ctx context.Context, querier database.
 			}
 			entry.DocumentId = &documentId
 			entry.PurchaseId = linkedPurchaseId
-			if ledgerQuery.kind == EntryPurchase {
+			if ledgerQuery.kind == EntryPurchase || ledgerQuery.kind == EntryReceipt {
 				entry.Debit = amount
 			} else {
 				entry.Credit = amount
