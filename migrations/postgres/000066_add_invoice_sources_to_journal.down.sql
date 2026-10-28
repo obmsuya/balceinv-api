@@ -1,0 +1,2 @@
+ALTER TABLE journal_entries DROP CONSTRAINT journal_entries_source_type_check;
+ALTER TABLE journal_entries ADD CONSTRAINT journal_entries_source_type_check CHECK (source_type IN ('sale', 'sale_void', 'stock_adjustment', 'stock_transfer', 'expense', 'owner_in', 'owner_out', 'money_move', 'other_income', 'opening', 'manual', 'reversal', 'purchase', 'purchase_cancel', 'supplier_payment', 'supplier_payment_void', 'supplier_return', 'customer_payment', 'customer_payment_void', 'order_deposit', 'order_refund'));
