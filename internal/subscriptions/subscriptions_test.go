@@ -9,15 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/subscriptions"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit"
 	"github.com/chrisostomemataba/balceinv-api/internal/testkit/apptest"
 	"github.com/chrisostomemataba/balceinv-api/license"
 )
 
 type fakeLicensingServer struct {
-	mutex         sync.Mutex
-	paidDeviceIds map[string]time.Time
-	paymentBodies []map[string]any
+	mutex             sync.Mutex
+	paidDeviceIds     map[string]time.Time
+	paymentBodies     []map[string]any
+	planListDeviceIds []string
 }
 
 func startFakeLicensingServer(t *testing.T) *fakeLicensingServer {
@@ -27,6 +29,10 @@ func startFakeLicensingServer(t *testing.T) *fakeLicensingServer {
 		fake.mutex.Lock()
 		defer fake.mutex.Unlock()
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/balce/packages/":
+			fake.planListDeviceIds = append(fake.planListDeviceIds, request.URL.Query().Get("hardware_id"))
+			writer.Header().Set("Content-Type", "application/json")
+			writer.Write([]byte(`{"success": true, "data": [{"id": 2, "name": "Basic", "price": "150000.00", "days_granted": 180, "max_devices": 1}]}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/balce/pay/":
 			paymentBody := map[string]any{}
 			json.NewDecoder(request.Body).Decode(&paymentBody)
@@ -112,6 +118,10 @@ func TestWebBusinessesGetATrialThenPayOrLock(t *testing.T) {
 			t.Fatal("one business's ended subscription locked another business")
 		}
 
+		plans := harness.Call(http.MethodGet, "/api/license/packages", company.OwnerToken, nil)
+		if plans.Status != http.StatusOK || len(fake.planListDeviceIds) == 0 || fake.planListDeviceIds[len(fake.planListDeviceIds)-1] != subscriptions.DeviceIdFor(company.Id) {
+			t.Fatalf("the plan list did not tell the licensing server which business asked: %d %v", plans.Status, fake.planListDeviceIds)
+		}
 		if harness.Call(http.MethodPost, "/api/license/pay", cashierToken, map[string]any{"phone": "0712345678", "provider": "Mpesa", "package_id": 1}).Status != http.StatusForbidden {
 			t.Fatal("a cashier could start a payment")
 		}

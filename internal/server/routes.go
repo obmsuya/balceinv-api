@@ -156,7 +156,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 		application.Get("/api/license/status", signedIn(subscriptionsHandler.Status)...)
 		application.Post("/api/license/refresh", signedIn(subscriptionsHandler.Refresh)...)
 		application.Get("/api/license/hardware-id", signedIn(subscriptionsHandler.DeviceId)...)
-		application.Get("/api/license/packages", authenticate, licensing.Packages)
+		application.Get("/api/license/packages", authenticate, subscriptionsHandler.Packages)
 		application.Post("/api/license/pay", authenticate, subscriptionsHandler.Pay)
 	}
 

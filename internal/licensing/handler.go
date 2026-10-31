@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -119,7 +120,19 @@ func Refresh(c *fiber.Ctx) error {
 }
 
 func Packages(c *fiber.Ctx) error {
-	packagesRequest, requestError := http.NewRequestWithContext(c.UserContext(), http.MethodGet, license.DjangoBaseURL+"/balce/packages/", nil)
+	return PackagesFor(c, license.ComputeHardwareId)
+}
+
+func PackagesFor(c *fiber.Ctx, hardwareIdOf func() (string, error)) error {
+	packagesUrl := license.DjangoBaseURL + "/balce/packages/"
+	hardwareId, computeError := hardwareIdOf()
+	if computeError != nil {
+		slog.Warn("plans listed without this device's id", "error", computeError)
+	}
+	if computeError == nil && hardwareId != "" {
+		packagesUrl += "?hardware_id=" + url.QueryEscape(hardwareId)
+	}
+	packagesRequest, requestError := http.NewRequestWithContext(c.UserContext(), http.MethodGet, packagesUrl, nil)
 	if requestError != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "failed to build request to licensing server"})
 	}
