@@ -37,6 +37,9 @@ func staticApp(staticDirectory string) fiber.Handler {
 			if strings.HasPrefix(cleanedPath, "/_nuxt/") {
 				c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
 			}
+			if filepath.Ext(candidatePath) == ".html" {
+				c.Set(fiber.HeaderCacheControl, "no-cache")
+			}
 			return c.SendFile(candidatePath)
 		}
 
