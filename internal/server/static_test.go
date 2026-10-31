@@ -25,6 +25,8 @@ func TestStaticAppFallsBackToIndexButNeverForApi(t *testing.T) {
 		os.MkdirAll(filepath.Join(staticDirectory, "_nuxt"), 0o755)
 		os.WriteFile(filepath.Join(staticDirectory, "index.html"), []byte("<html>balce app</html>"), 0o644)
 		os.WriteFile(filepath.Join(staticDirectory, "_nuxt", "entry.js"), []byte("console.log('balce')"), 0o644)
+		os.MkdirAll(filepath.Join(staticDirectory, "invoices"), 0o755)
+		os.WriteFile(filepath.Join(staticDirectory, "invoices", "index.html"), []byte("<html>balce app</html>"), 0o644)
 		secretPath := filepath.Join(filepath.Dir(staticDirectory), "secret.txt")
 		os.WriteFile(secretPath, []byte("do not serve"), 0o644)
 
@@ -36,23 +38,28 @@ func TestStaticAppFallsBackToIndexButNeverForApi(t *testing.T) {
 		}
 		application := server.New(testConfig, testkit.OpenMigrated(t, engineCase), objectStore, func() {}, server.Desktop{})
 
+		cacheControls := map[string]string{}
 		fetch := func(requestPath string) (int, string, string) {
 			testResponse, testError := application.Test(httptest.NewRequest(http.MethodGet, requestPath, nil), 5000)
 			if testError != nil {
 				t.Fatalf("GET %s: %v", requestPath, testError)
 			}
 			bodyBytes, _ := io.ReadAll(testResponse.Body)
+			cacheControls[requestPath] = testResponse.Header.Get("Cache-Control")
 			return testResponse.StatusCode, testResponse.Header.Get("Content-Type"), string(bodyBytes)
 		}
 
-		for _, deepLink := range []string{"/", "/pos", "/receipts/0192-abc", "/settings?tab=network"} {
+		for _, deepLink := range []string{"/", "/invoices", "/pos", "/receipts/0192-abc", "/settings?tab=network"} {
 			status, _, body := fetch(deepLink)
 			if status != http.StatusOK || body != "<html>balce app</html>" {
 				t.Fatalf("%s returned %d %q", deepLink, status, body)
 			}
+			if cacheControls[deepLink] != "no-cache" {
+				t.Fatalf("%s was sent with Cache-Control %q, so a browser could keep the old app after a release", deepLink, cacheControls[deepLink])
+			}
 		}
 		scriptStatus, scriptType, scriptBody := fetch("/_nuxt/entry.js")
-		if scriptStatus != http.StatusOK || !strings.Contains(scriptType, "javascript") || scriptBody != "console.log('balce')" {
+		if scriptStatus != http.StatusOK || !strings.Contains(scriptType, "javascript") || scriptBody != "console.log('balce')" || !strings.Contains(cacheControls["/_nuxt/entry.js"], "immutable") {
 			t.Fatalf("the script returned %d %s %q", scriptStatus, scriptType, scriptBody)
 		}
 		if missingStatus, _, missingBody := fetch("/_nuxt/gone.js"); missingStatus != http.StatusNotFound || strings.Contains(missingBody, "<html>") {
