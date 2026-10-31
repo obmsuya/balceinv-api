@@ -74,6 +74,11 @@ func (handler *Handler) DeviceId(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "hardware_id": DeviceIdFor(httpx.CurrentPrincipal(c).CompanyId)})
 }
 
+func (handler *Handler) Packages(c *fiber.Ctx) error {
+	deviceId := DeviceIdFor(httpx.CurrentPrincipal(c).CompanyId)
+	return licensing.PackagesFor(c, func() (string, error) { return deviceId, nil })
+}
+
 func (handler *Handler) Pay(c *fiber.Ctx) error {
 	deviceId := DeviceIdFor(httpx.CurrentPrincipal(c).CompanyId)
 	return licensing.PayFor(c, func() (string, error) { return deviceId, nil })
