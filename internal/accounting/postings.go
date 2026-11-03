@@ -9,18 +9,19 @@ import (
 )
 
 type SalePosting struct {
-	CompanyId    uuid.UUID
-	SaleId       uuid.UUID
-	ShopId       uuid.UUID
-	SoldAt       time.Time
-	Reference    string
-	Total        int64
-	TaxTotal     int64
-	ChangeGiven  int64
-	PaidByMethod map[string]int64
-	CostTotal    int64
-	CustomerId   *uuid.UUID
-	UserId       *uuid.UUID
+	CompanyId       uuid.UUID
+	SaleId          uuid.UUID
+	ShopId          uuid.UUID
+	SoldAt          time.Time
+	Reference       string
+	Total           int64
+	TaxTotal        int64
+	ChangeGiven     int64
+	PaidByMethod    map[string]int64
+	CostTotal       int64
+	WingaShareTotal int64
+	CustomerId      *uuid.UUID
+	UserId          *uuid.UUID
 }
 
 type StockMovementPosting struct {
@@ -188,6 +189,9 @@ func (ledger *Ledger) postSale(ctx context.Context, querier database.Querier, bo
 		keyedLine{Key: KeyVatOutput, Credit: vatCharged, ShopId: &shopId},
 		keyedLine{Key: KeyCogs, Debit: posting.CostTotal, ShopId: &shopId},
 		keyedLine{Key: KeyInventory, Credit: posting.CostTotal, ShopId: &shopId},
+		// ponytail: the winga share is booked as paid out of the till cash when the sale is made. If brokers start being paid later or by mobile money, give winga shares their own payable and a pay-out screen.
+		keyedLine{Key: KeyCogs, Debit: posting.WingaShareTotal, ShopId: &shopId},
+		keyedLine{Key: KeyCash, Credit: posting.WingaShareTotal, ShopId: &shopId},
 	)
 
 	partyType, partyId := partyOf(PartyCustomer, posting.CustomerId)
