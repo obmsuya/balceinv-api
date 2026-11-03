@@ -87,17 +87,19 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, princ
 
 	for _, pricedLine := range pricedLines {
 		foundOrder.Lines = append(foundOrder.Lines, OrderLineView{
-			ProductId:      pricedLine.Product.Id,
-			ProductName:    pricedLine.Product.Name,
-			VariantLabel:   pricedLine.Product.VariantLabel,
-			Sku:            pricedLine.Product.Sku,
-			Unit:           pricedLine.Product.Unit,
-			Quantity:       pricedLine.Quantity,
-			UnitPrice:      pricedLine.UnitPrice,
-			IsWholesale:    pricedLine.IsWholesale,
-			DiscountName:   pricedLine.DiscountName,
-			DiscountAmount: pricedLine.DiscountAmount,
-			LineTotal:      pricedLine.LineTotal,
+			ProductId:       pricedLine.Product.Id,
+			ProductName:     pricedLine.Product.Name,
+			VariantLabel:    pricedLine.Product.VariantLabel,
+			Sku:             pricedLine.Product.Sku,
+			Unit:            pricedLine.Product.Unit,
+			Quantity:        pricedLine.Quantity,
+			UnitPrice:       pricedLine.UnitPrice,
+			IsWholesale:     pricedLine.IsWholesale,
+			DiscountName:    pricedLine.DiscountName,
+			DiscountAmount:  pricedLine.DiscountAmount,
+			ManualDiscount:  pricedLine.ManualDiscount,
+			ExtraUnitAmount: pricedLine.ExtraUnitAmount,
+			LineTotal:       pricedLine.LineTotal,
 		})
 	}
 	foundOrder.Payments = paymentViews
@@ -122,11 +124,20 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 
 	lineRequests := make([]sales.LineRequest, 0, len(request.Items))
 	for _, itemRequest := range request.Items {
-		lineRequests = append(lineRequests, sales.LineRequest{ProductId: itemRequest.ProductId, Quantity: itemRequest.Quantity})
+		lineRequests = append(lineRequests, sales.LineRequest{
+			ProductId:      itemRequest.ProductId,
+			Quantity:       itemRequest.Quantity,
+			ManualDiscount: itemRequest.ManualDiscount,
+			Extra:          itemRequest.Extra,
+		})
 	}
 	pricedSale, priceError := service.salesService.PriceForOrder(ctx, querier, principal, lineRequests)
 	if priceError != nil {
 		return OrderView{}, priceError
+	}
+	discountCheckError := sales.CheckManualDiscounts(principal, pricedSale)
+	if discountCheckError != nil {
+		return OrderView{}, discountCheckError
 	}
 
 	hasDeposit := request.Deposit != nil
