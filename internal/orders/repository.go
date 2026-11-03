@@ -77,8 +77,9 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 	for position, pricedLine := range pricedLines {
 		lineQuery := `
 			INSERT INTO customer_order_lines (id, company_id, order_id, position, product_id, product_name, variant_label, sku, unit, quantity,
-			                                  unit_price, unit_cost, is_wholesale, discount_id, discount_name, discount_amount, line_total)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			                                  unit_price, unit_cost, is_wholesale, discount_id, discount_name, discount_amount,
+			                                  manual_discount_amount, extra_unit_amount, line_total)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		`
 		_, lineError := querier.ExecContext(ctx, lineQuery,
 			uuid.Must(uuid.NewV7()),
@@ -97,6 +98,8 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 			pricedLine.DiscountId,
 			pricedLine.DiscountName,
 			pricedLine.DiscountAmount,
+			pricedLine.ManualDiscount,
+			pricedLine.ExtraUnitAmount,
 			pricedLine.LineTotal,
 		)
 		if lineError != nil {
@@ -232,7 +235,7 @@ func (repository *Repository) List(ctx context.Context, querier database.Querier
 func (repository *Repository) PricedLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, orderId uuid.UUID) ([]sales.PricedLine, error) {
 	query := `
 		SELECT product_id, product_name, variant_label, sku, unit, quantity, unit_price, unit_cost, is_wholesale,
-		       discount_id, discount_name, discount_amount, line_total
+		       discount_id, discount_name, discount_amount, manual_discount_amount, extra_unit_amount, line_total
 		FROM customer_order_lines
 		WHERE company_id = $1 AND order_id = $2
 		ORDER BY position
@@ -260,6 +263,8 @@ func (repository *Repository) PricedLines(ctx context.Context, querier database.
 			&pricedLine.DiscountId,
 			&pricedLine.DiscountName,
 			&pricedLine.DiscountAmount,
+			&pricedLine.ManualDiscount,
+			&pricedLine.ExtraUnitAmount,
 			&pricedLine.LineTotal,
 		)
 		if scanError != nil {

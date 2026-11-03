@@ -86,12 +86,13 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 	itemArguments := &queryArguments{}
 	itemQuery := `
 		SELECT CAST(COALESCE(SUM(i.quantity), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(i.unit_cost * i.quantity), 0) AS BIGINT)
+		       CAST(COALESCE(SUM(i.unit_cost * i.quantity), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(i.extra_unit_amount * i.quantity), 0) AS BIGINT)
 		FROM sale_items i
 		JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
 		WHERE ` + salesWhere(scope, itemArguments)
 
-	itemScanError := querier.QueryRowContext(ctx, itemQuery, itemArguments.values...).Scan(&summary.UnitsSold, &summary.CostTotal)
+	itemScanError := querier.QueryRowContext(ctx, itemQuery, itemArguments.values...).Scan(&summary.UnitsSold, &summary.CostTotal, &summary.ExtraTotal)
 	if itemScanError != nil {
 		return SummaryView{}, fmt.Errorf("failed to total sold items: %w", itemScanError)
 	}

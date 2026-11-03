@@ -85,8 +85,8 @@ func (repository *Repository) InsertLines(ctx context.Context, querier database.
 		itemQuery := `
 			INSERT INTO sale_items (id, company_id, sale_id, position, product_id, product_name, variant_label, sku, unit, quantity,
 			                        unit_price, unit_cost, is_wholesale, addons_unit_total, discount_id, discount_name, discount_amount,
-			                        manual_discount_amount, line_total)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			                        manual_discount_amount, extra_unit_amount, line_total)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		`
 		_, itemError := querier.ExecContext(ctx, itemQuery,
 			itemId,
@@ -107,6 +107,7 @@ func (repository *Repository) InsertLines(ctx context.Context, querier database.
 			pricedLine.DiscountName,
 			pricedLine.DiscountAmount,
 			pricedLine.ManualDiscount,
+			pricedLine.ExtraUnitAmount,
 			pricedLine.LineTotal,
 		)
 		if itemError != nil {
@@ -207,7 +208,7 @@ func (repository *Repository) FindView(ctx context.Context, querier database.Que
 func (repository *Repository) ListLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, saleId uuid.UUID) ([]LineView, error) {
 	query := `
 		SELECT i.id, i.product_id, i.product_name, i.variant_label, i.sku, i.unit, i.quantity, i.unit_price, i.is_wholesale,
-		       i.addons_unit_total, i.discount_name, i.discount_amount, i.manual_discount_amount, i.line_total,
+		       i.addons_unit_total, i.discount_name, i.discount_amount, i.manual_discount_amount, i.extra_unit_amount, i.line_total,
 		       CAST(COALESCE((SELECT SUM(rl.quantity) FROM sale_refund_lines rl WHERE rl.company_id = i.company_id AND rl.sale_item_id = i.id), 0) AS BIGINT)
 		FROM sale_items i
 		WHERE i.company_id = $1 AND i.sale_id = $2
@@ -239,6 +240,7 @@ func (repository *Repository) ListLines(ctx context.Context, querier database.Qu
 			&lineView.DiscountName,
 			&lineView.DiscountAmount,
 			&lineView.ManualDiscount,
+			&lineView.ExtraUnitAmount,
 			&lineView.LineTotal,
 			&lineView.RefundedQuantity,
 		)

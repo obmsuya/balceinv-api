@@ -8,8 +8,10 @@ import (
 )
 
 type LineRequest struct {
-	ProductId string `json:"product_id" validate:"required,uuid"`
-	Quantity  int    `json:"quantity" validate:"required,gte=1,lte=100000"`
+	ProductId      string                       `json:"product_id" validate:"required,uuid"`
+	Quantity       int                          `json:"quantity" validate:"required,gte=1,lte=100000"`
+	ManualDiscount *sales.ManualDiscountRequest `json:"manual_discount" validate:"omitnil"`
+	Extra          *sales.ExtraRequest          `json:"extra" validate:"omitnil"`
 }
 
 type MoneyRequest struct {
@@ -35,17 +37,19 @@ type CancelRequest struct {
 }
 
 type OrderLineView struct {
-	ProductId      uuid.UUID `json:"product_id"`
-	ProductName    string    `json:"product_name"`
-	VariantLabel   string    `json:"variant_label"`
-	Sku            string    `json:"sku"`
-	Unit           string    `json:"unit"`
-	Quantity       int       `json:"quantity"`
-	UnitPrice      int64     `json:"unit_price"`
-	IsWholesale    bool      `json:"is_wholesale"`
-	DiscountName   *string   `json:"discount_name"`
-	DiscountAmount int64     `json:"discount_amount"`
-	LineTotal      int64     `json:"line_total"`
+	ProductId       uuid.UUID `json:"product_id"`
+	ProductName     string    `json:"product_name"`
+	VariantLabel    string    `json:"variant_label"`
+	Sku             string    `json:"sku"`
+	Unit            string    `json:"unit"`
+	Quantity        int       `json:"quantity"`
+	UnitPrice       int64     `json:"unit_price"`
+	IsWholesale     bool      `json:"is_wholesale"`
+	DiscountName    *string   `json:"discount_name"`
+	DiscountAmount  int64     `json:"discount_amount"`
+	ManualDiscount  int64     `json:"manual_discount_amount"`
+	ExtraUnitAmount int64     `json:"extra_unit_amount"`
+	LineTotal       int64     `json:"line_total"`
 }
 
 type OrderPaymentView struct {
