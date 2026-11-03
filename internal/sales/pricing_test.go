@@ -143,3 +143,32 @@ func TestCashierDiscountStacksOnTheAutomaticOneAndNeverGoesBelowZero(t *testing.
 	}
 
 }
+
+func TestExtraRaisesTheUnitPriceAfterTheAutomaticDiscount(t *testing.T) {
+	soda := product(1000, nil, 0)
+	tenPercentOff := discount(discounts.KindPercent, 1000, &soda.Id)
+	priceWith := func(priceExtra *PriceExtra, manualDiscount *ManualDiscount) PricedLine {
+		pricingLine := PricingLine{Product: soda, Quantity: 3, Extra: priceExtra, ManualDiscount: manualDiscount}
+		return PriceSale([]PricingLine{pricingLine}, []discounts.Discount{tenPercentOff}, 0).Lines[0]
+	}
+
+	byAmount := priceWith(&PriceExtra{Kind: ManualDiscountAmount, Value: 250}, nil)
+	if byAmount.ExtraUnitAmount != 250 || byAmount.UnitPrice != 1250 || byAmount.DiscountAmount != 300 || byAmount.LineTotal != 3450 {
+		t.Fatalf("an extra of 250 a unit priced as %+v", byAmount)
+	}
+
+	byPercent := priceWith(&PriceExtra{Kind: ManualDiscountPercent, Value: 1250}, nil)
+	if byPercent.ExtraUnitAmount != 125 || byPercent.UnitPrice != 1125 || byPercent.LineTotal != 3075 {
+		t.Fatalf("an extra of 12.5%% priced as %+v", byPercent)
+	}
+
+	withCashierDiscount := priceWith(&PriceExtra{Kind: ManualDiscountAmount, Value: 500}, &ManualDiscount{Kind: ManualDiscountAmount, Value: 100})
+	if withCashierDiscount.LineTotal != 4100 || withCashierDiscount.DiscountAmount != 400 || withCashierDiscount.ManualDiscount != 100 {
+		t.Fatalf("an extra and a cashier discount on one line priced as %+v", withCashierDiscount)
+	}
+
+	cappedPercent := priceWith(&PriceExtra{Kind: ManualDiscountPercent, Value: 5000000}, nil)
+	if cappedPercent.ExtraUnitAmount != 10000 {
+		t.Fatalf("a huge percentage extra was not capped at 1000%%: %+v", cappedPercent)
+	}
+}

@@ -94,7 +94,7 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 	if priceError != nil {
 		return QuoteView{}, priceError
 	}
-	discountCheckError := checkManualDiscounts(principal, pricedSale)
+	discountCheckError := CheckManualDiscounts(principal, pricedSale)
 	if discountCheckError != nil {
 		return QuoteView{}, discountCheckError
 	}
@@ -156,7 +156,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	if priceError != nil {
 		return SaleView{}, priceError
 	}
-	discountCheckError := checkManualDiscounts(principal, pricedSale)
+	discountCheckError := CheckManualDiscounts(principal, pricedSale)
 	if discountCheckError != nil {
 		return SaleView{}, discountCheckError
 	}
@@ -486,6 +486,7 @@ func (service *Service) price(ctx context.Context, querier database.Querier, pri
 			Quantity:       lineRequest.Quantity,
 			Addons:         lineAddons,
 			ManualDiscount: toManualDiscount(lineRequest.ManualDiscount),
+			Extra:          toPriceExtra(lineRequest.Extra),
 		})
 	}
 
@@ -519,7 +520,14 @@ func toManualDiscount(manualDiscountRequest *ManualDiscountRequest) *ManualDisco
 	return &ManualDiscount{Kind: manualDiscountRequest.Kind, Value: manualDiscountRequest.Value}
 }
 
-func checkManualDiscounts(principal *identity.Principal, pricedSale PricedSale) error {
+func toPriceExtra(extraRequest *ExtraRequest) *PriceExtra {
+	if extraRequest == nil {
+		return nil
+	}
+	return &PriceExtra{Kind: extraRequest.Kind, Value: extraRequest.Value}
+}
+
+func CheckManualDiscounts(principal *identity.Principal, pricedSale PricedSale) error {
 	for _, pricedLine := range pricedSale.Lines {
 		hasManualDiscount := pricedLine.ManualDiscount > 0
 		if hasManualDiscount && !principal.Can(TillDiscountPermission) {
@@ -679,6 +687,7 @@ func toLineView(pricedLine PricedLine) LineView {
 		DiscountName:    pricedLine.DiscountName,
 		DiscountAmount:  pricedLine.DiscountAmount,
 		ManualDiscount:  pricedLine.ManualDiscount,
+		ExtraUnitAmount: pricedLine.ExtraUnitAmount,
 		LineTotal:       pricedLine.LineTotal,
 	}
 }

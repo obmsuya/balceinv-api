@@ -1,0 +1,6 @@
+ALTER TABLE customer_order_lines DROP CONSTRAINT customer_order_lines_manual_discount_within_discount;
+ALTER TABLE customer_order_lines DROP COLUMN manual_discount_amount;
+ALTER TABLE customer_order_lines DROP CONSTRAINT customer_order_lines_extra_within_price;
+ALTER TABLE customer_order_lines DROP COLUMN extra_unit_amount;
+ALTER TABLE sale_items DROP CONSTRAINT sale_items_extra_within_price;
+ALTER TABLE sale_items DROP COLUMN extra_unit_amount;

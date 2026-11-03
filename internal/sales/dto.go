@@ -11,6 +11,12 @@ type LineRequest struct {
 	Quantity       int                    `json:"quantity" validate:"required,gte=1,lte=100000"`
 	AddonIds       []string               `json:"addon_ids" validate:"omitempty,max=20,dive,uuid"`
 	ManualDiscount *ManualDiscountRequest `json:"manual_discount" validate:"omitnil"`
+	Extra          *ExtraRequest          `json:"extra" validate:"omitnil"`
+}
+
+type ExtraRequest struct {
+	Kind  string `json:"kind" validate:"required,oneof=percent amount"`
+	Value int64  `json:"value" validate:"required,gt=0,lte=1000000000000"`
 }
 
 type ManualDiscountRequest struct {
@@ -67,6 +73,7 @@ type LineView struct {
 	DiscountName     *string     `json:"discount_name"`
 	DiscountAmount   int64       `json:"discount_amount"`
 	ManualDiscount   int64       `json:"manual_discount_amount"`
+	ExtraUnitAmount  int64       `json:"extra_unit_amount"`
 	LineTotal        int64       `json:"line_total"`
 	InStock          *int        `json:"in_stock,omitempty"`
 }

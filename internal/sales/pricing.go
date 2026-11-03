@@ -9,6 +9,8 @@ import (
 
 const basisPointsPerWhole = 10000
 
+const highestExtraBasisPoints = 10 * basisPointsPerWhole
+
 const (
 	ManualDiscountPercent  = "percent"
 	ManualDiscountAmount   = "amount"
@@ -41,11 +43,17 @@ type ManualDiscount struct {
 	Value int64
 }
 
+type PriceExtra struct {
+	Kind  string
+	Value int64
+}
+
 type PricingLine struct {
 	Product        PricingProduct
 	Quantity       int
 	Addons         []PricingAddon
 	ManualDiscount *ManualDiscount
+	Extra          *PriceExtra
 }
 
 type PricedLine struct {
@@ -59,6 +67,7 @@ type PricedLine struct {
 	DiscountName    *string
 	DiscountAmount  int64
 	ManualDiscount  int64
+	ExtraUnitAmount int64
 	LineTotal       int64
 }
 
@@ -135,6 +144,11 @@ func priceLine(pricingLine PricingLine, applicableDiscounts []discounts.Discount
 		}
 	}
 
+	if pricingLine.Extra != nil {
+		pricedLine.ExtraUnitAmount = extraUnitAmount(*pricingLine.Extra, unitPrice)
+		pricedLine.UnitPrice += pricedLine.ExtraUnitAmount
+	}
+
 	if pricingLine.ManualDiscount != nil {
 		amountLeftToDiscount := pricedLine.GrossTotal() - pricedLine.DiscountAmount
 		pricedLine.ManualDiscount = min(manualDiscountAmount(*pricingLine.ManualDiscount, pricedLine.GrossTotal()), amountLeftToDiscount)
@@ -150,6 +164,13 @@ func manualDiscountAmount(manualDiscount ManualDiscount, grossTotal int64) int64
 		return multiplyDivideRoundHalfUp(grossTotal, min(manualDiscount.Value, basisPointsPerWhole), basisPointsPerWhole)
 	}
 	return manualDiscount.Value
+}
+
+func extraUnitAmount(priceExtra PriceExtra, listUnitPrice int64) int64 {
+	if priceExtra.Kind == ManualDiscountPercent {
+		return multiplyDivideRoundHalfUp(listUnitPrice, min(priceExtra.Value, highestExtraBasisPoints), basisPointsPerWhole)
+	}
+	return priceExtra.Value
 }
 
 func bestDiscountFor(productId uuid.UUID, unitPrice int64, quantity int64, applicableDiscounts []discounts.Discount) (*discounts.Discount, int64) {
