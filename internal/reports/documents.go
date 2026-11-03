@@ -135,6 +135,8 @@ func (service *Service) salesSummaryStatement(ctx context.Context, querier datab
 		documents.StatementRow{Style: documents.StatementHeading, Label: exporting.label("sumOther")},
 		documents.StatementRow{Style: documents.StatementLine, Label: exporting.label("sumDiscounts"), Current: current.DiscountTotal, Previous: previous.DiscountTotal},
 		documents.StatementRow{Style: documents.StatementLine, Label: exporting.label("sumExtras"), Current: current.ExtraTotal, Previous: previous.ExtraTotal},
+		documents.StatementRow{Style: documents.StatementLine, Label: exporting.label("sumWinga"), Current: current.WingaTotal, Previous: previous.WingaTotal},
+		documents.StatementRow{Style: documents.StatementLine, Label: exporting.label("sumWingaShare"), Current: current.WingaShareTotal, Previous: previous.WingaShareTotal},
 		documents.StatementRow{Style: documents.StatementLine, Label: exporting.label("averageSale"), Current: current.AverageSale, Previous: previous.AverageSale},
 	)
 

@@ -39,6 +39,10 @@ var (
 	ErrSaleAlreadyVoided  = errors.New("this sale was already voided")
 	ErrSaleFromOrder      = errors.New("this sale completed a customer order; cancel or change the order instead")
 	ErrFiscalBusy         = errors.New("this sale is being sent to the EFD right now; try again in a moment")
+	ErrEmptySale          = errors.New("add at least one item")
+	ErrWingaOff           = errors.New("winga lines are turned off for this business")
+	ErrWingaNameRequired  = errors.New("give each winga line a name")
+	ErrWingaShareTooHigh  = errors.New("the winga share cannot be more than the line total")
 )
 
 type Service struct {
@@ -61,7 +65,7 @@ func NewService(repository *Repository, discountsService *discounts.Service, set
 	}
 }
 
-func (service *Service) PriceForOrder(ctx context.Context, querier database.Querier, principal *identity.Principal, lineRequests []LineRequest) (PricedSale, error) {
+func (service *Service) PriceForOrder(ctx context.Context, querier database.Querier, principal *identity.Principal, lineRequests []LineRequest, wingaRequests []WingaLineRequest) (PricedSale, error) {
 	if principal.ShopId == nil {
 		return PricedSale{}, ErrNoActiveShop
 	}
@@ -73,7 +77,7 @@ func (service *Service) PriceForOrder(ctx context.Context, querier database.Quer
 	if taxRateError != nil {
 		return PricedSale{}, taxRateError
 	}
-	return service.price(ctx, querier, principal, lineRequests, saleTaxRate)
+	return service.price(ctx, querier, principal, lineRequests, wingaRequests, saleTaxRate)
 }
 
 func (service *Service) Quote(ctx context.Context, querier database.Querier, principal *identity.Principal, request QuoteRequest) (QuoteView, error) {
@@ -90,7 +94,7 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 	if taxRateError != nil {
 		return QuoteView{}, taxRateError
 	}
-	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
+	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, request.WingaLines, saleTaxRate)
 	if priceError != nil {
 		return QuoteView{}, priceError
 	}
@@ -101,6 +105,7 @@ func (service *Service) Quote(ctx context.Context, querier database.Querier, pri
 
 	quoteView := QuoteView{
 		Lines:              make([]LineView, 0, len(pricedSale.Lines)),
+		WingaLines:         ToWingaLineViews(pricedSale.WingaLines),
 		Subtotal:           pricedSale.Subtotal,
 		DiscountTotal:      pricedSale.DiscountTotal,
 		Total:              pricedSale.Total,
@@ -152,7 +157,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 	if taxRateError != nil {
 		return SaleView{}, taxRateError
 	}
-	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, saleTaxRate)
+	pricedSale, priceError := service.price(ctx, querier, principal, request.Items, request.WingaLines, saleTaxRate)
 	if priceError != nil {
 		return SaleView{}, priceError
 	}
@@ -200,8 +205,7 @@ func (service *Service) CreateFromOrder(ctx context.Context, querier database.Qu
 		pricedSale.Subtotal += pricedLine.LineTotal + pricedLine.DiscountAmount
 		pricedSale.DiscountTotal += pricedLine.DiscountAmount
 	}
-	pricedSale.Total = pricedSale.Subtotal - pricedSale.DiscountTotal
-	pricedSale.TaxTotal = IncludedTax(pricedSale.Total, request.TaxRateBasisPoints)
+	pricedSale = pricedSale.WithWingaLines(request.WingaLines)
 
 	customerId := request.CustomerId
 	saleDraft := draft{
@@ -282,6 +286,10 @@ func (service *Service) record(ctx context.Context, querier database.Querier, pr
 	insertLinesError := service.repository.InsertLines(ctx, querier, principal.CompanyId, newSale.Id, pricedSale.Lines)
 	if insertLinesError != nil {
 		return SaleView{}, insertLinesError
+	}
+	insertWingaError := service.repository.InsertWingaLines(ctx, querier, principal.CompanyId, newSale.Id, pricedSale.WingaLines)
+	if insertWingaError != nil {
+		return SaleView{}, insertWingaError
 	}
 	insertPaymentsError := service.repository.InsertPayments(ctx, querier, principal.CompanyId, newSale.Id, payments)
 	if insertPaymentsError != nil {
@@ -411,6 +419,10 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 	if linesError != nil {
 		return SaleView{}, linesError
 	}
+	wingaLines, wingaError := service.repository.ListWingaLines(ctx, querier, companyId, saleId)
+	if wingaError != nil {
+		return SaleView{}, wingaError
+	}
 	paymentViews, paymentsError := service.repository.ListPayments(ctx, querier, companyId, saleId)
 	if paymentsError != nil {
 		return SaleView{}, paymentsError
@@ -426,6 +438,7 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 	}
 
 	saleView.Items = lineViews
+	saleView.WingaLines = ToWingaLineViews(wingaLines)
 	saleView.Payments = paymentViews
 	saleView.Fiscal = fiscalView
 	saleView.CreditNote = creditNoteView
@@ -446,7 +459,18 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, compa
 	return *saleView, nil
 }
 
-func (service *Service) price(ctx context.Context, querier database.Querier, principal *identity.Principal, lineRequests []LineRequest, taxRateBasisPoints int) (PricedSale, error) {
+func (service *Service) price(ctx context.Context, querier database.Querier, principal *identity.Principal, lineRequests []LineRequest, wingaRequests []WingaLineRequest, taxRateBasisPoints int) (PricedSale, error) {
+	if len(lineRequests)+len(wingaRequests) == 0 {
+		return PricedSale{}, ErrEmptySale
+	}
+	wingaLines, wingaError := service.wingaLinesFor(ctx, querier, principal.CompanyId, wingaRequests)
+	if wingaError != nil {
+		return PricedSale{}, wingaError
+	}
+	if len(lineRequests) == 0 {
+		return PriceSale(nil, nil, taxRateBasisPoints).WithWingaLines(wingaLines), nil
+	}
+
 	productIds, addonIds := collectIds(lineRequests)
 
 	productsById, productsError := service.repository.LoadProducts(ctx, querier, principal.CompanyId, *principal.ShopId, productIds)
@@ -495,7 +519,7 @@ func (service *Service) price(ctx context.Context, querier database.Querier, pri
 		return PricedSale{}, discountsError
 	}
 
-	return PriceSale(pricingLines, applicableDiscounts, taxRateBasisPoints), nil
+	return PriceSale(pricingLines, applicableDiscounts, taxRateBasisPoints).WithWingaLines(wingaLines), nil
 }
 
 func (service *Service) TillOptions(ctx context.Context, querier database.Querier, companyId uuid.UUID) (TillOptionsView, error) {
@@ -624,13 +648,15 @@ func formatReceiptNumber(receiptFormat string, shopCounter ShopCounter, soldAt t
 
 func hashRequest(request SaleRequest) (string, error) {
 	hashedFields := struct {
-		CustomerId *string          `json:"customer_id,omitempty"`
-		Items      []LineRequest    `json:"items"`
-		Payments   []PaymentRequest `json:"payments"`
-		Note       *string          `json:"note"`
+		CustomerId *string            `json:"customer_id,omitempty"`
+		Items      []LineRequest      `json:"items"`
+		WingaLines []WingaLineRequest `json:"winga_lines,omitempty"`
+		Payments   []PaymentRequest   `json:"payments"`
+		Note       *string            `json:"note"`
 	}{
 		CustomerId: request.CustomerId,
 		Items:      request.Items,
+		WingaLines: request.WingaLines,
 		Payments:   request.Payments,
 		Note:       request.Note,
 	}

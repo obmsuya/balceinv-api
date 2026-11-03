@@ -23,7 +23,8 @@ func (repository *Repository) UnpostedSales(ctx context.Context, querier databas
 
 	saleQuery := `
 		SELECT s.id, s.shop_id, s.user_id, s.customer_id, s.receipt_number, s.total, s.tax_total, s.change_given, s.created_at,
-		       CAST(COALESCE((SELECT SUM(i.unit_cost * i.quantity) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id), 0) AS BIGINT)
+		       CAST(COALESCE((SELECT SUM(i.unit_cost * i.quantity) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id), 0) AS BIGINT),
+		       CAST(COALESCE((SELECT SUM(w.winga_share) FROM sale_winga_lines w WHERE w.company_id = s.company_id AND w.sale_id = s.id), 0) AS BIGINT)
 		FROM sales s
 		WHERE ` + where + `
 		ORDER BY s.created_at, s.id
@@ -40,7 +41,7 @@ func (repository *Repository) UnpostedSales(ctx context.Context, querier databas
 		userId := uuid.UUID{}
 		salePosting := SalePosting{CompanyId: companyId, PaidByMethod: map[string]int64{}}
 		scanError := saleRows.Scan(&salePosting.SaleId, &salePosting.ShopId, &userId, &salePosting.CustomerId, &salePosting.Reference, &salePosting.Total,
-			&salePosting.TaxTotal, &salePosting.ChangeGiven, &salePosting.SoldAt, &salePosting.CostTotal)
+			&salePosting.TaxTotal, &salePosting.ChangeGiven, &salePosting.SoldAt, &salePosting.CostTotal, &salePosting.WingaShareTotal)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a sale for the books: %w", scanError)
 		}

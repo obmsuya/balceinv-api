@@ -47,7 +47,7 @@ func (repository *Repository) NextNumber(ctx context.Context, querier database.Q
 	return nextNumber, nil
 }
 
-func (repository *Repository) Insert(ctx context.Context, querier database.Querier, newOrder Order, pricedLines []sales.PricedLine) error {
+func (repository *Repository) Insert(ctx context.Context, querier database.Querier, newOrder Order, pricedLines []sales.PricedLine, wingaLines []sales.WingaLine) error {
 	orderQuery := `
 		INSERT INTO customer_orders (id, company_id, shop_id, customer_id, number, status, due_date, note, subtotal, discount_total, total,
 		                             tax_total, tax_rate_basis_points, created_by, created_at)
@@ -107,7 +107,29 @@ func (repository *Repository) Insert(ctx context.Context, querier database.Queri
 		}
 	}
 
+	for position, wingaLine := range wingaLines {
+		wingaQuery := `
+			INSERT INTO customer_order_winga_lines (id, company_id, order_id, position, name, quantity, unit_price, line_total, winga_share)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`
+		_, wingaError := querier.ExecContext(ctx, wingaQuery, uuid.Must(uuid.NewV7()), newOrder.CompanyId, newOrder.Id, position,
+			wingaLine.Name, wingaLine.Quantity, wingaLine.UnitPrice, wingaLine.LineTotal, wingaLine.WingaShare)
+		if wingaError != nil {
+			return fmt.Errorf("failed to insert an order winga line: %w", wingaError)
+		}
+	}
+
 	return nil
+}
+
+func (repository *Repository) WingaLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, orderId uuid.UUID) ([]sales.WingaLine, error) {
+	query := `
+		SELECT name, quantity, unit_price, winga_share, line_total
+		FROM customer_order_winga_lines
+		WHERE company_id = $1 AND order_id = $2
+		ORDER BY position
+	`
+	return sales.ScanWingaLines(querier.QueryContext(ctx, query, companyId, orderId))
 }
 
 func (repository *Repository) InsertPayment(ctx context.Context, querier database.Querier, orderPayment OrderPayment) error {

@@ -97,6 +97,19 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 		return SummaryView{}, fmt.Errorf("failed to total sold items: %w", itemScanError)
 	}
 
+	wingaArguments := &queryArguments{}
+	wingaQuery := `
+		SELECT CAST(COALESCE(SUM(w.line_total), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(w.winga_share), 0) AS BIGINT)
+		FROM sale_winga_lines w
+		JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+		WHERE ` + salesWhere(scope, wingaArguments)
+	wingaScanError := querier.QueryRowContext(ctx, wingaQuery, wingaArguments.values...).Scan(&summary.WingaTotal, &summary.WingaShareTotal)
+	if wingaScanError != nil {
+		return SummaryView{}, fmt.Errorf("failed to total winga lines: %w", wingaScanError)
+	}
+	summary.CostTotal += summary.WingaShareTotal
+
 	refundArguments := &queryArguments{}
 	refundQuery := `
 		SELECT COUNT(*),
@@ -173,11 +186,19 @@ func (repository *Repository) Daily(ctx context.Context, querier database.Querie
 	query := `
 		WITH days (day, starts_at, ends_at) AS (VALUES ` + strings.Join(dayRows, ", ") + `),
 		item_costs AS (
-			SELECT i.sale_id, SUM(i.unit_cost * i.quantity) AS cost
-			FROM sale_items i
-			JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
-			WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
-			GROUP BY i.sale_id
+SELECT costs.sale_id, SUM(costs.cost) AS cost
+			FROM (
+				SELECT i.sale_id, i.unit_cost * i.quantity AS cost
+				FROM sale_items i
+				JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
+				WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
+				UNION ALL
+				SELECT w.sale_id, w.winga_share AS cost
+				FROM sale_winga_lines w
+				JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+				WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
+			) costs
+			GROUP BY costs.sale_id
 		)
 		SELECT d.day,
 		       COUNT(s.id),
@@ -295,11 +316,19 @@ func (repository *Repository) Shops(ctx context.Context, querier database.Querie
 	whereClause := salesWhere(scope, arguments)
 	query := `
 		WITH item_costs AS (
-			SELECT i.sale_id, SUM(i.unit_cost * i.quantity) AS cost
-			FROM sale_items i
-			JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
-			WHERE ` + whereClause + `
-			GROUP BY i.sale_id
+SELECT costs.sale_id, SUM(costs.cost) AS cost
+			FROM (
+				SELECT i.sale_id, i.unit_cost * i.quantity AS cost
+				FROM sale_items i
+				JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
+				WHERE ` + whereClause + `
+				UNION ALL
+				SELECT w.sale_id, w.winga_share AS cost
+				FROM sale_winga_lines w
+				JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+				WHERE ` + whereClause + `
+			) costs
+			GROUP BY costs.sale_id
 		)
 		SELECT s.shop_id,
 		       MAX(sh.name),

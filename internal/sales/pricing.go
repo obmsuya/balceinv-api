@@ -77,6 +77,7 @@ func (pricedLine PricedLine) GrossTotal() int64 {
 
 type PricedSale struct {
 	Lines              []PricedLine
+	WingaLines         []WingaLine
 	Subtotal           int64
 	DiscountTotal      int64
 	Total              int64

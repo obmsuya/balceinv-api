@@ -80,10 +80,15 @@ func (service *Service) Get(ctx context.Context, querier database.Querier, princ
 	if linesError != nil {
 		return OrderView{}, linesError
 	}
+	wingaLines, wingaError := service.repository.WingaLines(ctx, querier, principal.CompanyId, orderId)
+	if wingaError != nil {
+		return OrderView{}, wingaError
+	}
 	paymentViews, paymentsError := service.repository.ListPayments(ctx, querier, principal.CompanyId, orderId)
 	if paymentsError != nil {
 		return OrderView{}, paymentsError
 	}
+	foundOrder.WingaLines = sales.ToWingaLineViews(wingaLines)
 
 	for _, pricedLine := range pricedLines {
 		foundOrder.Lines = append(foundOrder.Lines, OrderLineView{
@@ -131,7 +136,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 			Extra:          itemRequest.Extra,
 		})
 	}
-	pricedSale, priceError := service.salesService.PriceForOrder(ctx, querier, principal, lineRequests)
+	pricedSale, priceError := service.salesService.PriceForOrder(ctx, querier, principal, lineRequests, request.WingaLines)
 	if priceError != nil {
 		return OrderView{}, priceError
 	}
@@ -168,7 +173,7 @@ func (service *Service) Create(ctx context.Context, querier database.Querier, pr
 		CreatedBy:          principal.UserId,
 		CreatedAt:          createdAt,
 	}
-	insertError := service.repository.Insert(ctx, querier, newOrder, pricedSale.Lines)
+	insertError := service.repository.Insert(ctx, querier, newOrder, pricedSale.Lines, pricedSale.WingaLines)
 	if database.IsUniqueViolation(insertError) {
 		return OrderView{}, ErrOrderNumberInFlight
 	}
@@ -240,12 +245,17 @@ func (service *Service) Collect(ctx context.Context, querier database.Querier, p
 	if linesError != nil {
 		return OrderView{}, linesError
 	}
+	wingaLines, wingaError := service.repository.WingaLines(ctx, querier, principal.CompanyId, orderId)
+	if wingaError != nil {
+		return OrderView{}, wingaError
+	}
 
 	orderSale := sales.OrderSaleRequest{
 		ClientRef:          "order-" + orderId.String(),
 		ShopId:             foundOrder.ShopId,
 		CustomerId:         foundOrder.CustomerId,
 		Lines:              pricedLines,
+		WingaLines:         wingaLines,
 		TaxRateBasisPoints: foundOrder.TaxRateBasisPoints,
 		Payments:           collectionPayments,
 	}

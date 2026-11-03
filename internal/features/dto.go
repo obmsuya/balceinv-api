@@ -7,6 +7,7 @@ type FeaturesView struct {
 	CreditSalesEnabled    bool    `json:"credit_sales_enabled"`
 	CustomerOrdersEnabled bool    `json:"customer_orders_enabled"`
 	InvoicesEnabled       bool    `json:"invoices_enabled"`
+	WingaEnabled          bool    `json:"winga_enabled"`
 	AccountingMode        string  `json:"accounting_mode"`
 	VatRegistered         bool    `json:"vat_registered"`
 	VatNumber             *string `json:"vat_number"`
@@ -19,6 +20,7 @@ type UpdateFeaturesRequest struct {
 	CreditSalesEnabled    *bool   `json:"credit_sales_enabled"`
 	CustomerOrdersEnabled *bool   `json:"customer_orders_enabled"`
 	InvoicesEnabled       *bool   `json:"invoices_enabled"`
+	WingaEnabled          *bool   `json:"winga_enabled"`
 	AccountingMode        *string `json:"accounting_mode" validate:"omitnil,oneof=off simple full"`
 	VatRegistered         *bool   `json:"vat_registered"`
 	VatNumber             *string `json:"vat_number" validate:"omitnil,max=40"`
@@ -32,6 +34,7 @@ func ToView(companyFeatures Features) FeaturesView {
 		CreditSalesEnabled:    companyFeatures.CreditSalesEnabled,
 		CustomerOrdersEnabled: companyFeatures.CustomerOrdersEnabled,
 		InvoicesEnabled:       companyFeatures.InvoicesEnabled,
+		WingaEnabled:          companyFeatures.WingaEnabled,
 		AccountingMode:        companyFeatures.AccountingMode,
 		VatRegistered:         companyFeatures.VatRegistered,
 		VatNumber:             companyFeatures.VatNumber,

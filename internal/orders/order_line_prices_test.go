@@ -52,3 +52,35 @@ func TestOrderLinesTakeAnExtraAndACashierDiscountIntoTheSale(t *testing.T) {
 		}
 	})
 }
+
+func TestOrderWingaLinesReachTheCollectedSale(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		harness := apptest.Start(t, engineCase)
+		company := harness.CreateCompany("Order Winga", "owner@orderwinga.test")
+		harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"customers_enabled": true, "customer_orders_enabled": true})
+		customerId := harness.Call(http.MethodPost, "/api/customers", company.OwnerToken, map[string]any{"name": "Zawadi"}).Data()["id"].(string)
+		sofaLine := map[string]any{"name": "Sofa from the market", "quantity": 1, "unit_price": 300000, "winga_share": 250000}
+
+		turnedOff := harness.Call(http.MethodPost, "/api/orders", company.OwnerToken, map[string]any{"customer_id": customerId, "winga_lines": []any{sofaLine}})
+		if turnedOff.Status != http.StatusConflict || turnedOff.Code() != "winga_off" {
+			t.Fatalf("a winga order while the feature is off returned %d %v", turnedOff.Status, turnedOff.Body)
+		}
+		harness.Call(http.MethodPut, "/api/features", company.OwnerToken, map[string]any{"winga_enabled": true})
+
+		created := harness.Call(http.MethodPost, "/api/orders", company.OwnerToken, map[string]any{"customer_id": customerId, "winga_lines": []any{sofaLine}})
+		order := created.Data()
+		if created.Status != http.StatusCreated || order["total"] != float64(300000) || len(order["winga_lines"].([]any)) != 1 {
+			t.Fatalf("a winga order returned %d %v", created.Status, created.Body)
+		}
+
+		collected := harness.Call(http.MethodPost, "/api/orders/"+order["id"].(string)+"/collect", company.OwnerToken, map[string]any{"payments": []any{map[string]any{"method": "cash", "amount": 300000}}})
+		if collected.Status != http.StatusOK {
+			t.Fatalf("collecting a winga order returned %d %v", collected.Status, collected.Body)
+		}
+		sale := harness.Call(http.MethodGet, "/api/sales/"+collected.Data()["sale_id"].(string), company.OwnerToken, nil).Data()
+		saleWinga := sale["winga_lines"].([]any)
+		if sale["total"] != float64(300000) || len(saleWinga) != 1 || saleWinga[0].(map[string]any)["winga_share"] != float64(250000) {
+			t.Fatalf("the collected winga sale is %v", sale)
+		}
+	})
+}

@@ -154,6 +154,12 @@ func respondWithServiceError(c *fiber.Ctx, serviceError error) error {
 		return response.Error(c, fiber.StatusForbidden, "forbidden", serviceError.Error())
 	case errors.Is(serviceError, sales.ErrDuplicatePayment), errors.Is(serviceError, sales.ErrPaymentTooLow), errors.Is(serviceError, sales.ErrChangeWithoutCash):
 		return response.Error(c, fiber.StatusBadRequest, "invalid_payment", serviceError.Error())
+	case errors.Is(serviceError, sales.ErrEmptySale):
+		return response.Error(c, fiber.StatusBadRequest, "empty_sale", serviceError.Error())
+	case errors.Is(serviceError, sales.ErrWingaOff):
+		return response.Error(c, fiber.StatusConflict, "winga_off", serviceError.Error())
+	case errors.Is(serviceError, sales.ErrWingaNameRequired), errors.Is(serviceError, sales.ErrWingaShareTooHigh):
+		return response.Error(c, fiber.StatusBadRequest, "invalid_winga_line", serviceError.Error())
 	case errors.Is(serviceError, sales.ErrDiscountNotAllowed):
 		return response.Error(c, fiber.StatusForbidden, "till_discount_not_allowed", serviceError.Error())
 	case errors.Is(serviceError, sales.ErrShopClosed):
