@@ -27,6 +27,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
 	"github.com/chrisostomemataba/balceinv-api/internal/notifications"
 	"github.com/chrisostomemataba/balceinv-api/internal/orders"
+	"github.com/chrisostomemataba/balceinv-api/internal/passwordreset"
 	"github.com/chrisostomemataba/balceinv-api/internal/phoneupload"
 	"github.com/chrisostomemataba/balceinv-api/internal/platform"
 	"github.com/chrisostomemataba/balceinv-api/internal/printing"
@@ -77,6 +78,7 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 	tenancyHandler := tenancy.NewHandler(tenancyService, isPostgres, oldDatabasePath)
 	authHandler := auth.NewHandler(authService, isPostgres)
+	passwordResetHandler := passwordreset.NewHandler(passwordreset.NewService(openDatabase, loadedConfig))
 	usersHandler := users.NewHandler(usersService)
 	accessHandler := access.NewHandler(accessService)
 	settingsHandler := settings.NewHandler(settingsService)
@@ -165,6 +167,8 @@ func registerRoutes(application *fiber.App, loadedConfig *config.Config, openDat
 	}
 
 	application.Post("/api/auth/login", newLoginAddressLimiter(), newLoginLimiter(), authHandler.Login)
+	application.Post("/api/auth/password-reset/code", newPasswordResetLimiter(), passwordResetHandler.SendCode)
+	application.Post("/api/auth/password-reset", newPasswordResetLimiter(), passwordResetHandler.Reset)
 	application.Post("/api/auth/logout", signedIn(authHandler.Logout)...)
 	application.Get("/api/auth/me", signedIn(authHandler.Me)...)
 	application.Post("/api/auth/switch-shop", signedIn(authHandler.SwitchShop)...)
@@ -474,6 +478,19 @@ func newSignupLimiter() fiber.Handler {
 		},
 		LimitReached: func(c *fiber.Ctx) error {
 			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many new businesses from this network. Try again in an hour")
+		},
+	})
+}
+
+func newPasswordResetLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        10,
+		Expiration: 15 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return response.Error(c, fiber.StatusTooManyRequests, "rate_limited", "Too many password reset tries. Try again in 15 minutes")
 		},
 	})
 }
