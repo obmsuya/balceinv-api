@@ -16,6 +16,8 @@ var CompiledSupportPasscodeHash = ""
 
 var CompiledSupportSmtpPassword = ""
 
+var CompiledBalceSmsApiKey = ""
+
 type Engine string
 
 const (
@@ -57,6 +59,8 @@ type Config struct {
 	SupportSmtpPassword string
 	SupportEmailTo      string
 	SupportEmailFrom    string
+
+	BalceSmsApiKey string
 }
 
 type LookupFunc func(key string) (string, bool)
@@ -187,6 +191,7 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 	supportSmtpPassword := readOrDefault(lookup, "SUPPORT_SMTP_PASSWORD", CompiledSupportSmtpPassword)
 	supportEmailTo := readOrDefault(lookup, "SUPPORT_EMAIL_TO", "obmsuya@gmail.com")
 	supportEmailFrom := readOrDefault(lookup, "SUPPORT_EMAIL_FROM", supportSmtpUsername)
+	balceSmsApiKey := readOrDefault(lookup, "BALCE_SMS_API_KEY", CompiledBalceSmsApiKey)
 
 	hasProblems := len(problems) > 0
 	if hasProblems {
@@ -226,6 +231,8 @@ func LoadFrom(lookup LookupFunc) (*Config, error) {
 		SupportSmtpPassword: supportSmtpPassword,
 		SupportEmailTo:      supportEmailTo,
 		SupportEmailFrom:    supportEmailFrom,
+
+		BalceSmsApiKey: balceSmsApiKey,
 	}
 
 	return loadedConfig, nil

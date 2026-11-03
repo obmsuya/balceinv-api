@@ -15,6 +15,7 @@ import (
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/identity"
+	"github.com/chrisostomemataba/balceinv-api/internal/common/mailer"
 	"github.com/chrisostomemataba/balceinv-api/internal/common/storage"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/chrisostomemataba/balceinv-api/internal/media"
@@ -289,7 +290,7 @@ func (service *Service) deliver(ctx context.Context, settings mailSettings, clai
 		return buildError
 	}
 
-	sendContext, cancelSend := context.WithTimeout(ctx, 2*smtpTimeout)
+	sendContext, cancelSend := context.WithTimeout(ctx, 2*mailer.SmtpTimeout)
 	defer cancelSend()
 	return sendMail(sendContext, settings, outgoingMessage)
 }

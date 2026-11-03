@@ -28,6 +28,7 @@ var ClearedTables = []string{
 	"sale_item_addons",
 	"sale_payments",
 	"sale_winga_lines",
+	"password_reset_codes",
 	"sale_items",
 	"sales",
 	"journal_lines",

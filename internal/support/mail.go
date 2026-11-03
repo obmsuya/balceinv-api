@@ -7,13 +7,11 @@ import (
 	htmltemplate "html/template"
 	"strings"
 	texttemplate "text/template"
-	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/common/mailer"
 	"github.com/chrisostomemataba/balceinv-api/internal/config"
 	"github.com/wneessen/go-mail"
 )
-
-const smtpTimeout = 30 * time.Second
 
 type mailSettings struct {
 	host     string
@@ -40,28 +38,8 @@ func (settings mailSettings) isConfigured() bool {
 }
 
 var sendMail = func(ctx context.Context, settings mailSettings, outgoingMessage *mail.Msg) error {
-	clientOptions := []mail.Option{
-		mail.WithPort(settings.port),
-		mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover),
-		mail.WithUsername(settings.username),
-		mail.WithPassword(settings.password),
-		mail.WithTimeout(smtpTimeout),
-	}
-	if settings.port == mail.DefaultPortSSL {
-		clientOptions = append(clientOptions, mail.WithSSL())
-	} else {
-		clientOptions = append(clientOptions, mail.WithTLSPolicy(mail.TLSMandatory))
-	}
-
-	mailClient, clientError := mail.NewClient(settings.host, clientOptions...)
-	if clientError != nil {
-		return fmt.Errorf("failed to prepare the mail client: %w", clientError)
-	}
-	sendError := mailClient.DialAndSendWithContext(ctx, outgoingMessage)
-	if sendError != nil {
-		return fmt.Errorf("failed to send the support email: %w", sendError)
-	}
-	return nil
+	server := mailer.Server{Host: settings.host, Port: settings.port, Username: settings.username, Password: settings.password, From: settings.from}
+	return mailer.Send(ctx, server, outgoingMessage)
 }
 
 type emailContent struct {
