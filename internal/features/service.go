@@ -90,6 +90,9 @@ func applyChanges(companyFeatures Features, request UpdateFeaturesRequest) Featu
 	if request.InvoicesEnabled != nil {
 		changedFeatures.InvoicesEnabled = *request.InvoicesEnabled
 	}
+	if request.WingaEnabled != nil {
+		changedFeatures.WingaEnabled = *request.WingaEnabled
+	}
 	if request.AccountingMode != nil {
 		changedFeatures.AccountingMode = *request.AccountingMode
 	}

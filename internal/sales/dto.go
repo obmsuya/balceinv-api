@@ -14,6 +14,13 @@ type LineRequest struct {
 	Extra          *ExtraRequest          `json:"extra" validate:"omitnil"`
 }
 
+type WingaLineRequest struct {
+	Name       string `json:"name" validate:"required,max=120"`
+	Quantity   int    `json:"quantity" validate:"required,gte=1,lte=100000"`
+	UnitPrice  int64  `json:"unit_price" validate:"gte=0,lte=1000000000000"`
+	WingaShare int64  `json:"winga_share" validate:"gte=0,lte=1000000000000"`
+}
+
 type ExtraRequest struct {
 	Kind  string `json:"kind" validate:"required,oneof=percent amount"`
 	Value int64  `json:"value" validate:"required,gt=0,lte=1000000000000"`
@@ -30,15 +37,17 @@ type PaymentRequest struct {
 }
 
 type QuoteRequest struct {
-	Items []LineRequest `json:"items" validate:"required,min=1,max=200,dive"`
+	Items      []LineRequest      `json:"items" validate:"omitempty,max=200,dive"`
+	WingaLines []WingaLineRequest `json:"winga_lines" validate:"omitempty,max=50,dive"`
 }
 
 type SaleRequest struct {
-	ClientRef  string           `json:"client_ref" validate:"required,min=8,max=64"`
-	CustomerId *string          `json:"customer_id" validate:"omitnil,uuid"`
-	Items      []LineRequest    `json:"items" validate:"required,min=1,max=200,dive"`
-	Payments   []PaymentRequest `json:"payments" validate:"omitempty,max=4,dive"`
-	Note       *string          `json:"note" validate:"omitnil,max=200"`
+	ClientRef  string             `json:"client_ref" validate:"required,min=8,max=64"`
+	CustomerId *string            `json:"customer_id" validate:"omitnil,uuid"`
+	Items      []LineRequest      `json:"items" validate:"omitempty,max=200,dive"`
+	WingaLines []WingaLineRequest `json:"winga_lines" validate:"omitempty,max=50,dive"`
+	Payments   []PaymentRequest   `json:"payments" validate:"omitempty,max=4,dive"`
+	Note       *string            `json:"note" validate:"omitnil,max=200"`
 }
 
 type OrderSaleRequest struct {
@@ -46,6 +55,7 @@ type OrderSaleRequest struct {
 	ShopId             uuid.UUID
 	CustomerId         uuid.UUID
 	Lines              []PricedLine
+	WingaLines         []WingaLine
 	TaxRateBasisPoints int
 	Payments           []PaymentRequest
 	Note               *string
@@ -78,6 +88,14 @@ type LineView struct {
 	InStock          *int        `json:"in_stock,omitempty"`
 }
 
+type WingaLineView struct {
+	Name       string `json:"name"`
+	Quantity   int    `json:"quantity"`
+	UnitPrice  int64  `json:"unit_price"`
+	WingaShare int64  `json:"winga_share"`
+	LineTotal  int64  `json:"line_total"`
+}
+
 type TillOptionsView struct {
 	NumpadEnabled             bool `json:"numpad_enabled"`
 	CustomerDisplayEnabled    bool `json:"customer_display_enabled"`
@@ -86,12 +104,13 @@ type TillOptionsView struct {
 }
 
 type QuoteView struct {
-	Lines              []LineView `json:"lines"`
-	Subtotal           int64      `json:"subtotal"`
-	DiscountTotal      int64      `json:"discount_total"`
-	Total              int64      `json:"total"`
-	TaxTotal           int64      `json:"tax_total"`
-	TaxRateBasisPoints int        `json:"tax_rate_basis_points"`
+	Lines              []LineView      `json:"lines"`
+	WingaLines         []WingaLineView `json:"winga_lines"`
+	Subtotal           int64           `json:"subtotal"`
+	DiscountTotal      int64           `json:"discount_total"`
+	Total              int64           `json:"total"`
+	TaxTotal           int64           `json:"tax_total"`
+	TaxRateBasisPoints int             `json:"tax_rate_basis_points"`
 }
 
 type PaymentView struct {
@@ -100,38 +119,39 @@ type PaymentView struct {
 }
 
 type SaleView struct {
-	Id                 uuid.UUID     `json:"id"`
-	ReceiptNumber      string        `json:"receipt_number"`
-	ClientRef          string        `json:"client_ref"`
-	ShopId             uuid.UUID     `json:"shop_id"`
-	ShopName           string        `json:"shop_name"`
-	UserId             uuid.UUID     `json:"user_id"`
-	CashierName        string        `json:"cashier_name"`
-	CustomerId         *uuid.UUID    `json:"customer_id"`
-	CustomerName       *string       `json:"customer_name"`
-	CustomerPhone      *string       `json:"customer_phone"`
-	CreditAmount       int64         `json:"credit_amount"`
-	OrderNumber        *string       `json:"order_number"`
-	Subtotal           int64         `json:"subtotal"`
-	DiscountTotal      int64         `json:"discount_total"`
-	Total              int64         `json:"total"`
-	TaxTotal           int64         `json:"tax_total"`
-	TaxRateBasisPoints int           `json:"tax_rate_basis_points"`
-	AmountPaid         int64         `json:"amount_paid"`
-	ChangeGiven        int64         `json:"change_given"`
-	CurrencyCode       string        `json:"currency_code"`
-	CurrencyDecimals   int           `json:"currency_decimals"`
-	Note               *string       `json:"note"`
-	CreatedAt          time.Time     `json:"created_at"`
-	Items              []LineView    `json:"items"`
-	Payments           []PaymentView `json:"payments"`
-	Fiscal             *FiscalView   `json:"fiscal"`
-	VoidedAt           *time.Time    `json:"voided_at"`
-	VoidReason         *string       `json:"void_reason"`
-	VoidedByName       *string       `json:"voided_by_name"`
-	CreditNote         *FiscalView   `json:"credit_note"`
-	Refunds            []RefundView  `json:"refunds"`
-	RefundedTotal      int64         `json:"refunded_total"`
+	Id                 uuid.UUID       `json:"id"`
+	ReceiptNumber      string          `json:"receipt_number"`
+	ClientRef          string          `json:"client_ref"`
+	ShopId             uuid.UUID       `json:"shop_id"`
+	ShopName           string          `json:"shop_name"`
+	UserId             uuid.UUID       `json:"user_id"`
+	CashierName        string          `json:"cashier_name"`
+	CustomerId         *uuid.UUID      `json:"customer_id"`
+	CustomerName       *string         `json:"customer_name"`
+	CustomerPhone      *string         `json:"customer_phone"`
+	CreditAmount       int64           `json:"credit_amount"`
+	OrderNumber        *string         `json:"order_number"`
+	Subtotal           int64           `json:"subtotal"`
+	DiscountTotal      int64           `json:"discount_total"`
+	Total              int64           `json:"total"`
+	TaxTotal           int64           `json:"tax_total"`
+	TaxRateBasisPoints int             `json:"tax_rate_basis_points"`
+	AmountPaid         int64           `json:"amount_paid"`
+	ChangeGiven        int64           `json:"change_given"`
+	CurrencyCode       string          `json:"currency_code"`
+	CurrencyDecimals   int             `json:"currency_decimals"`
+	Note               *string         `json:"note"`
+	CreatedAt          time.Time       `json:"created_at"`
+	Items              []LineView      `json:"items"`
+	WingaLines         []WingaLineView `json:"winga_lines"`
+	Payments           []PaymentView   `json:"payments"`
+	Fiscal             *FiscalView     `json:"fiscal"`
+	VoidedAt           *time.Time      `json:"voided_at"`
+	VoidReason         *string         `json:"void_reason"`
+	VoidedByName       *string         `json:"voided_by_name"`
+	CreditNote         *FiscalView     `json:"credit_note"`
+	Refunds            []RefundView    `json:"refunds"`
+	RefundedTotal      int64           `json:"refunded_total"`
 }
 
 type RefundLineRequest struct {

@@ -462,6 +462,16 @@ func BuildFiscalPayload(saleView SaleView, companyProfile settings.CompanyProfil
 		}
 		payloadItems = append(payloadItems, payloadItem)
 	}
+	for _, wingaLineView := range saleView.WingaLines {
+		payloadItems = append(payloadItems, FiscalPayloadItem{
+			Code:               "WINGA",
+			Description:        wingaLineView.Name,
+			Quantity:           wingaLineView.Quantity,
+			UnitPrice:          wingaLineView.UnitPrice,
+			Total:              wingaLineView.LineTotal,
+			TaxRateBasisPoints: saleView.TaxRateBasisPoints,
+		})
+	}
 
 	fiscalPayload := FiscalPayload{
 		DocumentType:  "receipt",

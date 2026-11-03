@@ -116,6 +116,11 @@ func BuildReceipt(receiptView sales.ReceiptView, logoImage image.Image, openDraw
 			printer.Write(leftRightText("  "+fitText(labels["cashierDiscount"], columns-16), "-"+money(saleLine.ManualDiscount), columns) + "\n")
 		}
 	}
+	for _, wingaLine := range saleView.WingaLines {
+		printer.Write(fitText(wingaLine.Name, columns) + "\n")
+		quantityText := fmt.Sprintf("  %d x %s", wingaLine.Quantity, money(wingaLine.UnitPrice))
+		printer.Write(leftRightText(quantityText, money(wingaLine.LineTotal), columns) + "\n")
+	}
 
 	printer.Write(strings.Repeat("-", columns) + "\n")
 	if saleView.DiscountTotal > 0 {

@@ -168,7 +168,7 @@ func (service *Service) SaleDocument(ctx context.Context, querier database.Queri
 		StatusTone:    statusTone,
 		Party:         saleParty(saleView, label),
 		Facts:         saleDetails(saleView, receiptView.Shop.Name, label),
-		Lines:         invoiceLines(saleView.Items, label),
+		Lines:         invoiceLines(saleView.Items, saleView.WingaLines, label),
 		Totals:        totals,
 		AmountInWords: documents.AmountInWords(language, saleView.Total, branding),
 		GeneratedBy:   viewer.Name,
@@ -218,7 +218,7 @@ func saleParty(saleView sales.SaleView, label func(string) string) documents.Inv
 	return party
 }
 
-func invoiceLines(saleLines []sales.LineView, label func(string) string) []documents.InvoiceLine {
+func invoiceLines(saleLines []sales.LineView, wingaLines []sales.WingaLineView, label func(string) string) []documents.InvoiceLine {
 	lines := []documents.InvoiceLine{}
 	for _, saleLine := range saleLines {
 		itemName := saleLine.ProductName
@@ -254,6 +254,14 @@ func invoiceLines(saleLines []sales.LineView, label func(string) string) []docum
 				Amount:      quantity * addon.UnitPrice,
 			})
 		}
+	}
+	for _, wingaLine := range wingaLines {
+		lines = append(lines, documents.InvoiceLine{
+			Description: wingaLine.Name,
+			Quantity:    int64(wingaLine.Quantity),
+			UnitPrice:   wingaLine.UnitPrice,
+			Amount:      wingaLine.LineTotal,
+		})
 	}
 	return lines
 }
