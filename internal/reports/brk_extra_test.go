@@ -57,7 +57,7 @@ func TestBrkAndExtraShowInTheReports(t *testing.T) {
 		}
 
 		dailyBook := openWorkbook(t, harness.Call(http.MethodGet, "/api/reports/daily/export"+rangeQuery+"&format=xlsx&lang=sw", company.OwnerToken, nil))
-		if !strings.Contains(sheetText(dailyBook), "Sehemu ya Brk") || !strings.Contains(sheetText(dailyBook), "Ziada") {
+		if !strings.Contains(sheetText(dailyBook), "Sehemu ya winga") || !strings.Contains(sheetText(dailyBook), "Ziada") {
 			t.Fatalf("the daily sheet has no Brk or Extra columns:\n%s", sheetText(dailyBook))
 		}
 
