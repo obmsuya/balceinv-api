@@ -2,6 +2,7 @@ package reports
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ func (service *Service) Export(ctx context.Context, querier database.Querier, pr
 	if formatError != nil {
 		return documents.File{}, formatError
 	}
-	isKnownReport := map[string]bool{ReportSummary: true, ReportDaily: true, ReportProducts: true, ReportCashiers: true, ReportShops: true, ReportInventory: true, ReportDeadStock: true}[request.Report]
+	isKnownReport := map[string]bool{ReportSummary: true, ReportDaily: true, ReportProducts: true, ReportCashiers: true, ReportShops: true, ReportInventory: true, ReportDeadStock: true, ReportBrkExtra: true}[request.Report]
 	if !isKnownReport {
 		return documents.File{}, ErrUnknownReport
 	}
@@ -188,6 +189,8 @@ func (service *Service) reportRegister(ctx context.Context, querier database.Que
 		return register, service.fillStaff(ctx, querier, exporting, &register)
 	case ReportShops:
 		return register, service.fillShops(ctx, querier, exporting, &register)
+	case ReportBrkExtra:
+		return register, service.fillBrkExtra(ctx, querier, exporting, &register)
 	case ReportInventory:
 		return register, service.fillStock(ctx, querier, exporting, &register)
 	default:
@@ -213,6 +216,10 @@ func (service *Service) fillDaily(ctx context.Context, querier database.Querier,
 	if showsVat {
 		register.Columns = append(register.Columns, documents.RegisterColumn{Title: exporting.moneyTitle("vat"), Kind: documents.Money, Sum: true})
 	}
+	showsExtra := summary.ExtraTotal != 0
+	showsBrk := summary.WingaTotal != 0
+	register.Columns = append(register.Columns, exporting.brkExtraColumns(showsExtra, showsBrk)...)
+	register.Landscape = showsExtra || showsBrk
 	register.Columns = append(register.Columns,
 		documents.RegisterColumn{Title: exporting.moneyTitle("costOfGoods"), Kind: documents.Money, Sum: true},
 		documents.RegisterColumn{Title: exporting.moneyTitle("grossProfit"), Kind: documents.Money, Sum: true},
@@ -228,6 +235,7 @@ func (service *Service) fillDaily(ctx context.Context, querier database.Querier,
 		if showsVat {
 			cells = append(cells, dayView.TaxTotal)
 		}
+		cells = append(cells, brkExtraCells(showsExtra, showsBrk, dayView.ExtraTotal, dayView.WingaTotal, dayView.WingaShareTotal)...)
 		cells = append(cells, dayView.CostTotal, dayView.GrossProfit, marginOf(dayView.GrossProfit, dayView.Total-dayView.TaxTotal))
 		register.Rows = append(register.Rows, documents.RegisterRow{Cells: cells})
 	}
@@ -238,7 +246,7 @@ func (service *Service) fillDaily(ctx context.Context, querier database.Querier,
 		{Label: exporting.label("margin"), Value: summary.MarginBasisPoints, Kind: documents.Percent},
 	}
 	register.EmptyText = exporting.label("emptySales")
-	register.Notes = []string{exporting.label("dailyNote"), exporting.label("sumNoteCost")}
+	register.Notes = append([]string{exporting.label("dailyNote"), exporting.label("sumNoteCost")}, exporting.brkExtraNotes(showsExtra, showsBrk)...)
 	return nil
 }
 
@@ -273,18 +281,105 @@ func (service *Service) fillStaff(ctx context.Context, querier database.Querier,
 	if cashiersError != nil {
 		return cashiersError
 	}
+	showsExtra := false
+	showsBrk := false
+	for _, cashierView := range cashierViews {
+		showsExtra = showsExtra || cashierView.ExtraTotal != 0
+		showsBrk = showsBrk || cashierView.WingaTotal != 0
+	}
 	register.Columns = []documents.RegisterColumn{
 		{Title: exporting.label("staff"), Kind: documents.Text, Weight: 3.4},
 		{Title: exporting.label("sales"), Kind: documents.Integer, Sum: true},
 		{Title: exporting.moneyTitle("takings"), Kind: documents.Money, Sum: true},
-		{Title: exporting.moneyTitle("averageSale"), Kind: documents.Money},
 	}
+	register.Columns = append(register.Columns, exporting.brkExtraColumns(showsExtra, showsBrk)...)
+	register.Columns = append(register.Columns, documents.RegisterColumn{Title: exporting.moneyTitle("averageSale"), Kind: documents.Money})
+	register.Landscape = showsExtra && showsBrk
 	for _, cashierView := range cashierViews {
-		register.Rows = append(register.Rows, documents.RegisterRow{Cells: []any{cashierView.Name, cashierView.SaleCount, cashierView.Total, cashierView.AverageSale}})
+		cells := []any{cashierView.Name, cashierView.SaleCount, cashierView.Total}
+		cells = append(cells, brkExtraCells(showsExtra, showsBrk, cashierView.ExtraTotal, cashierView.WingaTotal, cashierView.WingaShareTotal)...)
+		cells = append(cells, cashierView.AverageSale)
+		register.Rows = append(register.Rows, documents.RegisterRow{Cells: cells})
 	}
 	register.EmptyText = exporting.label("emptySales")
-	register.Notes = []string{exporting.label("staffNote")}
+	register.Notes = append([]string{exporting.label("staffNote")}, exporting.brkExtraNotes(showsExtra, showsBrk)...)
 	return nil
+}
+
+func (service *Service) fillBrkExtra(ctx context.Context, querier database.Querier, exporting exportContext, register *documents.Register) error {
+	extraLines, extraError := service.repository.ExtraLines(ctx, querier, exporting.scope, documentProductLimit)
+	if extraError != nil {
+		return extraError
+	}
+	brkLines, brkError := service.repository.BrkLines(ctx, querier, exporting.scope, documentProductLimit)
+	if brkError != nil {
+		return brkError
+	}
+	lineViews := append(extraLines, brkLines...)
+	sort.SliceStable(lineViews, func(left int, right int) bool {
+		return lineViews[left].SoldAt.Before(lineViews[right].SoldAt)
+	})
+
+	register.Landscape = true
+	register.Columns = []documents.RegisterColumn{
+		{Title: exporting.label("time"), Kind: documents.DateTime},
+		{Title: exporting.label("receipt"), Kind: documents.Text, Weight: 1.8},
+		{Title: exporting.label("staff"), Kind: documents.Text, Weight: 2.3},
+		{Title: exporting.label("item"), Kind: documents.Text, Weight: 2.5},
+		{Title: exporting.label("quantity"), Kind: documents.Integer, Sum: true},
+	}
+	register.Columns = append(register.Columns, exporting.brkExtraColumns(true, true)...)
+	extraTotal := int64(0)
+	brkTotal := int64(0)
+	brkShareTotal := int64(0)
+	for _, lineView := range lineViews {
+		cells := []any{lineView.SoldAt, lineView.ReceiptNumber, lineView.StaffName, lineView.ItemName, lineView.Quantity}
+		cells = append(cells, brkExtraCells(true, true, lineView.ExtraTotal, lineView.WingaTotal, lineView.WingaShare)...)
+		register.Rows = append(register.Rows, documents.RegisterRow{Cells: cells})
+		extraTotal += lineView.ExtraTotal
+		brkTotal += lineView.WingaTotal
+		brkShareTotal += lineView.WingaShare
+	}
+	register.Summary = []documents.Field{
+		{Label: exporting.label("extra"), Value: extraTotal, Kind: documents.Money},
+		{Label: exporting.label("brk"), Value: brkTotal, Kind: documents.Money},
+		{Label: exporting.label("brkShare"), Value: brkShareTotal, Kind: documents.Money, Strong: true},
+	}
+	register.EmptyText = exporting.label("emptyBrkExtra")
+	register.Notes = []string{exporting.label("brkExtraNote")}
+	return nil
+}
+
+func (exporting exportContext) brkExtraColumns(showsExtra bool, showsBrk bool) []documents.RegisterColumn {
+	columns := []documents.RegisterColumn{}
+	if showsExtra {
+		columns = append(columns, documents.RegisterColumn{Title: exporting.moneyTitle("extra"), Kind: documents.Money, Sum: true})
+	}
+	if showsBrk {
+		columns = append(columns,
+			documents.RegisterColumn{Title: exporting.moneyTitle("brk"), Kind: documents.Money, Sum: true},
+			documents.RegisterColumn{Title: exporting.moneyTitle("brkShare"), Kind: documents.Money, Sum: true},
+		)
+	}
+	return columns
+}
+
+func brkExtraCells(showsExtra bool, showsBrk bool, extraTotal int64, brkTotal int64, brkShare int64) []any {
+	cells := []any{}
+	if showsExtra {
+		cells = append(cells, extraTotal)
+	}
+	if showsBrk {
+		cells = append(cells, brkTotal, brkShare)
+	}
+	return cells
+}
+
+func (exporting exportContext) brkExtraNotes(showsExtra bool, showsBrk bool) []string {
+	if !showsExtra && !showsBrk {
+		return nil
+	}
+	return []string{exporting.label("brkExtraNote")}
 }
 
 func (service *Service) fillShops(ctx context.Context, querier database.Querier, exporting exportContext, register *documents.Register) error {

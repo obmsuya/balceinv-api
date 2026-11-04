@@ -14,9 +14,10 @@ const (
 	ReportShops     = "shops"
 	ReportInventory = "inventory"
 	ReportDeadStock = "dead-stock"
+	ReportBrkExtra  = "brk-extra"
 )
 
-var ErrUnknownReport = errors.New("choose summary, daily, products, cashiers, shops, inventory or dead-stock")
+var ErrUnknownReport = errors.New("choose summary, daily, products, cashiers, shops, inventory, dead-stock or brk-extra")
 
 type ExportRequest struct {
 	Report   string
@@ -86,6 +87,15 @@ var exportLabels = map[string]map[string]string{
 		"stockAsAt":         "Stock as at {date}",
 		"period":            "Period",
 		"title.dead-stock":  "Stock not selling",
+		"title.brk-extra":   "Brk and Extra",
+		"time":              "Time",
+		"receipt":           "Receipt",
+		"item":              "Item",
+		"extra":             "Extra",
+		"brk":               "Brk",
+		"brkShare":          "Brk share",
+		"brkExtraNote":      "Extra and Brk are already in takings. The Brk share is the part paid out and is already in cost of goods.",
+		"emptyBrkExtra":     "No Extra or Brk in this period",
 		"sumTakings":        "Takings",
 		"sumTakingsInclVat": "Takings, including VAT",
 		"sumLessVat":        "Less: VAT",
@@ -178,6 +188,15 @@ var exportLabels = map[string]map[string]string{
 		"stockAsAt":         "Stoku kufikia {date}",
 		"period":            "Kipindi",
 		"title.dead-stock":  "Stoku isiyouzwa",
+		"title.brk-extra":   "Brk na Ziada",
+		"time":              "Muda",
+		"receipt":           "Risiti",
+		"item":              "Kitu",
+		"extra":             "Ziada",
+		"brk":               "Brk",
+		"brkShare":          "Sehemu ya Brk",
+		"brkExtraNote":      "Ziada na Brk tayari ziko kwenye makusanyo. Sehemu ya Brk ni kiasi kinacholipwa na tayari iko kwenye gharama ya bidhaa.",
+		"emptyBrkExtra":     "Hakuna Ziada wala Brk katika kipindi hiki",
 		"sumTakings":        "Makusanyo",
 		"sumTakingsInclVat": "Makusanyo, pamoja na VAT",
 		"sumLessVat":        "Toa: VAT",
