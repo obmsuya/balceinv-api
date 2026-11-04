@@ -50,12 +50,15 @@ type SummaryView struct {
 }
 
 type DayView struct {
-	Date        string `json:"date"`
-	SaleCount   int64  `json:"sale_count"`
-	Total       int64  `json:"total"`
-	TaxTotal    int64  `json:"tax_total"`
-	CostTotal   int64  `json:"cost_total"`
-	GrossProfit int64  `json:"gross_profit"`
+	Date            string `json:"date"`
+	SaleCount       int64  `json:"sale_count"`
+	Total           int64  `json:"total"`
+	TaxTotal        int64  `json:"tax_total"`
+	CostTotal       int64  `json:"cost_total"`
+	GrossProfit     int64  `json:"gross_profit"`
+	ExtraTotal      int64  `json:"extra_total"`
+	WingaTotal      int64  `json:"winga_total"`
+	WingaShareTotal int64  `json:"winga_share_total"`
 }
 
 type ProductRowView struct {
@@ -72,11 +75,25 @@ type ProductRowView struct {
 }
 
 type CashierRowView struct {
-	UserId      uuid.UUID `json:"user_id"`
-	Name        string    `json:"name"`
-	SaleCount   int64     `json:"sale_count"`
-	Total       int64     `json:"total"`
-	AverageSale int64     `json:"average_sale"`
+	UserId          uuid.UUID `json:"user_id"`
+	Name            string    `json:"name"`
+	SaleCount       int64     `json:"sale_count"`
+	Total           int64     `json:"total"`
+	AverageSale     int64     `json:"average_sale"`
+	ExtraTotal      int64     `json:"extra_total"`
+	WingaTotal      int64     `json:"winga_total"`
+	WingaShareTotal int64     `json:"winga_share_total"`
+}
+
+type BrkExtraLineView struct {
+	SoldAt        time.Time
+	ReceiptNumber string
+	StaffName     string
+	ItemName      string
+	Quantity      int64
+	ExtraTotal    int64
+	WingaTotal    int64
+	WingaShare    int64
 }
 
 type ShopRowView struct {

@@ -186,14 +186,14 @@ func (repository *Repository) Daily(ctx context.Context, querier database.Querie
 	query := `
 		WITH days (day, starts_at, ends_at) AS (VALUES ` + strings.Join(dayRows, ", ") + `),
 		item_costs AS (
-SELECT costs.sale_id, SUM(costs.cost) AS cost
+SELECT costs.sale_id, SUM(costs.cost) AS cost, SUM(costs.extra) AS extra, SUM(costs.winga_total) AS winga_total, SUM(costs.winga_share) AS winga_share
 			FROM (
-				SELECT i.sale_id, i.unit_cost * i.quantity AS cost
+				SELECT i.sale_id, i.unit_cost * i.quantity AS cost, i.extra_unit_amount * i.quantity AS extra, 0 AS winga_total, 0 AS winga_share
 				FROM sale_items i
 				JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
 				WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
 				UNION ALL
-				SELECT w.sale_id, w.winga_share AS cost
+				SELECT w.sale_id, w.winga_share AS cost, 0 AS extra, w.line_total AS winga_total, w.winga_share AS winga_share
 				FROM sale_winga_lines w
 				JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
 				WHERE s.company_id = ` + companyPlaceholder + ` AND s.created_at >= ` + itemFrom + ` AND s.created_at < ` + itemTo + itemShopFilter + ` AND s.voided_at IS NULL
@@ -204,7 +204,10 @@ SELECT costs.sale_id, SUM(costs.cost) AS cost
 		       COUNT(s.id),
 		       CAST(COALESCE(SUM(s.total), 0) AS BIGINT),
 		       CAST(COALESCE(SUM(s.tax_total), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(c.cost), 0) AS BIGINT)
+		       CAST(COALESCE(SUM(c.cost), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(c.extra), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(c.winga_total), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(c.winga_share), 0) AS BIGINT)
 		FROM days d
 		LEFT JOIN sales s ON s.company_id = ` + companyPlaceholder + ` AND s.created_at >= d.starts_at AND s.created_at < d.ends_at AND s.voided_at IS NULL` + shopFilter + `
 		LEFT JOIN item_costs c ON c.sale_id = s.id
@@ -221,7 +224,7 @@ SELECT costs.sale_id, SUM(costs.cost) AS cost
 	dayViews := []DayView{}
 	for dayRowsResult.Next() {
 		dayView := DayView{}
-		scanError := dayRowsResult.Scan(&dayView.Date, &dayView.SaleCount, &dayView.Total, &dayView.TaxTotal, &dayView.CostTotal)
+		scanError := dayRowsResult.Scan(&dayView.Date, &dayView.SaleCount, &dayView.Total, &dayView.TaxTotal, &dayView.CostTotal, &dayView.ExtraTotal, &dayView.WingaTotal, &dayView.WingaShareTotal)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a day: %w", scanError)
 		}
@@ -283,11 +286,33 @@ func (repository *Repository) Products(ctx context.Context, querier database.Que
 
 func (repository *Repository) Cashiers(ctx context.Context, querier database.Querier, scope Scope) ([]CashierRowView, error) {
 	arguments := &queryArguments{}
+	extraWhere := salesWhere(scope, arguments)
+	wingaWhere := salesWhere(scope, arguments)
+	saleWhere := salesWhere(scope, arguments)
 	query := `
-		SELECT s.user_id, MAX(u.name), COUNT(*), CAST(SUM(s.total) AS BIGINT)
+		WITH sale_extras AS (
+			SELECT extras.sale_id, SUM(extras.extra) AS extra, SUM(extras.winga_total) AS winga_total, SUM(extras.winga_share) AS winga_share
+			FROM (
+				SELECT i.sale_id, i.extra_unit_amount * i.quantity AS extra, 0 AS winga_total, 0 AS winga_share
+				FROM sale_items i
+				JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
+				WHERE ` + extraWhere + ` AND i.extra_unit_amount <> 0
+				UNION ALL
+				SELECT w.sale_id, 0 AS extra, w.line_total AS winga_total, w.winga_share AS winga_share
+				FROM sale_winga_lines w
+				JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+				WHERE ` + wingaWhere + `
+			) extras
+			GROUP BY extras.sale_id
+		)
+		SELECT s.user_id, MAX(u.name), COUNT(*), CAST(SUM(s.total) AS BIGINT),
+		       CAST(COALESCE(SUM(e.extra), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(e.winga_total), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(e.winga_share), 0) AS BIGINT)
 		FROM sales s
 		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
-		WHERE ` + salesWhere(scope, arguments) + `
+		LEFT JOIN sale_extras e ON e.sale_id = s.id
+		WHERE ` + saleWhere + `
 		GROUP BY s.user_id
 		ORDER BY SUM(s.total) DESC, s.user_id
 	`
@@ -301,7 +326,7 @@ func (repository *Repository) Cashiers(ctx context.Context, querier database.Que
 	cashierViews := []CashierRowView{}
 	for cashierRows.Next() {
 		cashierView := CashierRowView{}
-		scanError := cashierRows.Scan(&cashierView.UserId, &cashierView.Name, &cashierView.SaleCount, &cashierView.Total)
+		scanError := cashierRows.Scan(&cashierView.UserId, &cashierView.Name, &cashierView.SaleCount, &cashierView.Total, &cashierView.ExtraTotal, &cashierView.WingaTotal, &cashierView.WingaShareTotal)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a cashier row: %w", scanError)
 		}
@@ -309,6 +334,66 @@ func (repository *Repository) Cashiers(ctx context.Context, querier database.Que
 		cashierViews = append(cashierViews, cashierView)
 	}
 	return cashierViews, cashierRows.Err()
+}
+
+func (repository *Repository) ExtraLines(ctx context.Context, querier database.Querier, scope Scope, limit int) ([]BrkExtraLineView, error) {
+	arguments := &queryArguments{}
+	query := `
+		SELECT s.created_at, s.receipt_number, u.name, i.product_name, i.variant_label, i.quantity, i.extra_unit_amount * i.quantity
+		FROM sale_items i
+		JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
+		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
+		WHERE ` + salesWhere(scope, arguments) + ` AND i.extra_unit_amount <> 0
+		ORDER BY s.created_at, s.receipt_number
+		LIMIT ` + arguments.add(limit)
+
+	extraRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list extra lines: %w", queryError)
+	}
+	defer extraRows.Close()
+
+	lineViews := []BrkExtraLineView{}
+	for extraRows.Next() {
+		lineView := BrkExtraLineView{}
+		variantLabel := ""
+		scanError := extraRows.Scan(&lineView.SoldAt, &lineView.ReceiptNumber, &lineView.StaffName, &lineView.ItemName, &variantLabel, &lineView.Quantity, &lineView.ExtraTotal)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan an extra line: %w", scanError)
+		}
+		lineView.ItemName = productLabel(lineView.ItemName, variantLabel)
+		lineViews = append(lineViews, lineView)
+	}
+	return lineViews, extraRows.Err()
+}
+
+func (repository *Repository) BrkLines(ctx context.Context, querier database.Querier, scope Scope, limit int) ([]BrkExtraLineView, error) {
+	arguments := &queryArguments{}
+	query := `
+		SELECT s.created_at, s.receipt_number, u.name, w.name, w.quantity, w.line_total, w.winga_share
+		FROM sale_winga_lines w
+		JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+		JOIN users u ON u.company_id = s.company_id AND u.id = s.user_id
+		WHERE ` + salesWhere(scope, arguments) + `
+		ORDER BY s.created_at, s.receipt_number
+		LIMIT ` + arguments.add(limit)
+
+	brkRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
+	if queryError != nil {
+		return nil, fmt.Errorf("failed to list brk lines: %w", queryError)
+	}
+	defer brkRows.Close()
+
+	lineViews := []BrkExtraLineView{}
+	for brkRows.Next() {
+		lineView := BrkExtraLineView{}
+		scanError := brkRows.Scan(&lineView.SoldAt, &lineView.ReceiptNumber, &lineView.StaffName, &lineView.ItemName, &lineView.Quantity, &lineView.WingaTotal, &lineView.WingaShare)
+		if scanError != nil {
+			return nil, fmt.Errorf("failed to scan a brk line: %w", scanError)
+		}
+		lineViews = append(lineViews, lineView)
+	}
+	return lineViews, brkRows.Err()
 }
 
 func (repository *Repository) Shops(ctx context.Context, querier database.Querier, scope Scope) ([]ShopRowView, error) {
