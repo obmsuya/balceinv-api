@@ -40,9 +40,9 @@ var (
 	ErrSaleFromOrder      = errors.New("this sale completed a customer order; cancel or change the order instead")
 	ErrFiscalBusy         = errors.New("this sale is being sent to the EFD right now; try again in a moment")
 	ErrEmptySale          = errors.New("add at least one item")
-	ErrWingaOff           = errors.New("winga lines are turned off for this business")
-	ErrWingaNameRequired  = errors.New("give each winga line a name")
-	ErrWingaShareTooHigh  = errors.New("the winga share cannot be more than the line total")
+	ErrWingaOff           = errors.New("brk lines are turned off for this business")
+	ErrWingaNameRequired  = errors.New("give each brk line a name")
+	ErrWingaShareTooHigh  = errors.New("the brk share cannot be more than the line total")
 )
 
 type Service struct {

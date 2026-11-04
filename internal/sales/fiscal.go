@@ -464,7 +464,7 @@ func BuildFiscalPayload(saleView SaleView, companyProfile settings.CompanyProfil
 	}
 	for _, wingaLineView := range saleView.WingaLines {
 		payloadItems = append(payloadItems, FiscalPayloadItem{
-			Code:               "WINGA",
+			Code:               "BRK",
 			Description:        wingaLineView.Name,
 			Quantity:           wingaLineView.Quantity,
 			UnitPrice:          wingaLineView.UnitPrice,
