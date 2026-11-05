@@ -144,6 +144,28 @@ func TestCashierDiscountStacksOnTheAutomaticOneAndNeverGoesBelowZero(t *testing.
 
 }
 
+func TestCashierDiscountComesOffEachItem(t *testing.T) {
+	cement := product(3333, nil, 0)
+	priceWith := func(quantity int, manualDiscount ManualDiscount) PricedLine {
+		return PriceSale([]PricingLine{{Product: cement, Quantity: quantity, ManualDiscount: &manualDiscount}}, nil, 0).Lines[0]
+	}
+
+	fiveHundredEach := priceWith(4, ManualDiscount{Kind: ManualDiscountAmount, Value: 500})
+	if fiveHundredEach.ManualDiscount != 2000 || fiveHundredEach.LineTotal != 11332 {
+		t.Fatalf("500 off each of 4 bags priced as %+v", fiveHundredEach)
+	}
+
+	tenPercentEach := priceWith(3, ManualDiscount{Kind: ManualDiscountPercent, Value: 1000})
+	if tenPercentEach.ManualDiscount != 999 || tenPercentEach.LineTotal != 9000 {
+		t.Fatalf("10%% off each of 3 bags priced as %+v", tenPercentEach)
+	}
+
+	moreThanThePrice := priceWith(2, ManualDiscount{Kind: ManualDiscountAmount, Value: 1_000_000_000_000})
+	if moreThanThePrice.ManualDiscount != 6666 || moreThanThePrice.LineTotal != 0 {
+		t.Fatalf("an amount above the price each priced as %+v", moreThanThePrice)
+	}
+}
+
 func TestExtraRaisesTheUnitPriceAfterTheAutomaticDiscount(t *testing.T) {
 	soda := product(1000, nil, 0)
 	tenPercentOff := discount(discounts.KindPercent, 1000, &soda.Id)
@@ -163,7 +185,7 @@ func TestExtraRaisesTheUnitPriceAfterTheAutomaticDiscount(t *testing.T) {
 	}
 
 	withCashierDiscount := priceWith(&PriceExtra{Kind: ManualDiscountAmount, Value: 500}, &ManualDiscount{Kind: ManualDiscountAmount, Value: 100})
-	if withCashierDiscount.LineTotal != 4100 || withCashierDiscount.DiscountAmount != 400 || withCashierDiscount.ManualDiscount != 100 {
+	if withCashierDiscount.LineTotal != 3900 || withCashierDiscount.DiscountAmount != 600 || withCashierDiscount.ManualDiscount != 300 {
 		t.Fatalf("an extra and a cashier discount on one line priced as %+v", withCashierDiscount)
 	}
 
