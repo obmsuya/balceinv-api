@@ -146,13 +146,14 @@ func priceLine(pricingLine PricingLine, applicableDiscounts []discounts.Discount
 	}
 
 	if pricingLine.Extra != nil {
-		pricedLine.ExtraUnitAmount = extraUnitAmount(*pricingLine.Extra, unitPrice)
+		pricedLine.ExtraUnitAmount = ExtraPerItem(*pricingLine.Extra, unitPrice)
 		pricedLine.UnitPrice += pricedLine.ExtraUnitAmount
 	}
 
 	if pricingLine.ManualDiscount != nil {
 		amountLeftToDiscount := pricedLine.GrossTotal() - pricedLine.DiscountAmount
-		pricedLine.ManualDiscount = min(manualDiscountAmount(*pricingLine.ManualDiscount, pricedLine.GrossTotal()), amountLeftToDiscount)
+		discountEach := DiscountPerItem(*pricingLine.ManualDiscount, pricedLine.UnitPrice+pricedLine.AddonsUnitTotal)
+		pricedLine.ManualDiscount = min(discountEach*quantity, amountLeftToDiscount)
 		pricedLine.DiscountAmount += pricedLine.ManualDiscount
 	}
 
@@ -160,14 +161,14 @@ func priceLine(pricingLine PricingLine, applicableDiscounts []discounts.Discount
 	return pricedLine
 }
 
-func manualDiscountAmount(manualDiscount ManualDiscount, grossTotal int64) int64 {
+func DiscountPerItem(manualDiscount ManualDiscount, itemPrice int64) int64 {
 	if manualDiscount.Kind == ManualDiscountPercent {
-		return multiplyDivideRoundHalfUp(grossTotal, min(manualDiscount.Value, basisPointsPerWhole), basisPointsPerWhole)
+		return multiplyDivideRoundHalfUp(itemPrice, min(manualDiscount.Value, basisPointsPerWhole), basisPointsPerWhole)
 	}
-	return manualDiscount.Value
+	return min(manualDiscount.Value, itemPrice)
 }
 
-func extraUnitAmount(priceExtra PriceExtra, listUnitPrice int64) int64 {
+func ExtraPerItem(priceExtra PriceExtra, listUnitPrice int64) int64 {
 	if priceExtra.Kind == ManualDiscountPercent {
 		return multiplyDivideRoundHalfUp(listUnitPrice, min(priceExtra.Value, highestExtraBasisPoints), basisPointsPerWhole)
 	}
