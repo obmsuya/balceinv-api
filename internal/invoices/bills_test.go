@@ -87,7 +87,7 @@ func TestInvoiceFromDraftToPaidMovesStockDebtAndBooksOnce(t *testing.T) {
 			"customer_id": shop.customerId,
 			"reference":   "LPO-4471",
 			"lines": []map[string]any{
-				{"product_id": shop.productId, "quantity": 4, "discount_amount": 8000},
+				{"product_id": shop.productId, "quantity": 4, "discount": map[string]any{"kind": "amount", "value": 2000}},
 				{"description": "Transport to Mbezi", "unit": "trip", "quantity": 1, "unit_price": 25000},
 			},
 		}, http.StatusCreated).Data()
@@ -105,7 +105,7 @@ func TestInvoiceFromDraftToPaidMovesStockDebtAndBooksOnce(t *testing.T) {
 
 		edited := shop.call(t, http.MethodPut, "/api/invoices/"+invoiceId, map[string]any{
 			"kind": "invoice", "customer_id": shop.customerId,
-			"lines": []map[string]any{{"product_id": shop.productId, "quantity": 5, "unit_price": 70000}},
+			"lines": []map[string]any{{"product_id": shop.productId, "quantity": 5, "discount": map[string]any{"kind": "amount", "value": 2000}}},
 		}, http.StatusOK).Data()
 		if edited["total"] != float64(350000) || edited["number"] != draft["number"] {
 			t.Fatalf("the edit gave %v", edited)
@@ -217,7 +217,7 @@ func TestQuotationsBecomeInvoicesAndInvoicesGiveDeliveryNotes(t *testing.T) {
 		year := time.Now().Year()
 		quotation := shop.call(t, http.MethodPost, "/api/invoices", map[string]any{
 			"kind": "quotation", "customer_id": shop.customerId, "terms": "Valid while stock lasts",
-			"lines": []map[string]any{{"product_id": shop.productId, "quantity": 2, "unit_price": 70000}, {"description": "Installation", "quantity": 1, "unit_price": 15000}},
+			"lines": []map[string]any{{"product_id": shop.productId, "quantity": 2, "discount": map[string]any{"kind": "amount", "value": 2000}}, {"description": "Installation", "quantity": 1, "unit_price": 15000}},
 		}, http.StatusCreated).Data()
 		quotationId := quotation["id"].(string)
 		if quotation["number"] != fmt.Sprintf("QUO-%d-0001", year) || quotation["payment_status"] != nil {
@@ -287,7 +287,9 @@ func TestInvoiceLinesAreChecked(t *testing.T) {
 			"party_required":            {"kind": "invoice", "lines": []map[string]any{{"description": "Labour", "quantity": 1, "unit_price": 1000}}},
 			"line_description_required": {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"quantity": 1, "unit_price": 1000}}},
 			"line_price_required":       {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"description": "Labour", "quantity": 1}}},
-			"discount_too_high":         {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"description": "Labour", "quantity": 1, "unit_price": 1000, "discount_amount": 1001}}},
+			"invoice_price_locked":      {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"product_id": shop.productId, "quantity": 1, "unit_price": 1000}}},
+			"winga_off":                 {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"description": "Tiles from Kariakoo", "quantity": 1, "unit_price": 1000, "is_winga": true}}},
+			"invalid_winga_line":        {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"description": "Labour", "quantity": 1, "unit_price": 1000, "winga_share": 100}}},
 			"due_before_issue":          {"kind": "invoice", "customer_id": shop.customerId, "issue_date": "2026-10-10", "due_date": "2026-10-01", "lines": []map[string]any{{"description": "Labour", "quantity": 1, "unit_price": 1000}}},
 			"invalid_date":              {"kind": "invoice", "customer_id": shop.customerId, "issue_date": "2026-13-40", "lines": []map[string]any{{"description": "Labour", "quantity": 1, "unit_price": 1000}}},
 			"not_found":                 {"kind": "invoice", "customer_id": shop.customerId, "lines": []map[string]any{{"product_id": uuid.NewString(), "quantity": 1}}},

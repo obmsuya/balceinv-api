@@ -61,15 +61,18 @@ type Invoice struct {
 }
 
 type Line struct {
-	Id             uuid.UUID
-	Position       int
-	ProductId      *uuid.UUID
-	Description    string
-	Unit           string
-	Quantity       int
-	UnitPrice      int64
-	DiscountAmount int64
-	LineTotal      int64
+	Id              uuid.UUID
+	Position        int
+	ProductId       *uuid.UUID
+	Description     string
+	Unit            string
+	Quantity        int
+	UnitPrice       int64
+	ExtraUnitAmount int64
+	DiscountAmount  int64
+	LineTotal       int64
+	IsWinga         bool
+	WingaShare      int64
 }
 
 type Payment struct {

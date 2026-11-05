@@ -31,7 +31,8 @@ var (
 	ErrProductNotFound      = errors.New("a product on this document was not found")
 	ErrDescriptionRequired  = errors.New("write what each typed line is for")
 	ErrPriceRequired        = errors.New("give each typed line a price")
-	ErrDiscountTooHigh      = errors.New("a line discount cannot be more than the line")
+	ErrPriceLocked          = errors.New("a product's price cannot be changed on an invoice; use Discount or Extra")
+	ErrInvalidWingaLine     = errors.New("a Brk line needs a name and a price, no product, discount or extra, and a share no bigger than the line")
 	ErrInvalidDate          = errors.New("a date is not valid")
 	ErrDueBeforeIssue       = errors.New("the due date cannot be before the issue date")
 	ErrNotDraft             = errors.New("only a draft can be changed")
@@ -332,9 +333,33 @@ func (service *BillService) Update(ctx context.Context, querier database.Querier
 }
 
 func (service *BillService) fill(ctx context.Context, querier database.Querier, principal *identity.Principal, company companyContext, invoice *Invoice, request InvoiceRequest) ([]Line, error) {
+	headerError := service.fillHeader(ctx, querier, principal, company, invoice, request)
+	if headerError != nil {
+		return nil, headerError
+	}
+	pricedLines, priceError := service.priceLines(ctx, querier, principal, company, request.Lines)
+	if priceError != nil {
+		return nil, priceError
+	}
+	company.addTotals(invoice, pricedLines)
+	return pricedLines, nil
+}
+
+func (company companyContext) addTotals(invoice *Invoice, lines []Line) {
+	invoice.Subtotal, invoice.DiscountTotal = 0, 0
+	for _, line := range lines {
+		invoice.Subtotal += int64(line.Quantity) * line.UnitPrice
+		invoice.DiscountTotal += line.DiscountAmount
+	}
+	invoice.Total = invoice.Subtotal - invoice.DiscountTotal
+	invoice.TaxRateBasisPoints = company.taxRate()
+	invoice.TaxTotal = sales.IncludedTax(invoice.Total, invoice.TaxRateBasisPoints)
+}
+
+func (service *BillService) fillHeader(ctx context.Context, querier database.Querier, principal *identity.Principal, company companyContext, invoice *Invoice, request InvoiceRequest) error {
 	partyError := service.setParty(ctx, querier, principal, invoice, request)
 	if partyError != nil {
-		return nil, partyError
+		return partyError
 	}
 
 	issueDate := company.today()
@@ -343,7 +368,7 @@ func (service *BillService) fill(ctx context.Context, querier database.Querier, 
 	}
 	_, issueParseError := time.Parse(time.DateOnly, issueDate)
 	if issueParseError != nil {
-		return nil, ErrInvalidDate
+		return ErrInvalidDate
 	}
 	invoice.IssueDate = issueDate
 
@@ -355,10 +380,10 @@ func (service *BillService) fill(ctx context.Context, querier database.Querier, 
 	if invoice.DueDate != nil {
 		_, dueParseError := time.Parse(time.DateOnly, *invoice.DueDate)
 		if dueParseError != nil {
-			return nil, ErrInvalidDate
+			return ErrInvalidDate
 		}
 		if *invoice.DueDate < issueDate {
-			return nil, ErrDueBeforeIssue
+			return ErrDueBeforeIssue
 		}
 	}
 
@@ -368,20 +393,7 @@ func (service *BillService) fill(ctx context.Context, querier database.Querier, 
 	if request.Terms == nil && company.profile.InvoiceTerms != nil && invoice.Kind != KindDeliveryNote {
 		invoice.Terms = trimmedOrNil(company.profile.InvoiceTerms)
 	}
-
-	pricedLines, priceError := service.priceLines(ctx, querier, principal.CompanyId, request.Lines)
-	if priceError != nil {
-		return nil, priceError
-	}
-	invoice.Subtotal, invoice.DiscountTotal = 0, 0
-	for _, pricedLine := range pricedLines {
-		invoice.Subtotal += int64(pricedLine.Quantity) * pricedLine.UnitPrice
-		invoice.DiscountTotal += pricedLine.DiscountAmount
-	}
-	invoice.Total = invoice.Subtotal - invoice.DiscountTotal
-	invoice.TaxRateBasisPoints = company.taxRate()
-	invoice.TaxTotal = sales.IncludedTax(invoice.Total, invoice.TaxRateBasisPoints)
-	return pricedLines, nil
+	return nil
 }
 
 func (service *BillService) setParty(ctx context.Context, querier database.Querier, principal *identity.Principal, invoice *Invoice, request InvoiceRequest) error {
@@ -416,22 +428,29 @@ func (service *BillService) setParty(ctx context.Context, querier database.Queri
 	return nil
 }
 
-func (service *BillService) priceLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, lineRequests []LineRequest) ([]Line, error) {
+func (service *BillService) priceLines(ctx context.Context, querier database.Querier, principal *identity.Principal, company companyContext, lineRequests []LineRequest) ([]Line, error) {
 	pricedLines := []Line{}
 	for position, lineRequest := range lineRequests {
 		pricedLine := Line{
-			Id:             uuid.Must(uuid.NewV7()),
-			Position:       position,
-			Description:    strings.TrimSpace(lineRequest.Description),
-			Unit:           strings.TrimSpace(lineRequest.Unit),
-			Quantity:       lineRequest.Quantity,
-			DiscountAmount: lineRequest.DiscountAmount,
+			Id:          uuid.Must(uuid.NewV7()),
+			Position:    position,
+			Description: strings.TrimSpace(lineRequest.Description),
+			Unit:        strings.TrimSpace(lineRequest.Unit),
+			Quantity:    lineRequest.Quantity,
+			IsWinga:     lineRequest.IsWinga,
+		}
+		wingaError := checkWingaRequest(company, lineRequest)
+		if wingaError != nil {
+			return nil, wingaError
+		}
+		if lineRequest.ProductId != nil && lineRequest.UnitPrice != nil {
+			return nil, ErrPriceLocked
 		}
 		if lineRequest.ProductId != nil {
 			productId := uuid.MustParse(*lineRequest.ProductId)
-			productName, variantLabel, productUnit, productPrice := "", "", "", int64(0)
-			scanError := querier.QueryRowContext(ctx, `SELECT name, variant_label, unit, price FROM products WHERE company_id = $1 AND id = $2 AND is_active`, companyId, productId).
-				Scan(&productName, &variantLabel, &productUnit, &productPrice)
+			productName, variantLabel, productUnit, productPrice, wholesalePrice, wholesaleMin := "", "", "", int64(0), sql.NullInt64{}, 0
+			scanError := querier.QueryRowContext(ctx, `SELECT name, variant_label, unit, price, wholesale_price, wholesale_min FROM products WHERE company_id = $1 AND id = $2 AND is_active`, principal.CompanyId, productId).
+				Scan(&productName, &variantLabel, &productUnit, &productPrice, &wholesalePrice, &wholesaleMin)
 			if errors.Is(scanError, sql.ErrNoRows) {
 				return nil, ErrProductNotFound
 			}
@@ -449,6 +468,9 @@ func (service *BillService) priceLines(ctx context.Context, querier database.Que
 				pricedLine.Unit = productUnit
 			}
 			pricedLine.UnitPrice = productPrice
+			if wholesalePrice.Valid && wholesaleMin > 0 && lineRequest.Quantity >= wholesaleMin {
+				pricedLine.UnitPrice = wholesalePrice.Int64
+			}
 		}
 		if lineRequest.UnitPrice != nil {
 			pricedLine.UnitPrice = *lineRequest.UnitPrice
@@ -459,14 +481,41 @@ func (service *BillService) priceLines(ctx context.Context, querier database.Que
 		if pricedLine.ProductId == nil && lineRequest.UnitPrice == nil {
 			return nil, ErrPriceRequired
 		}
-		lineAmount := int64(pricedLine.Quantity) * pricedLine.UnitPrice
-		if pricedLine.DiscountAmount > lineAmount {
-			return nil, ErrDiscountTooHigh
+		if lineRequest.Extra != nil {
+			pricedLine.ExtraUnitAmount = sales.ExtraPerItem(sales.PriceExtra{Kind: lineRequest.Extra.Kind, Value: lineRequest.Extra.Value}, pricedLine.UnitPrice)
+			pricedLine.UnitPrice += pricedLine.ExtraUnitAmount
 		}
-		pricedLine.LineTotal = lineAmount - pricedLine.DiscountAmount
+		if lineRequest.Discount != nil {
+			if !principal.Can(sales.TillDiscountPermission) {
+				return nil, sales.ErrDiscountNotAllowed
+			}
+			discountEach := sales.DiscountPerItem(sales.ManualDiscount{Kind: lineRequest.Discount.Kind, Value: lineRequest.Discount.Value}, pricedLine.UnitPrice)
+			pricedLine.DiscountAmount = discountEach * int64(pricedLine.Quantity)
+		}
+		pricedLine.LineTotal = int64(pricedLine.Quantity)*pricedLine.UnitPrice - pricedLine.DiscountAmount
+		if lineRequest.WingaShare > pricedLine.LineTotal {
+			return nil, ErrInvalidWingaLine
+		}
+		pricedLine.WingaShare = lineRequest.WingaShare
 		pricedLines = append(pricedLines, pricedLine)
 	}
 	return pricedLines, nil
+}
+
+func checkWingaRequest(company companyContext, lineRequest LineRequest) error {
+	if !lineRequest.IsWinga {
+		if lineRequest.WingaShare != 0 {
+			return ErrInvalidWingaLine
+		}
+		return nil
+	}
+	if !company.features.WingaEnabled {
+		return sales.ErrWingaOff
+	}
+	if lineRequest.ProductId != nil || lineRequest.Discount != nil || lineRequest.Extra != nil {
+		return ErrInvalidWingaLine
+	}
+	return nil
 }
 
 func (service *BillService) Issue(ctx context.Context, querier database.Querier, principal *identity.Principal, invoiceId uuid.UUID) (InvoiceView, error) {
@@ -656,21 +705,22 @@ func (service *BillService) Convert(ctx context.Context, querier database.Querie
 		return InvoiceView{}, ErrCannotConvert
 	}
 
-	lineRequests := []LineRequest{}
-	for _, lineView := range foundInvoice.Lines {
-		unitPrice := lineView.UnitPrice
-		lineRequest := LineRequest{
-			Description:    lineView.Description,
-			Unit:           lineView.Unit,
-			Quantity:       lineView.Quantity,
-			UnitPrice:      &unitPrice,
-			DiscountAmount: lineView.DiscountAmount,
-		}
-		if lineView.ProductId != nil {
-			productIdText := lineView.ProductId.String()
-			lineRequest.ProductId = &productIdText
-		}
-		lineRequests = append(lineRequests, lineRequest)
+	copiedLines := []Line{}
+	for position, lineView := range foundInvoice.Lines {
+		copiedLines = append(copiedLines, Line{
+			Id:              uuid.Must(uuid.NewV7()),
+			Position:        position,
+			ProductId:       lineView.ProductId,
+			Description:     lineView.Description,
+			Unit:            lineView.Unit,
+			Quantity:        lineView.Quantity,
+			UnitPrice:       lineView.UnitPrice,
+			ExtraUnitAmount: lineView.ExtraUnitAmount,
+			DiscountAmount:  lineView.DiscountAmount,
+			LineTotal:       lineView.LineTotal,
+			IsWinga:         lineView.IsWinga,
+			WingaShare:      lineView.WingaShare,
+		})
 	}
 	customerIdText := foundInvoice.Party.Id.String()
 	convertedRequest := InvoiceRequest{
@@ -678,7 +728,6 @@ func (service *BillService) Convert(ctx context.Context, querier database.Querie
 		CustomerId: &customerIdText,
 		Reference:  foundInvoice.Reference,
 		Notes:      foundInvoice.Notes,
-		Lines:      lineRequests,
 	}
 	if request.Kind == KindInvoice {
 		convertedRequest.Terms = foundInvoice.Terms
@@ -704,15 +753,16 @@ func (service *BillService) Convert(ctx context.Context, querier database.Querie
 		CreatedAt:       createdAt,
 		UpdatedAt:       createdAt,
 	}
-	pricedLines, fillError := service.fill(ctx, querier, principal, company, &convertedInvoice, convertedRequest)
-	if fillError != nil {
-		return InvoiceView{}, fillError
+	headerError := service.fillHeader(ctx, querier, principal, company, &convertedInvoice, convertedRequest)
+	if headerError != nil {
+		return InvoiceView{}, headerError
 	}
+	company.addTotals(&convertedInvoice, copiedLines)
 	numberError := service.assignNumber(ctx, querier, company, &convertedInvoice)
 	if numberError != nil {
 		return InvoiceView{}, numberError
 	}
-	insertError := service.repository.Insert(ctx, querier, convertedInvoice, pricedLines)
+	insertError := service.repository.Insert(ctx, querier, convertedInvoice, copiedLines)
 	if database.IsUniqueViolation(insertError) {
 		return InvoiceView{}, ErrNumberInFlight
 	}

@@ -99,12 +99,13 @@ func (repository *Repository) UpdateDraft(ctx context.Context, querier database.
 
 func (repository *Repository) insertLines(ctx context.Context, querier database.Querier, companyId uuid.UUID, invoiceId uuid.UUID, lines []Line) error {
 	query := `
-		INSERT INTO invoice_lines (id, company_id, invoice_id, position, product_id, description, unit, quantity, unit_price, discount_amount, line_total)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO invoice_lines (id, company_id, invoice_id, position, product_id, description, unit, quantity, unit_price, discount_amount, line_total,
+		                           extra_unit_amount, is_winga, winga_share)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	for _, line := range lines {
 		_, insertError := querier.ExecContext(ctx, query, line.Id, companyId, invoiceId, line.Position, line.ProductId, line.Description,
-			line.Unit, line.Quantity, line.UnitPrice, line.DiscountAmount, line.LineTotal)
+			line.Unit, line.Quantity, line.UnitPrice, line.DiscountAmount, line.LineTotal, line.ExtraUnitAmount, line.IsWinga, line.WingaShare)
 		if insertError != nil {
 			return fmt.Errorf("failed to save an invoice line: %w", insertError)
 		}
@@ -243,7 +244,8 @@ func (repository *Repository) Summary(ctx context.Context, querier database.Quer
 
 func (repository *Repository) Lines(ctx context.Context, querier database.Querier, companyId uuid.UUID, invoiceId uuid.UUID) ([]LineView, error) {
 	query := `
-		SELECT il.id, il.product_id, p.sku, il.description, il.unit, il.quantity, il.unit_price, il.discount_amount, il.line_total
+		SELECT il.id, il.product_id, p.sku, il.description, il.unit, il.quantity, il.unit_price, il.discount_amount, il.line_total,
+		       il.extra_unit_amount, il.is_winga, il.winga_share
 		FROM invoice_lines il
 		LEFT JOIN products p ON p.company_id = il.company_id AND p.id = il.product_id
 		WHERE il.company_id = $1 AND il.invoice_id = $2
@@ -259,7 +261,7 @@ func (repository *Repository) Lines(ctx context.Context, querier database.Querie
 	for lineRows.Next() {
 		lineView := LineView{}
 		scanError := lineRows.Scan(&lineView.Id, &lineView.ProductId, &lineView.Sku, &lineView.Description, &lineView.Unit, &lineView.Quantity,
-			&lineView.UnitPrice, &lineView.DiscountAmount, &lineView.LineTotal)
+			&lineView.UnitPrice, &lineView.DiscountAmount, &lineView.LineTotal, &lineView.ExtraUnitAmount, &lineView.IsWinga, &lineView.WingaShare)
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan an invoice line: %w", scanError)
 		}
