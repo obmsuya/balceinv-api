@@ -3,16 +3,20 @@ package invoices
 import (
 	"time"
 
+	"github.com/chrisostomemataba/balceinv-api/internal/sales"
 	"github.com/google/uuid"
 )
 
 type LineRequest struct {
-	ProductId      *string `json:"product_id" validate:"omitnil,uuid"`
-	Description    string  `json:"description" validate:"max=300"`
-	Unit           string  `json:"unit" validate:"max=20"`
-	Quantity       int     `json:"quantity" validate:"required,gte=1,lte=1000000"`
-	UnitPrice      *int64  `json:"unit_price" validate:"omitnil,gte=0,lte=1000000000000000"`
-	DiscountAmount int64   `json:"discount_amount" validate:"gte=0,lte=1000000000000000"`
+	ProductId   *string                      `json:"product_id" validate:"omitnil,uuid"`
+	Description string                       `json:"description" validate:"max=300"`
+	Unit        string                       `json:"unit" validate:"max=20"`
+	Quantity    int                          `json:"quantity" validate:"required,gte=1,lte=1000000"`
+	UnitPrice   *int64                       `json:"unit_price" validate:"omitnil,gte=0,lte=1000000000000000"`
+	Discount    *sales.ManualDiscountRequest `json:"discount" validate:"omitnil"`
+	Extra       *sales.ExtraRequest          `json:"extra" validate:"omitnil"`
+	IsWinga     bool                         `json:"is_winga"`
+	WingaShare  int64                        `json:"winga_share" validate:"gte=0,lte=1000000000000000"`
 }
 
 type InvoiceRequest struct {
@@ -42,15 +46,18 @@ type ConvertRequest struct {
 }
 
 type LineView struct {
-	Id             uuid.UUID  `json:"id"`
-	ProductId      *uuid.UUID `json:"product_id"`
-	Sku            *string    `json:"sku"`
-	Description    string     `json:"description"`
-	Unit           string     `json:"unit"`
-	Quantity       int        `json:"quantity"`
-	UnitPrice      int64      `json:"unit_price"`
-	DiscountAmount int64      `json:"discount_amount"`
-	LineTotal      int64      `json:"line_total"`
+	Id              uuid.UUID  `json:"id"`
+	ProductId       *uuid.UUID `json:"product_id"`
+	Sku             *string    `json:"sku"`
+	Description     string     `json:"description"`
+	Unit            string     `json:"unit"`
+	Quantity        int        `json:"quantity"`
+	UnitPrice       int64      `json:"unit_price"`
+	ExtraUnitAmount int64      `json:"extra_unit_amount"`
+	DiscountAmount  int64      `json:"discount_amount"`
+	LineTotal       int64      `json:"line_total"`
+	IsWinga         bool       `json:"is_winga"`
+	WingaShare      int64      `json:"winga_share"`
 }
 
 type PaymentView struct {

@@ -13,6 +13,7 @@ import (
 	"github.com/chrisostomemataba/balceinv-api/internal/common/shopscope"
 	"github.com/chrisostomemataba/balceinv-api/internal/customers"
 	"github.com/chrisostomemataba/balceinv-api/internal/documents"
+	"github.com/chrisostomemataba/balceinv-api/internal/sales"
 	"github.com/chrisostomemataba/balceinv-api/internal/stock"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -221,32 +222,35 @@ var billErrors = map[error]struct {
 	status int
 	code   string
 }{
-	ErrInvoiceNotFound:         {fiber.StatusNotFound, "not_found"},
-	ErrPaymentNotFound:         {fiber.StatusNotFound, "not_found"},
-	ErrProductNotFound:         {fiber.StatusNotFound, "not_found"},
-	ErrNoActiveShop:            {fiber.StatusBadRequest, "no_active_shop"},
-	ErrInvoicesOff:             {fiber.StatusForbidden, "feature_off"},
-	ErrCustomersOff:            {fiber.StatusForbidden, "feature_off"},
-	ErrSuppliersOff:            {fiber.StatusForbidden, "feature_off"},
-	ErrPartyRequired:           {fiber.StatusBadRequest, "party_required"},
-	ErrDescriptionRequired:     {fiber.StatusBadRequest, "line_description_required"},
-	ErrPriceRequired:           {fiber.StatusBadRequest, "line_price_required"},
-	ErrDiscountTooHigh:         {fiber.StatusBadRequest, "discount_too_high"},
-	ErrInvalidDate:             {fiber.StatusBadRequest, "invalid_date"},
-	ErrDueBeforeIssue:          {fiber.StatusBadRequest, "due_before_issue"},
-	ErrNotDraft:                {fiber.StatusConflict, "not_draft"},
-	ErrInvalidStatus:           {fiber.StatusConflict, "invalid_status"},
-	ErrNotABill:                {fiber.StatusConflict, "not_a_bill"},
-	ErrAlreadyDelivered:        {fiber.StatusConflict, "already_delivered"},
-	ErrPaymentTooHigh:          {fiber.StatusBadRequest, "payment_too_high"},
-	ErrWrongMethod:             {fiber.StatusBadRequest, "invalid_payment"},
-	ErrPaymentAlreadyVoided:    {fiber.StatusConflict, "already_voided"},
-	ErrHasPayments:             {fiber.StatusConflict, "has_payments"},
-	ErrInvalidReason:           {fiber.StatusBadRequest, "validation_failed"},
-	ErrCannotConvert:           {fiber.StatusConflict, "cannot_convert"},
-	ErrNumberInFlight:          {fiber.StatusConflict, "try_again"},
-	ErrInvalidFilter:           {fiber.StatusBadRequest, "invalid_filter"},
-	documents.ErrUnknownFormat: {fiber.StatusBadRequest, "invalid_format"},
+	ErrInvoiceNotFound:          {fiber.StatusNotFound, "not_found"},
+	ErrPaymentNotFound:          {fiber.StatusNotFound, "not_found"},
+	ErrProductNotFound:          {fiber.StatusNotFound, "not_found"},
+	ErrNoActiveShop:             {fiber.StatusBadRequest, "no_active_shop"},
+	ErrInvoicesOff:              {fiber.StatusForbidden, "feature_off"},
+	ErrCustomersOff:             {fiber.StatusForbidden, "feature_off"},
+	ErrSuppliersOff:             {fiber.StatusForbidden, "feature_off"},
+	ErrPartyRequired:            {fiber.StatusBadRequest, "party_required"},
+	ErrDescriptionRequired:      {fiber.StatusBadRequest, "line_description_required"},
+	ErrPriceRequired:            {fiber.StatusBadRequest, "line_price_required"},
+	ErrPriceLocked:              {fiber.StatusBadRequest, "invoice_price_locked"},
+	ErrInvalidWingaLine:         {fiber.StatusBadRequest, "invalid_winga_line"},
+	sales.ErrWingaOff:           {fiber.StatusConflict, "winga_off"},
+	sales.ErrDiscountNotAllowed: {fiber.StatusForbidden, "till_discount_not_allowed"},
+	ErrInvalidDate:              {fiber.StatusBadRequest, "invalid_date"},
+	ErrDueBeforeIssue:           {fiber.StatusBadRequest, "due_before_issue"},
+	ErrNotDraft:                 {fiber.StatusConflict, "not_draft"},
+	ErrInvalidStatus:            {fiber.StatusConflict, "invalid_status"},
+	ErrNotABill:                 {fiber.StatusConflict, "not_a_bill"},
+	ErrAlreadyDelivered:         {fiber.StatusConflict, "already_delivered"},
+	ErrPaymentTooHigh:           {fiber.StatusBadRequest, "payment_too_high"},
+	ErrWrongMethod:              {fiber.StatusBadRequest, "invalid_payment"},
+	ErrPaymentAlreadyVoided:     {fiber.StatusConflict, "already_voided"},
+	ErrHasPayments:              {fiber.StatusConflict, "has_payments"},
+	ErrInvalidReason:            {fiber.StatusBadRequest, "validation_failed"},
+	ErrCannotConvert:            {fiber.StatusConflict, "cannot_convert"},
+	ErrNumberInFlight:           {fiber.StatusConflict, "try_again"},
+	ErrInvalidFilter:            {fiber.StatusBadRequest, "invalid_filter"},
+	documents.ErrUnknownFormat:  {fiber.StatusBadRequest, "invalid_format"},
 }
 
 func respondWithBillError(c *fiber.Ctx, serviceError error) error {

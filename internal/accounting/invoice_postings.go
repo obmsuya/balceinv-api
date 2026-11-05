@@ -18,6 +18,7 @@ type InvoicePosting struct {
 	Total       int64
 	TaxTotal    int64
 	CostTotal   int64
+	WingaShare  int64
 	PartyType   string
 	PartyId     uuid.UUID
 	UserId      *uuid.UUID
@@ -47,6 +48,9 @@ func (ledger *Ledger) postInvoice(ctx context.Context, querier database.Querier,
 		{Key: KeyVatOutput, Credit: vatCharged, ShopId: &shopId},
 		{Key: KeyCogs, Debit: posting.CostTotal, ShopId: &shopId},
 		{Key: KeyInventory, Credit: posting.CostTotal, ShopId: &shopId},
+		// ponytail: as on a sale, a Brk share is booked as paid out of the till cash when the invoice is delivered. Give Brk shares their own payable when brokers start being paid later.
+		{Key: KeyCogs, Debit: posting.WingaShare, ShopId: &shopId},
+		{Key: KeyCash, Credit: posting.WingaShare, ShopId: &shopId},
 	}
 
 	partyType, partyId := partyOf(posting.PartyType, &posting.PartyId)
@@ -65,7 +69,7 @@ func (ledger *Ledger) postInvoice(ctx context.Context, querier database.Querier,
 func (ledger *Ledger) pendingInvoices(ctx context.Context, querier database.Querier, books Books, onlyId *uuid.UUID) ([]pendingEvent, error) {
 	invoicePostings, loadError := ledger.repository.UnpostedInvoices(ctx, querier, books.CompanyId, books.StartedAt, onlyId)
 	return eventsOf(invoicePostings, loadError, func(posting InvoicePosting) pendingEvent {
-		return pendingEvent{posting.DeliveredAt, posting.Total > 0 || posting.CostTotal > 0, func() (*PostedEntry, error) {
+		return pendingEvent{posting.DeliveredAt, posting.Total > 0 || posting.CostTotal > 0 || posting.WingaShare > 0, func() (*PostedEntry, error) {
 			return ledger.postInvoice(ctx, querier, books, posting)
 		}}
 	})
@@ -82,6 +86,7 @@ func (repository *Repository) UnpostedInvoices(ctx context.Context, querier data
 	query := `
 		SELECT i.id, i.shop_id, i.delivered_at, i.number, i.total, i.tax_total,
 		       CAST(COALESCE((SELECT SUM(il.quantity * il.unit_cost) FROM invoice_lines il WHERE il.company_id = i.company_id AND il.invoice_id = i.id), 0) AS BIGINT),
+		       CAST(COALESCE((SELECT SUM(il.winga_share) FROM invoice_lines il WHERE il.company_id = i.company_id AND il.invoice_id = i.id), 0) AS BIGINT),
 		       i.customer_id, i.supplier_id, i.delivered_by
 		FROM invoices i WHERE ` + onlyId(where, "i", arguments, onlyInvoiceId) + ` ORDER BY i.delivered_at, i.id`
 	invoiceRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
@@ -90,7 +95,7 @@ func (repository *Repository) UnpostedInvoices(ctx context.Context, querier data
 		customerId := uuid.NullUUID{}
 		supplierId := uuid.NullUUID{}
 		scanError := rows.Scan(&invoicePosting.InvoiceId, &invoicePosting.ShopId, &invoicePosting.DeliveredAt, &invoicePosting.Number,
-			&invoicePosting.Total, &invoicePosting.TaxTotal, &invoicePosting.CostTotal, &customerId, &supplierId, &invoicePosting.UserId)
+			&invoicePosting.Total, &invoicePosting.TaxTotal, &invoicePosting.CostTotal, &invoicePosting.WingaShare, &customerId, &supplierId, &invoicePosting.UserId)
 		invoicePosting.PartyType, invoicePosting.PartyId = PartyCustomer, customerId.UUID
 		if supplierId.Valid {
 			invoicePosting.PartyType, invoicePosting.PartyId = PartySupplier, supplierId.UUID
