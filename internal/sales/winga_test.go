@@ -58,6 +58,13 @@ func TestWingaLinesAreOffUntilTurnedOnThenSellWithoutStock(t *testing.T) {
 		if wingaOnly.Status != http.StatusCreated || wingaOnly.Data()["total"] != float64(8000) {
 			t.Fatalf("a winga-only sale returned %d %v", wingaOnly.Status, wingaOnly.Body)
 		}
+		for _, listedSale := range harness.Call(http.MethodGet, "/api/sales", company.OwnerToken, nil).Items() {
+			listedFields := listedSale.(map[string]any)
+			wantedUnits := map[string]float64{mixedData["id"].(string): 3, wingaOnly.Data()["id"].(string): 1}[listedFields["id"].(string)]
+			if listedFields["unit_count"] != wantedUnits {
+				t.Fatalf("sale %v lists %v units, want %v", listedFields["receipt_number"], listedFields["unit_count"], wantedUnits)
+			}
+		}
 
 		if harness.QueryIntForCompany(company.Id, `SELECT quantity FROM shop_stock WHERE product_id = $1`, riceId) != 9 {
 			t.Fatal("winga lines moved stock")
@@ -70,7 +77,7 @@ func TestWingaLinesAreOffUntilTurnedOnThenSellWithoutStock(t *testing.T) {
 		todayInShop := time.Now().In(darEsSalaam).Format("2006-01-02")
 		summary := harness.Call(http.MethodGet, "/api/reports/summary?from="+todayInShop+"&to="+todayInShop, company.OwnerToken, nil).Data()
 		if summary["total"] != float64(48000) || summary["winga_total"] != float64(38000) || summary["winga_share_total"] != float64(20000) ||
-			summary["cost_total"] != float64(26000) || summary["gross_profit"] != float64(22000) {
+			summary["cost_total"] != float64(26000) || summary["gross_profit"] != float64(22000) || summary["units_sold"] != float64(4) {
 			t.Fatalf("the summary with winga lines is %v", summary)
 		}
 	})

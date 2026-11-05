@@ -72,6 +72,10 @@ func TestOrderWingaLinesReachTheCollectedSale(t *testing.T) {
 		if created.Status != http.StatusCreated || order["total"] != float64(300000) || len(order["winga_lines"].([]any)) != 1 {
 			t.Fatalf("a winga order returned %d %v", created.Status, created.Body)
 		}
+		listedOrder := harness.Call(http.MethodGet, "/api/orders", company.OwnerToken, nil).Items()[0].(map[string]any)
+		if listedOrder["line_count"] != float64(1) || order["line_count"] != float64(1) {
+			t.Fatalf("a Brk-only order counts %v lines in the list and %v in the order", listedOrder["line_count"], order["line_count"])
+		}
 
 		collected := harness.Call(http.MethodPost, "/api/orders/"+order["id"].(string)+"/collect", company.OwnerToken, map[string]any{"payments": []any{map[string]any{"method": "cash", "amount": 300000}}})
 		if collected.Status != http.StatusOK {

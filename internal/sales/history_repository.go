@@ -65,7 +65,8 @@ func (repository *Repository) ListSummaries(ctx context.Context, querier databas
 	offsetPosition := strconv.Itoa(len(whereArguments) + 2)
 	query := `
 		SELECT s.id, s.receipt_number, s.total, s.discount_total, u.name, s.shop_id, sh.name, s.created_at,
-		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id),
+		       (SELECT COALESCE(SUM(i.quantity), 0) FROM sale_items i WHERE i.company_id = s.company_id AND i.sale_id = s.id) +
+		       (SELECT COALESCE(SUM(w.quantity), 0) FROM sale_winga_lines w WHERE w.company_id = s.company_id AND w.sale_id = s.id),
 		       (SELECT f.status FROM fiscal_receipts f WHERE f.company_id = s.company_id AND f.sale_id = s.id),
 		       s.voided_at
 		FROM sales s

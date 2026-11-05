@@ -100,15 +100,18 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 	wingaArguments := &queryArguments{}
 	wingaQuery := `
 		SELECT CAST(COALESCE(SUM(w.line_total), 0) AS BIGINT),
-		       CAST(COALESCE(SUM(w.winga_share), 0) AS BIGINT)
+		       CAST(COALESCE(SUM(w.winga_share), 0) AS BIGINT),
+		       CAST(COALESCE(SUM(w.quantity), 0) AS BIGINT)
 		FROM sale_winga_lines w
 		JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
 		WHERE ` + salesWhere(scope, wingaArguments)
-	wingaScanError := querier.QueryRowContext(ctx, wingaQuery, wingaArguments.values...).Scan(&summary.WingaTotal, &summary.WingaShareTotal)
+	wingaUnits := int64(0)
+	wingaScanError := querier.QueryRowContext(ctx, wingaQuery, wingaArguments.values...).Scan(&summary.WingaTotal, &summary.WingaShareTotal, &wingaUnits)
 	if wingaScanError != nil {
 		return SummaryView{}, fmt.Errorf("failed to total winga lines: %w", wingaScanError)
 	}
 	summary.CostTotal += summary.WingaShareTotal
+	summary.UnitsSold += wingaUnits
 
 	refundArguments := &queryArguments{}
 	refundQuery := `

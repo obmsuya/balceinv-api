@@ -21,7 +21,8 @@ const orderViewQuery = `
 	           FROM customer_order_payments p
 	           WHERE p.company_id = o.company_id AND p.order_id = o.id
 	       ), 0) AS BIGINT),
-	       (SELECT COUNT(*) FROM customer_order_lines l WHERE l.company_id = o.company_id AND l.order_id = o.id),
+	       (SELECT COUNT(*) FROM customer_order_lines l WHERE l.company_id = o.company_id AND l.order_id = o.id) +
+	       (SELECT COUNT(*) FROM customer_order_winga_lines w WHERE w.company_id = o.company_id AND w.order_id = o.id),
 	       o.sale_id, s.receipt_number, creator.name, o.created_at, o.ready_at, o.collected_at, o.cancelled_at,
 	       canceller.name, o.cancel_reason
 	FROM customer_orders o
