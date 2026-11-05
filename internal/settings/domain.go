@@ -42,23 +42,24 @@ type Settings struct {
 }
 
 type CompanyProfile struct {
-	Id               uuid.UUID
-	Name             string
-	BusinessType     string
-	Phone            *string
-	Address          *string
-	Tin              *string
-	LogoKey          *string
-	PrimaryColor     string
-	CurrencyCode     string
-	CurrencyDecimals int
-	Timezone         string
-	DefaultLocale    string
-	ReceiptHeader    *string
-	ReceiptFooter    *string
-	Email            *string
-	PaymentDetails   *string
-	InvoiceTerms     *string
-	InvoiceDueDays   int
-	UpdatedAt        time.Time
+	Id                 uuid.UUID
+	Name               string
+	BusinessType       string
+	Phone              *string
+	Address            *string
+	Tin                *string
+	LogoKey            *string
+	PrimaryColor       string
+	CurrencyCode       string
+	CurrencyDecimals   int
+	Timezone           string
+	DefaultLocale      string
+	ReceiptHeader      *string
+	ReceiptFooter      *string
+	Email              *string
+	PaymentDetails     *string
+	InvoiceTerms       *string
+	InvoiceDueDays     int
+	InvoiceHiddenParts []string
+	UpdatedAt          time.Time
 }

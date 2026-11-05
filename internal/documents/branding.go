@@ -51,6 +51,7 @@ type Branding struct {
 	PaymentDetails   string
 	InvoiceTerms     string
 	InvoiceDueDays   int
+	InvoiceHidden    map[string]bool
 	ShowTaxOnReceipt bool
 	VatRegistered    bool
 }
@@ -95,11 +96,15 @@ func LoadBranding(ctx context.Context, querier database.Querier, objectStore sto
 		PaymentDetails:   textOf(companyProfile.PaymentDetails),
 		InvoiceTerms:     textOf(companyProfile.InvoiceTerms),
 		InvoiceDueDays:   companyProfile.InvoiceDueDays,
+		InvoiceHidden:    map[string]bool{},
 		ShowTaxOnReceipt: companySettings.ShowTaxOnReceipt,
 		VatRegistered:    companyFeatures.VatRegistered,
 	}
 	if companyFeatures.VatRegistered {
 		branding.Vrn = textOf(companyFeatures.VatNumber)
+	}
+	for _, hiddenPart := range companyProfile.InvoiceHiddenParts {
+		branding.InvoiceHidden[hiddenPart] = true
 	}
 	if !hexColorPattern.MatchString(branding.PrimaryColor) {
 		branding.PrimaryColor = defaultBrandColor
@@ -165,6 +170,10 @@ func (branding Branding) taxLine(language string) string {
 		identityParts = append(identityParts, Label(language, "vrn")+": "+branding.Vrn)
 	}
 	return strings.Join(identityParts, "  ·  ")
+}
+
+func (branding Branding) HidesInvoicePart(part string) bool {
+	return branding.InvoiceHidden[part]
 }
 
 func (branding Branding) contactLine() string {

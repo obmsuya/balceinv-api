@@ -15,6 +15,7 @@ import (
 var billLabels = map[string]map[string]string{
 	documents.English: {
 		"title.invoice":          "Invoice",
+		"title.taxInvoice":       "Tax invoice",
 		"title.proforma":         "Proforma invoice",
 		"title.quotation":        "Quotation",
 		"title.delivery_note":    "Delivery note",
@@ -29,11 +30,12 @@ var billLabels = map[string]map[string]string{
 		"shop":                   "Shop",
 		"forInvoice":             "For invoice",
 		"subtotal":               "Subtotal",
-		"discount":               "Discount",
+		"discount":               "Total discount",
+		"withoutTax":             "Amount without tax",
 		"vat":                    "VAT {rate}% (included)",
-		"total":                  "Total",
+		"total":                  "Total amount",
 		"paid":                   "Paid",
-		"balanceDue":             "Balance due",
+		"balanceDue":             "Outstanding amount",
 		"status.draft":           "Draft",
 		"status.cancelled":       "Cancelled",
 		"status.accepted":        "Accepted",
@@ -50,6 +52,7 @@ var billLabels = map[string]map[string]string{
 	},
 	documents.Swahili: {
 		"title.invoice":          "Ankara",
+		"title.taxInvoice":       "Ankara ya kodi",
 		"title.proforma":         "Ankara ya awali",
 		"title.quotation":        "Nukuu ya bei",
 		"title.delivery_note":    "Hati ya kupokelea",
@@ -64,9 +67,10 @@ var billLabels = map[string]map[string]string{
 		"shop":                   "Duka",
 		"forInvoice":             "Ya ankara",
 		"subtotal":               "Jumla ndogo",
-		"discount":               "Punguzo",
+		"discount":               "Jumla ya punguzo",
+		"withoutTax":             "Kiasi bila kodi",
 		"vat":                    "VAT {rate}% (imejumuishwa)",
-		"total":                  "Jumla",
+		"total":                  "Jumla kuu",
 		"paid":                   "Imelipwa",
 		"balanceDue":             "Kiasi kinachodaiwa",
 		"status.draft":           "Rasimu",
@@ -114,14 +118,20 @@ func BuildDocument(invoiceView InvoiceView, branding documents.Branding, languag
 	isOffer := invoiceView.Kind == KindQuotation || invoiceView.Kind == KindProforma
 	isBill := invoiceView.Kind == KindInvoice || invoiceView.Kind == KindSupplierInvoice
 
+	titleKey := "title." + invoiceView.Kind
+	if invoiceView.Kind == KindInvoice && branding.VatRegistered {
+		titleKey = "title.taxInvoice"
+	}
 	invoiceDocument := documents.InvoiceDocument{
 		Language:    language,
-		Title:       label("title." + invoiceView.Kind),
+		Title:       label(titleKey),
 		Number:      invoiceView.Number,
 		Party:       documentParty(invoiceView, label),
 		Facts:       documentFacts(invoiceView, label),
 		HidePrices:  isDeliveryNote,
 		Terms:       textOf(invoiceView.Terms),
+		PreparedBy:  invoiceView.CreatedByName,
+		PreparedAt:  invoiceView.CreatedAt,
 		GeneratedBy: generatedBy,
 		GeneratedAt: time.Now(),
 	}
@@ -246,7 +256,10 @@ func documentTotals(invoiceView InvoiceView, isBill bool, label func(string) str
 	}
 	if invoiceView.TaxTotal > 0 {
 		rateText := strconv.FormatFloat(float64(invoiceView.TaxRateBasisPoints)/100, 'f', -1, 64)
-		totals = append(totals, documents.Field{Label: strings.ReplaceAll(label("vat"), "{rate}", rateText), Value: invoiceView.TaxTotal, Kind: documents.Money})
+		totals = append(totals,
+			documents.Field{Label: label("withoutTax"), Value: invoiceView.Total - invoiceView.TaxTotal, Kind: documents.Money},
+			documents.Field{Label: strings.ReplaceAll(label("vat"), "{rate}", rateText), Value: invoiceView.TaxTotal, Kind: documents.Money},
+		)
 	}
 	isOpenBill := isBill && invoiceView.Status != StatusCancelled
 	if !isOpenBill {
