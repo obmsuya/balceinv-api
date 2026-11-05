@@ -448,9 +448,9 @@ func (service *BillService) priceLines(ctx context.Context, querier database.Que
 		}
 		if lineRequest.ProductId != nil {
 			productId := uuid.MustParse(*lineRequest.ProductId)
-			productName, variantLabel, productUnit, productPrice := "", "", "", int64(0)
-			scanError := querier.QueryRowContext(ctx, `SELECT name, variant_label, unit, price FROM products WHERE company_id = $1 AND id = $2 AND is_active`, principal.CompanyId, productId).
-				Scan(&productName, &variantLabel, &productUnit, &productPrice)
+			productName, variantLabel, productUnit, productPrice, wholesalePrice, wholesaleMin := "", "", "", int64(0), sql.NullInt64{}, 0
+			scanError := querier.QueryRowContext(ctx, `SELECT name, variant_label, unit, price, wholesale_price, wholesale_min FROM products WHERE company_id = $1 AND id = $2 AND is_active`, principal.CompanyId, productId).
+				Scan(&productName, &variantLabel, &productUnit, &productPrice, &wholesalePrice, &wholesaleMin)
 			if errors.Is(scanError, sql.ErrNoRows) {
 				return nil, ErrProductNotFound
 			}
@@ -468,6 +468,9 @@ func (service *BillService) priceLines(ctx context.Context, querier database.Que
 				pricedLine.Unit = productUnit
 			}
 			pricedLine.UnitPrice = productPrice
+			if wholesalePrice.Valid && wholesaleMin > 0 && lineRequest.Quantity >= wholesaleMin {
+				pricedLine.UnitPrice = wholesalePrice.Int64
+			}
 		}
 		if lineRequest.UnitPrice != nil {
 			pricedLine.UnitPrice = *lineRequest.UnitPrice
