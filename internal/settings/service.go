@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
@@ -157,6 +158,9 @@ func applyProfileChanges(companyProfile CompanyProfile, request UpdateSettingsRe
 	if request.InvoiceDueDays != nil {
 		companyProfile.InvoiceDueDays = *request.InvoiceDueDays
 	}
+	if request.InvoiceHiddenParts != nil {
+		companyProfile.InvoiceHiddenParts = uniqueParts(*request.InvoiceHiddenParts)
+	}
 	if request.PrimaryColor != nil {
 		companyProfile.PrimaryColor = strings.ToLower(*request.PrimaryColor)
 	}
@@ -302,27 +306,38 @@ func optionalText(rawText string) *string {
 	return &trimmedText
 }
 
+func uniqueParts(requestedParts []string) []string {
+	uniqueList := []string{}
+	for _, requestedPart := range requestedParts {
+		if !slices.Contains(uniqueList, requestedPart) {
+			uniqueList = append(uniqueList, requestedPart)
+		}
+	}
+	return uniqueList
+}
+
 func toSettingsView(companySettings Settings, companyProfile CompanyProfile) SettingsView {
 	return SettingsView{
 		Company: CompanyView{
-			Id:               companyProfile.Id,
-			Name:             companyProfile.Name,
-			BusinessType:     companyProfile.BusinessType,
-			Phone:            companyProfile.Phone,
-			Address:          companyProfile.Address,
-			Tin:              companyProfile.Tin,
-			LogoUrl:          media.PublicUrl(companyProfile.LogoKey),
-			PrimaryColor:     companyProfile.PrimaryColor,
-			CurrencyCode:     companyProfile.CurrencyCode,
-			CurrencyDecimals: companyProfile.CurrencyDecimals,
-			Timezone:         companyProfile.Timezone,
-			DefaultLocale:    companyProfile.DefaultLocale,
-			ReceiptHeader:    companyProfile.ReceiptHeader,
-			ReceiptFooter:    companyProfile.ReceiptFooter,
-			Email:            companyProfile.Email,
-			PaymentDetails:   companyProfile.PaymentDetails,
-			InvoiceTerms:     companyProfile.InvoiceTerms,
-			InvoiceDueDays:   companyProfile.InvoiceDueDays,
+			Id:                 companyProfile.Id,
+			Name:               companyProfile.Name,
+			BusinessType:       companyProfile.BusinessType,
+			Phone:              companyProfile.Phone,
+			Address:            companyProfile.Address,
+			Tin:                companyProfile.Tin,
+			LogoUrl:            media.PublicUrl(companyProfile.LogoKey),
+			PrimaryColor:       companyProfile.PrimaryColor,
+			CurrencyCode:       companyProfile.CurrencyCode,
+			CurrencyDecimals:   companyProfile.CurrencyDecimals,
+			Timezone:           companyProfile.Timezone,
+			DefaultLocale:      companyProfile.DefaultLocale,
+			ReceiptHeader:      companyProfile.ReceiptHeader,
+			ReceiptFooter:      companyProfile.ReceiptFooter,
+			Email:              companyProfile.Email,
+			PaymentDetails:     companyProfile.PaymentDetails,
+			InvoiceTerms:       companyProfile.InvoiceTerms,
+			InvoiceDueDays:     companyProfile.InvoiceDueDays,
+			InvoiceHiddenParts: companyProfile.InvoiceHiddenParts,
 		},
 		TaxRate:                   float64(companySettings.TaxRateBasisPoints) / 100,
 		DateFormat:                companySettings.DateFormat,

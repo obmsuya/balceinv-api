@@ -61,3 +61,31 @@ func TestInvoiceLinesTakeExtraDiscountEachAndBrk(t *testing.T) {
 		}
 	})
 }
+
+func TestOwnerChoosesWhichInvoicePartsToHide(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		shop := openInvoiceShop(t, engineCase, false)
+		if refused := shop.harness.Call(http.MethodPut, "/api/settings", shop.company.OwnerToken, map[string]any{"invoice_hidden_parts": []string{"logo", "watermark"}}); refused.Status != http.StatusBadRequest {
+			t.Fatalf("an unknown part returned %d %v", refused.Status, refused.Body)
+		}
+		saved := shop.call(t, http.MethodPut, "/api/settings", map[string]any{"invoice_hidden_parts": []string{"logo", "terms", "logo", "signatures"}}, http.StatusOK).Data()
+		hiddenParts := saved["company"].(map[string]any)["invoice_hidden_parts"].([]any)
+		if len(hiddenParts) != 3 || hiddenParts[0] != "logo" || hiddenParts[2] != "signatures" {
+			t.Fatalf("the saved parts were %v", hiddenParts)
+		}
+
+		invoiceId := shop.call(t, http.MethodPost, "/api/invoices", map[string]any{
+			"kind": "invoice", "customer_id": shop.customerId, "terms": "Goods once sold are not taken back",
+			"lines": []map[string]any{{"product_id": shop.productId, "quantity": 1}},
+		}, http.StatusCreated).Data()["id"].(string)
+		pdf := shop.call(t, http.MethodGet, "/api/invoices/"+invoiceId+"/document?lang=en", nil, http.StatusOK)
+		if !containsUtf16(pdf.Raw, "Juma Traders") || containsUtf16(pdf.Raw, "Goods once sold") || containsUtf16(pdf.Raw, "Received by") {
+			t.Fatal("the PDF still shows the hidden terms or signatures")
+		}
+
+		cleared := shop.call(t, http.MethodPut, "/api/settings", map[string]any{"invoice_hidden_parts": []string{}}, http.StatusOK).Data()
+		if len(cleared["company"].(map[string]any)["invoice_hidden_parts"].([]any)) != 0 {
+			t.Fatalf("clearing the parts left %v", cleared["company"])
+		}
+	})
+}

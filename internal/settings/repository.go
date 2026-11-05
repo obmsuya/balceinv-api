@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/chrisostomemataba/balceinv-api/internal/common/database"
@@ -143,12 +144,13 @@ func (repository *Repository) FindCompanyProfile(ctx context.Context, querier da
 	query := `
 		SELECT id, name, business_type, phone, address, tin, logo_key, primary_color, currency_code,
 		       currency_decimals, timezone, default_locale, receipt_header, receipt_footer,
-		       email, invoice_payment_details, invoice_terms, invoice_due_days, updated_at
+		       email, invoice_payment_details, invoice_terms, invoice_due_days, invoice_hidden_parts, updated_at
 		FROM companies
 		WHERE id = $1
 	`
 
 	foundProfile := CompanyProfile{}
+	hiddenPartsText := ""
 	scanError := querier.QueryRowContext(ctx, query, companyId).Scan(
 		&foundProfile.Id,
 		&foundProfile.Name,
@@ -168,6 +170,7 @@ func (repository *Repository) FindCompanyProfile(ctx context.Context, querier da
 		&foundProfile.PaymentDetails,
 		&foundProfile.InvoiceTerms,
 		&foundProfile.InvoiceDueDays,
+		&hiddenPartsText,
 		&foundProfile.UpdatedAt,
 	)
 	if scanError != nil {
@@ -175,6 +178,10 @@ func (repository *Repository) FindCompanyProfile(ctx context.Context, querier da
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to find company profile: %w", scanError)
+	}
+	foundProfile.InvoiceHiddenParts = []string{}
+	if hiddenPartsText != "" {
+		foundProfile.InvoiceHiddenParts = strings.Split(hiddenPartsText, ",")
 	}
 
 	return &foundProfile, nil
@@ -186,7 +193,7 @@ func (repository *Repository) SaveCompanyProfile(ctx context.Context, querier da
 		SET name = $2, business_type = $3, phone = $4, address = $5, tin = $6, primary_color = $7,
 		    currency_code = $8, currency_decimals = $9, timezone = $10, default_locale = $11,
 		    receipt_header = $12, receipt_footer = $13, email = $14, invoice_payment_details = $15,
-		    invoice_terms = $16, invoice_due_days = $17, updated_at = $18
+		    invoice_terms = $16, invoice_due_days = $17, invoice_hidden_parts = $18, updated_at = $19
 		WHERE id = $1
 	`
 
@@ -208,6 +215,7 @@ func (repository *Repository) SaveCompanyProfile(ctx context.Context, querier da
 		changedProfile.PaymentDetails,
 		changedProfile.InvoiceTerms,
 		changedProfile.InvoiceDueDays,
+		strings.Join(changedProfile.InvoiceHiddenParts, ","),
 		time.Now().UTC(),
 	)
 	if updateError != nil {

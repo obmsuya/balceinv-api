@@ -43,6 +43,13 @@ var labelsByLanguage = map[string]map[string]string{
 		"amountInWords":  "Amount in words",
 		"paymentDetails": "How to pay",
 		"terms":          "Terms",
+		"phone":          "Tel",
+		"currency":       "Currency",
+		"documentNumber": "Number",
+		"preparedBy":     "Prepared by",
+		"postedAt":       "Posted",
+		"printedAt":      "Printed",
+		"errorsExcepted": "E. & O.E.",
 	},
 	Swahili: {
 		"tin":           "TIN",
@@ -81,6 +88,13 @@ var labelsByLanguage = map[string]map[string]string{
 		"amountInWords":  "Kiasi kwa maneno",
 		"paymentDetails": "Jinsi ya kulipa",
 		"terms":          "Masharti",
+		"phone":          "Simu",
+		"currency":       "Sarafu",
+		"documentNumber": "Namba",
+		"preparedBy":     "Imeandaliwa na",
+		"postedAt":       "Imeandikwa",
+		"printedAt":      "Imechapishwa",
+		"errorsExcepted": "E. & O.E.",
 	},
 }
 

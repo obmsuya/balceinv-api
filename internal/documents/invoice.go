@@ -8,6 +8,20 @@ import (
 type Tone int
 
 const (
+	InvoicePartLogo           = "logo"
+	InvoicePartTaxIds         = "tax_ids"
+	InvoicePartStatus         = "status"
+	InvoicePartIssuedBy       = "issued_by"
+	InvoicePartSku            = "sku"
+	InvoicePartUnit           = "unit"
+	InvoicePartDiscount       = "discount"
+	InvoicePartAmountInWords  = "amount_in_words"
+	InvoicePartPaymentDetails = "payment_details"
+	InvoicePartTerms          = "terms"
+	InvoicePartSignatures     = "signatures"
+)
+
+const (
 	ToneNeutral Tone = iota
 	ToneGood
 	ToneWarning
@@ -46,6 +60,8 @@ type InvoiceDocument struct {
 	Terms          string
 	Notes          []string
 	Signatures     []string
+	PreparedBy     string
+	PreparedAt     time.Time
 	QrCode         string
 	QrCaption      string
 	GeneratedBy    string
