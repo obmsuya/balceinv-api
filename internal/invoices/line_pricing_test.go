@@ -89,3 +89,18 @@ func TestOwnerChoosesWhichInvoicePartsToHide(t *testing.T) {
 		}
 	})
 }
+
+func TestInvoiceProductLinesTakeTheWholesalePriceLikeTheTill(t *testing.T) {
+	testkit.ForEachEngine(t, func(t *testing.T, engineCase testkit.EngineCase) {
+		shop := openInvoiceShop(t, engineCase, false)
+		cementId := shop.call(t, http.MethodPost, "/api/products", map[string]any{"sku": "CEM50", "name": "Cement 50kg", "price": 20000, "wholesale_price": 18500, "wholesale_min": 10, "opening_quantity": 100}, http.StatusCreated).Data()["id"].(string)
+		draft := shop.call(t, http.MethodPost, "/api/invoices", map[string]any{
+			"kind": "invoice", "customer_id": shop.customerId,
+			"lines": []map[string]any{{"product_id": cementId, "quantity": 9}, {"product_id": cementId, "quantity": 10}},
+		}, http.StatusCreated).Data()
+		lines := draft["lines"].([]any)
+		if lines[0].(map[string]any)["unit_price"] != float64(20000) || lines[1].(map[string]any)["unit_price"] != float64(18500) {
+			t.Fatalf("9 and 10 bags were priced %v and %v", lines[0].(map[string]any)["unit_price"], lines[1].(map[string]any)["unit_price"])
+		}
+	})
+}
