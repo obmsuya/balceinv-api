@@ -109,13 +109,18 @@ func (service *Service) salesSummaryStatement(ctx context.Context, querier datab
 	}
 
 	showsVat := current.TaxTotal != 0 || previous.TaxTotal != 0
+	showsRefunds := current.RefundTotal != 0 || previous.RefundTotal != 0
 	netTerms := []documents.StatementTerm{{Key: "takings"}}
 	statementRows := []documents.StatementRow{
 		{Style: documents.StatementHeading, Label: exporting.label("sumTakings")},
 		{Key: "takings", Style: documents.StatementLine, Label: exporting.label("sumTakingsInclVat"), Current: current.Total, Previous: previous.Total},
 	}
+	if showsRefunds {
+		statementRows = append(statementRows, documents.StatementRow{Key: "refunds", Style: documents.StatementLine, Label: exporting.label("sumLessRefunds"), Current: -current.RefundTotal, Previous: -previous.RefundTotal, IsDeduction: true})
+		netTerms = append(netTerms, documents.StatementTerm{Key: "refunds"})
+	}
 	if showsVat {
-		statementRows = append(statementRows, documents.StatementRow{Key: "vat", Style: documents.StatementLine, Label: exporting.label("sumLessVat"), Current: -current.TaxTotal, Previous: -previous.TaxTotal, IsDeduction: true})
+		statementRows = append(statementRows, documents.StatementRow{Key: "vat", Style: documents.StatementLine, Label: exporting.label("sumLessVat"), Current: -(current.TaxTotal - current.RefundTax), Previous: -(previous.TaxTotal - previous.RefundTax), IsDeduction: true})
 		netTerms = append(netTerms, documents.StatementTerm{Key: "vat"})
 	}
 	grossLabel := "sumGrossProfit"
@@ -251,7 +256,7 @@ func (service *Service) fillDaily(ctx context.Context, querier database.Querier,
 }
 
 func (service *Service) fillProducts(ctx context.Context, querier database.Querier, exporting exportContext, productSort string, register *documents.Register) error {
-	productViews, productsError := service.repository.Products(ctx, querier, exporting.scope, productOrderColumns[productSort], documentProductLimit)
+	productViews, productsError := service.repository.Products(ctx, querier, exporting.scope, productOrderColumns[productSort], documentProductLimit, true)
 	if productsError != nil {
 		return productsError
 	}
@@ -267,12 +272,16 @@ func (service *Service) fillProducts(ctx context.Context, querier database.Queri
 		{Title: exporting.label("margin"), Kind: documents.Percent},
 	}
 	for _, productView := range productViews {
-		register.Rows = append(register.Rows, documents.RegisterRow{Cells: []any{productLabel(productView.Name, productView.VariantLabel), productView.Sku, productView.Quantity, productView.Revenue, productView.NetRevenue, productView.CostTotal, productView.GrossProfit, marginOf(productView.GrossProfit, productView.NetRevenue)}})
+		skuText := productView.Sku
+		if productView.IsBrk {
+			skuText = exporting.label("brk")
+		}
+		register.Rows = append(register.Rows, documents.RegisterRow{Cells: []any{productLabel(productView.Name, productView.VariantLabel), skuText, productView.Quantity, productView.Revenue, productView.NetRevenue, productView.CostTotal, productView.GrossProfit, marginOf(productView.GrossProfit, productView.NetRevenue)}})
 	}
 	sortName := exporting.label("sort." + productSort)
 	register.Filters = append(register.Filters, documents.Field{Label: exporting.label("rankedBy"), Value: sortName})
 	register.EmptyText = exporting.label("emptySales")
-	register.Notes = []string{strings.ReplaceAll(exporting.label("productsNote"), "{sort}", strings.ToLower(sortName)), exporting.label("sumNoteCost")}
+	register.Notes = []string{strings.ReplaceAll(exporting.label("productsNote"), "{sort}", strings.ToLower(sortName)), exporting.label("refundNote"), exporting.label("sumNoteCost")}
 	return nil
 }
 
