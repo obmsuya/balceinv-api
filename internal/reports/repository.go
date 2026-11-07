@@ -59,6 +59,13 @@ func salesWhere(scope Scope, arguments *queryArguments) string {
 		" AND s.voided_at IS NULL"
 }
 
+func refundsWhere(scope Scope, arguments *queryArguments) string {
+	return "r.company_id = " + arguments.add(scope.CompanyId) +
+		" AND r.created_at >= " + arguments.add(scope.From) +
+		" AND r.created_at < " + arguments.add(scope.To) +
+		shopCondition("s.shop_id", scope, arguments)
+}
+
 func (repository *Repository) SaleTotals(ctx context.Context, querier database.Querier, scope Scope) (SummaryView, error) {
 	arguments := &queryArguments{}
 	query := `
@@ -121,10 +128,7 @@ func (repository *Repository) SaleTotals(ctx context.Context, querier database.Q
 		       CAST(COALESCE(SUM(CASE WHEN r.restocked THEN r.cost_amount ELSE 0 END), 0) AS BIGINT)
 		FROM sale_refunds r
 		JOIN sales s ON s.company_id = r.company_id AND s.id = r.sale_id
-		WHERE r.company_id = ` + refundArguments.add(scope.CompanyId) +
-		` AND r.created_at >= ` + refundArguments.add(scope.From) +
-		` AND r.created_at < ` + refundArguments.add(scope.To) +
-		shopCondition("s.shop_id", scope, refundArguments)
+		WHERE ` + refundsWhere(scope, refundArguments)
 	refundScanError := querier.QueryRowContext(ctx, refundQuery, refundArguments.values...).Scan(&summary.RefundCount, &summary.RefundTotal, &summary.RefundTax, &summary.RefundCost)
 	if refundScanError != nil {
 		return SummaryView{}, fmt.Errorf("failed to total refunds: %w", refundScanError)
@@ -237,25 +241,67 @@ SELECT costs.sale_id, SUM(costs.cost) AS cost, SUM(costs.extra) AS extra, SUM(co
 	return dayViews, dayRowsResult.Err()
 }
 
-func (repository *Repository) Products(ctx context.Context, querier database.Querier, scope Scope, orderColumn string, limit int) ([]ProductRowView, error) {
+func (repository *Repository) Products(ctx context.Context, querier database.Querier, scope Scope, orderColumn string, limit int, includesBrk bool) ([]ProductRowView, error) {
 	arguments := &queryArguments{}
-	whereClause := salesWhere(scope, arguments)
+	soldLines := `
+			SELECT 'product' AS kind, i.product_id, i.product_name AS name, i.variant_label, i.sku,
+			       i.quantity, i.line_total AS amount, i.unit_cost * i.quantity AS cost, 1 AS direction,
+			       CAST(s.id AS TEXT) AS document_id, s.total AS document_amount, s.tax_total AS document_tax,
+			       CAST(i.id AS TEXT) AS line_key, CAST(s.id AS TEXT) AS sale_id
+			FROM sale_items i
+			JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
+			WHERE ` + salesWhere(scope, arguments)
+	if includesBrk {
+		soldLines += `
+			UNION ALL
+			SELECT 'brk', NULL, w.name, '', '',
+			       w.quantity, w.line_total, w.winga_share, 1,
+			       CAST(s.id AS TEXT), s.total, s.tax_total,
+			       CAST(w.id AS TEXT), CAST(s.id AS TEXT)
+			FROM sale_winga_lines w
+			JOIN sales s ON s.company_id = w.company_id AND s.id = w.sale_id
+			WHERE ` + salesWhere(scope, arguments)
+	}
+	refundedLines := `
+			SELECT 'product', i.product_id, i.product_name, i.variant_label, i.sku,
+			       l.quantity, l.amount, CASE WHEN r.restocked THEN l.cost_amount ELSE 0 END, -1,
+			       CAST(r.id AS TEXT), r.amount, r.tax_amount,
+			       CAST(l.sale_item_id AS TEXT), NULL
+			FROM sale_refund_lines l
+			JOIN sale_refunds r ON r.company_id = l.company_id AND r.id = l.refund_id
+			JOIN sale_items i ON i.company_id = l.company_id AND i.id = l.sale_item_id
+			JOIN sales s ON s.company_id = r.company_id AND s.id = r.sale_id
+			WHERE ` + refundsWhere(scope, arguments)
 	limitPlaceholder := arguments.add(limit)
 	query := `
-		SELECT i.product_id,
-		       MAX(i.product_name),
-		       MAX(i.variant_label),
-		       MAX(i.sku),
-		       CAST(SUM(i.quantity) AS BIGINT),
-		       CAST(SUM(i.line_total) AS BIGINT),
-		       CAST(SUM(i.line_total * 10000 / (10000 + s.tax_rate_basis_points)) AS BIGINT),
-		       CAST(SUM(i.unit_cost * i.quantity) AS BIGINT),
-		       COUNT(DISTINCT i.sale_id)
-		FROM sale_items i
-		JOIN sales s ON s.company_id = i.company_id AND s.id = i.sale_id
-		WHERE ` + whereClause + `
-		GROUP BY i.product_id
-		ORDER BY ` + orderColumn + ` DESC, i.product_id
+		WITH report_lines AS (` + soldLines + `
+			UNION ALL` + refundedLines + `
+		),
+		running_lines AS (
+			SELECT report_lines.*,
+			       CAST(SUM(amount) OVER (PARTITION BY document_id ORDER BY line_key ROWS UNBOUNDED PRECEDING) AS BIGINT) AS running_amount
+			FROM report_lines
+		),
+		taxed_lines AS (
+			SELECT running_lines.*,
+			       CASE WHEN document_amount = 0 THEN 0
+			            ELSE document_tax * running_amount / document_amount - document_tax * (running_amount - amount) / document_amount
+			       END AS line_tax
+			FROM running_lines
+		)
+		SELECT kind = 'brk',
+		       product_id,
+		       MAX(name),
+		       MAX(variant_label),
+		       MAX(sku),
+		       CAST(SUM(direction * quantity) AS BIGINT),
+		       CAST(SUM(direction * amount) AS BIGINT),
+		       CAST(SUM(direction * (amount - line_tax)) AS BIGINT),
+		       CAST(SUM(direction * cost) AS BIGINT),
+		       COUNT(DISTINCT sale_id)
+		FROM taxed_lines
+		GROUP BY kind, product_id, CASE WHEN kind = 'brk' THEN name ELSE '' END
+		ORDER BY ` + orderColumn + ` DESC, kind DESC, MAX(name)
 		LIMIT ` + limitPlaceholder
 
 	productRows, queryError := querier.QueryContext(ctx, query, arguments.values...)
@@ -267,8 +313,10 @@ func (repository *Repository) Products(ctx context.Context, querier database.Que
 	productViews := []ProductRowView{}
 	for productRows.Next() {
 		productView := ProductRowView{}
+		productId := uuid.NullUUID{}
 		scanError := productRows.Scan(
-			&productView.ProductId,
+			&productView.IsBrk,
+			&productId,
 			&productView.Name,
 			&productView.VariantLabel,
 			&productView.Sku,
@@ -281,6 +329,7 @@ func (repository *Repository) Products(ctx context.Context, querier database.Que
 		if scanError != nil {
 			return nil, fmt.Errorf("failed to scan a product row: %w", scanError)
 		}
+		productView.ProductId = productId.UUID
 		productView.GrossProfit = productView.NetRevenue - productView.CostTotal
 		productViews = append(productViews, productView)
 	}

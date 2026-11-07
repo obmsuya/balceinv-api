@@ -37,9 +37,9 @@ var (
 )
 
 var productOrderColumns = map[string]string{
-	"revenue":  "SUM(i.line_total)",
-	"quantity": "SUM(i.quantity)",
-	"profit":   "SUM(i.line_total * 10000 / (10000 + s.tax_rate_basis_points)) - SUM(i.unit_cost * i.quantity)",
+	"revenue":  "SUM(direction * amount)",
+	"quantity": "SUM(direction * quantity)",
+	"profit":   "SUM(direction * (amount - line_tax)) - SUM(direction * cost)",
 }
 
 type RangeRequest struct {
@@ -97,7 +97,7 @@ func (service *Service) Products(ctx context.Context, querier database.Querier, 
 	if scopeError != nil {
 		return nil, scopeError
 	}
-	return service.repository.Products(ctx, querier, scope, orderColumn, limit)
+	return service.repository.Products(ctx, querier, scope, orderColumn, limit, true)
 }
 
 func (service *Service) Cashiers(ctx context.Context, querier database.Querier, principal *identity.Principal, rangeRequest RangeRequest) ([]CashierRowView, error) {
@@ -178,7 +178,7 @@ func (service *Service) Dashboard(ctx context.Context, querier database.Querier,
 		return DashboardView{}, trendError
 	}
 	productsScope := withDays(today.AddDate(0, 0, -(dashboardProductsDays-1)), today)
-	topProducts, productsError := service.repository.Products(ctx, querier, productsScope, productOrderColumns["revenue"], dashboardTopProducts)
+	topProducts, productsError := service.repository.Products(ctx, querier, productsScope, productOrderColumns["revenue"], dashboardTopProducts, false)
 	if productsError != nil {
 		return DashboardView{}, productsError
 	}

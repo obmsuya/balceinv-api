@@ -63,6 +63,7 @@ type DayView struct {
 
 type ProductRowView struct {
 	ProductId    uuid.UUID `json:"product_id"`
+	IsBrk        bool      `json:"is_brk"`
 	Name         string    `json:"name"`
 	VariantLabel string    `json:"variant_label"`
 	Sku          string    `json:"sku"`
